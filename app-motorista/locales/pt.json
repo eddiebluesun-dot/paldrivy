@@ -6,7 +6,9 @@
     "email": "E-mail",
     "password": "Senha",
     "name": "Nome completo",
-    "logout": "Sair"
+    "logout": "Sair",
+    "no_account": "Não tem conta? Criar conta",
+    "have_account": "Já tem conta? Entrar"
   },
   "onboarding": {
     "language_title": "Configure seu perfil",
