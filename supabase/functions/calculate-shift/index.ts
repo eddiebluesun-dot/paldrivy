@@ -1,5 +1,5 @@
 // supabase/functions/calculate-shift/index.ts
-import { serve } from 'https://deno.land/std/http/server.ts';
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 export interface CalcInput {
@@ -112,7 +112,7 @@ if (import.meta.main) serve(async (req) => {
     parking_cents: shift.parking_cents,
     food_cents: shift.food_cents,
     avg_consumption_per_100: shift.vehicles.avg_consumption_per_100,
-    last_fuel_price_per_unit_cents: lastFuel?.price_per_unit_cents ?? 0,
+    last_fuel_price_per_unit_cents: lastFuel?.price_per_unit_cents ?? 0, // 0 when no fill-up recorded yet
     monthly_fixed_cents,
     days_in_month: new Date(
       new Date(shift.started_at).getFullYear(),
@@ -122,13 +122,14 @@ if (import.meta.main) serve(async (req) => {
   };
 
   const calc = calculateShift(input);
+  const fuel_price_missing = !lastFuel?.price_per_unit_cents;
 
   await supabase
     .from('shifts')
     .update({ calc })
     .eq('id', shift_id);
 
-  return new Response(JSON.stringify(calc), {
+  return new Response(JSON.stringify({ ...calc, fuel_price_missing }), {
     headers: { 'Content-Type': 'application/json' },
   });
 });

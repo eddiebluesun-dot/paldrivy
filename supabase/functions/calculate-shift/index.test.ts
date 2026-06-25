@@ -1,5 +1,5 @@
 // supabase/functions/calculate-shift/index.test.ts
-import { assertEquals, assertAlmostEquals } from 'https://deno.land/std/assert/mod.ts';
+import { assertEquals, assertAlmostEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { calculateShift, type CalcInput } from './index.ts';
 
 const base: CalcInput = {
