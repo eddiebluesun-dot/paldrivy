@@ -1,5 +1,5 @@
 {
-  "app_name": "Mis Ganancias",
+  "app_name": "DriveWise",
   "auth": { "login": "Iniciar sesión", "register": "Crear cuenta", "email": "Correo", "password": "Contraseña", "name": "Nombre completo", "logout": "Cerrar sesión" },
   "onboarding": { "language_title": "Configura tu perfil", "country": "País", "currency": "Moneda", "distance_unit": "Distancia", "volume_unit": "Volumen", "vehicle_title": "Tu vehículo", "brand": "Marca", "model": "Modelo", "year": "Año", "fuel_type": "Combustible", "ownership": "Tipo de uso", "monthly_cost": "Costo mensual (alquiler/cuota)", "insurance": "Seguro mensual", "is_taxi": "Soy taxista", "taxi_license": "Licencia/mes", "goal_title": "Meta mensual (opcional)", "goal_placeholder": "Ej: 1500", "skip": "Omitir", "next": "Siguiente", "finish": "Empezar" },
   "tabs": { "dashboard": "Inicio", "shifts": "Turnos", "fuel": "Combustible", "expenses": "Gastos", "more": "Más" },
