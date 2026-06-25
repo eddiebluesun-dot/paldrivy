@@ -1,6 +1,6 @@
 {
   "app_name": "DriveWise",
-  "auth": { "login": "Sign in", "register": "Create account", "email": "Email", "password": "Password", "name": "Full name", "logout": "Sign out", "no_account": "No account? Create one", "have_account": "Have an account? Sign in" },
+  "auth": { "login": "Sign in", "register": "Create account", "email": "Email", "password": "Password", "name": "Full name", "logout": "Sign out", "no_account": "No account? Create one", "have_account": "Have an account? Sign in", "password_min": "Minimum 6 characters" },
   "onboarding": { "language_title": "Set up your profile", "country": "Country", "currency": "Currency", "distance_unit": "Distance", "volume_unit": "Volume", "vehicle_title": "Your vehicle", "brand": "Brand", "model": "Model", "year": "Year", "fuel_type": "Fuel type", "ownership": "Vehicle type", "monthly_cost": "Monthly cost (rent/payment)", "insurance": "Monthly insurance", "is_taxi": "I'm a taxi driver", "taxi_license": "License fee/month", "goal_title": "Monthly goal (optional)", "goal_placeholder": "e.g. 2000", "skip": "Skip", "next": "Next", "finish": "Get started" },
   "tabs": { "dashboard": "Home", "shifts": "Shifts", "fuel": "Fuel", "expenses": "Expenses", "more": "More" },
   "dashboard": { "today": "Today", "gross": "Gross", "net": "Net", "hours": "hours", "km": "miles", "net_per_hour": "Net/hour", "net_per_km": "Net/mile", "best_platform": "Best app", "goal_progress": "Daily goal", "active_shift": "Shift in progress", "no_shifts": "No shifts today" },

@@ -8,7 +8,8 @@
     "name": "Nome completo",
     "logout": "Sair",
     "no_account": "Não tem conta? Criar conta",
-    "have_account": "Já tem conta? Entrar"
+    "have_account": "Já tem conta? Entrar",
+    "password_min": "Mínimo 6 caracteres"
   },
   "onboarding": {
     "language_title": "Configure seu perfil",

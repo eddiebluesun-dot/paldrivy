@@ -1,6 +1,6 @@
 {
   "app_name": "DriveWise",
-  "auth": { "login": "Iniciar sesión", "register": "Crear cuenta", "email": "Correo", "password": "Contraseña", "name": "Nombre completo", "logout": "Cerrar sesión", "no_account": "¿Sin cuenta? Crea una", "have_account": "¿Tienes cuenta? Inicia sesión" },
+  "auth": { "login": "Iniciar sesión", "register": "Crear cuenta", "email": "Correo", "password": "Contraseña", "name": "Nombre completo", "logout": "Cerrar sesión", "no_account": "¿Sin cuenta? Crea una", "have_account": "¿Tienes cuenta? Inicia sesión", "password_min": "Mínimo 6 caracteres" },
   "onboarding": { "language_title": "Configura tu perfil", "country": "País", "currency": "Moneda", "distance_unit": "Distancia", "volume_unit": "Volumen", "vehicle_title": "Tu vehículo", "brand": "Marca", "model": "Modelo", "year": "Año", "fuel_type": "Combustible", "ownership": "Tipo de uso", "monthly_cost": "Costo mensual (alquiler/cuota)", "insurance": "Seguro mensual", "is_taxi": "Soy taxista", "taxi_license": "Licencia/mes", "goal_title": "Meta mensual (opcional)", "goal_placeholder": "Ej: 1500", "skip": "Omitir", "next": "Siguiente", "finish": "Empezar" },
   "tabs": { "dashboard": "Inicio", "shifts": "Turnos", "fuel": "Combustible", "expenses": "Gastos", "more": "Más" },
   "dashboard": { "today": "Hoy", "gross": "Bruto", "net": "Neto", "hours": "horas", "km": "km", "net_per_hour": "Neto/hora", "net_per_km": "Neto/km", "best_platform": "Mejor app", "goal_progress": "Meta del día", "active_shift": "Turno en curso", "no_shifts": "Sin turnos hoy" },

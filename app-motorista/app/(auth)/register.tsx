@@ -13,13 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../src/hooks/useAuth';
+import { authSignUp } from '../../src/hooks/useAuth';
 import { Colors, Radius, Spacing } from '../../src/theme';
-import '../../src/lib/i18n';
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
-  const { signUp } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -43,7 +41,7 @@ export default function RegisterScreen() {
       setPasswordError(t('common.required'));
       valid = false;
     } else if (password.length < 6) {
-      setPasswordError('Mínimo 6 caracteres');
+      setPasswordError(t('auth.password_min'));
       valid = false;
     }
     return valid;
@@ -53,7 +51,7 @@ export default function RegisterScreen() {
     if (!validate()) return;
 
     setLoading(true);
-    const { error } = await signUp(email.trim(), password);
+    const { error } = await authSignUp(email.trim(), password);
     setLoading(false);
 
     if (error) {
@@ -61,7 +59,7 @@ export default function RegisterScreen() {
       return;
     }
 
-    router.replace('/onboarding/locale' as never);
+    router.replace('/onboarding/locale');
   };
 
   return (

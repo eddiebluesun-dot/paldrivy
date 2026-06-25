@@ -13,13 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../src/hooks/useAuth';
+import { authSignIn } from '../../src/hooks/useAuth';
 import { Colors, Radius, Spacing } from '../../src/theme';
-import '../../src/lib/i18n';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const { signIn } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -50,7 +48,7 @@ export default function LoginScreen() {
     if (!validate()) return;
 
     setLoading(true);
-    const { error } = await signIn(email.trim(), password);
+    const { error } = await authSignIn(email.trim(), password);
     setLoading(false);
 
     if (error) {
