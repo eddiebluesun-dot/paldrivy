@@ -15,6 +15,7 @@ create table profiles (
   timezone text not null default 'America/Sao_Paulo',
   locale text not null default 'pt-BR',
   onboarding_done boolean not null default false,
+  vehicle_id uuid,  -- FK added after vehicles to avoid forward-reference
   created_at timestamptz not null default now()
 );
 alter table profiles enable row level security;
@@ -46,11 +47,15 @@ create table vehicles (
 alter table vehicles enable row level security;
 create policy "own vehicles" on vehicles for all using (auth.uid() = user_id);
 
--- PLATFORMS (sem RLS — leitura pública)
+-- profiles.vehicle_id FK (deferred to after vehicles creation)
+alter table profiles add constraint profiles_vehicle_id_fkey
+  foreign key (vehicle_id) references vehicles on delete set null;
+
+-- PLATFORMS (no RLS — public read)
 create table platforms (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
-  country_code text,   -- null = global
+  country_code text,
   type text not null check (type in ('rideshare','taxi_app','taxi_conventional','delivery')),
   active boolean not null default true
 );
@@ -59,74 +64,57 @@ create table platforms (
 create table shifts (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references profiles on delete cascade,
-  vehicle_id uuid not null references vehicles on delete cascade,
+  vehicle_id uuid references vehicles on delete set null,
   started_at timestamptz not null,
   ended_at timestamptz,
-  start_odometer integer not null,  -- meters
-  end_odometer integer,             -- meters
+  odometer_start_meters integer,
+  odometer_end_meters integer,
+  platforms jsonb,              -- [{platform_name, amount_cents}]
   tips_cents integer not null default 0,
   bonuses_cents integer not null default 0,
   tolls_cents integer not null default 0,
   parking_cents integer not null default 0,
   food_cents integer not null default 0,
+  gross_cents integer,          -- filled by calculate-shift edge function
+  net_cents integer,            -- filled by calculate-shift edge function
+  duration_seconds integer,     -- filled by calculate-shift edge function
   region text,
   notes text,
-  -- cached calculation result (from edge function)
-  calc jsonb,
+  calc jsonb,                   -- full breakdown from edge function
   created_at timestamptz not null default now()
 );
 alter table shifts enable row level security;
 create policy "own shifts" on shifts for all using (auth.uid() = user_id);
 
--- SHIFT EARNINGS PER PLATFORM
-create table shift_earnings (
-  id uuid primary key default uuid_generate_v4(),
-  shift_id uuid not null references shifts on delete cascade,
-  platform_id uuid not null references platforms,
-  gross_amount_cents integer not null
-);
-alter table shift_earnings enable row level security;
-create policy "own shift earnings" on shift_earnings for all
-  using (auth.uid() = (select user_id from shifts where id = shift_id));
-
 -- FUEL ENTRIES
 create table fuel_entries (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references profiles on delete cascade,
-  vehicle_id uuid not null references vehicles on delete cascade,
+  vehicle_id uuid references vehicles on delete set null,
   filled_at timestamptz not null,
-  odometer integer not null,  -- meters
+  odometer_meters integer,
   fuel_type text not null,
   volume_ml integer not null,
-  total_amount_cents integer not null,
-  price_per_unit_cents integer not null, -- per liter/gallon in cents
-  station_name text,
-  is_full_tank boolean not null default true,
+  total_cost_cents integer not null,
+  price_per_unit_cents integer not null,
+  station text,
+  full_tank boolean not null default true,
   notes text,
   created_at timestamptz not null default now()
 );
 alter table fuel_entries enable row level security;
 create policy "own fuel" on fuel_entries for all using (auth.uid() = user_id);
 
--- EXPENSE CATEGORIES
-create table expense_categories (
-  id uuid primary key default uuid_generate_v4(),
-  name_key text not null,  -- i18n key
-  type text not null check (type in ('fixed','variable')),
-  is_system boolean not null default false
-);
-
 -- EXPENSES
 create table expenses (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references profiles on delete cascade,
   vehicle_id uuid references vehicles on delete set null,
-  category_id uuid not null references expense_categories,
+  category text not null,
   expense_date date not null,
   amount_cents integer not null,
   description text,
-  is_recurring boolean not null default false,
-  recurrence_period text check (recurrence_period in ('daily','weekly','monthly','yearly')),
+  recurring boolean not null default false,
   created_at timestamptz not null default now()
 );
 alter table expenses enable row level security;

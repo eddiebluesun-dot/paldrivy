@@ -42,22 +42,6 @@ export interface Vehicle {
   created_at: string;
 }
 
-export interface Platform {
-  id: string;
-  name: string;
-  country_code?: string;
-  type: PlatformType;
-  active: boolean;
-}
-
-export interface ShiftEarning {
-  id: string;
-  shift_id: string;
-  platform_id: string;
-  gross_amount_cents: number;
-  platform?: Platform;
-}
-
 export interface ShiftCalc {
   duration_hours: number;
   distance_meters: number;
@@ -105,42 +89,32 @@ export interface Shift {
   notes?: string;
   calc?: ShiftCalc;
   created_at: string;
-  shift_earnings?: ShiftEarning[];
 }
 
 export interface FuelEntry {
   id: string;
   user_id: string;
-  vehicle_id: string;
+  vehicle_id: string | null;
   filled_at: string;
-  odometer: number;
+  odometer_meters: number | null;
   fuel_type: FuelType;
   volume_ml: number;
-  total_amount_cents: number;
+  total_cost_cents: number;
   price_per_unit_cents: number;
-  station_name?: string;
-  is_full_tank: boolean;
+  station: string | null;
+  full_tank: boolean;
   notes?: string;
-}
-
-export interface ExpenseCategory {
-  id: string;
-  name_key: string;
-  type: 'fixed' | 'variable';
-  is_system: boolean;
 }
 
 export interface Expense {
   id: string;
   user_id: string;
   vehicle_id?: string;
-  category_id: string;
+  category: string;
   expense_date: string;
   amount_cents: number;
   description?: string;
-  is_recurring: boolean;
-  recurrence_period?: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  category?: ExpenseCategory;
+  recurring: boolean;
 }
 
 export interface Goal {
