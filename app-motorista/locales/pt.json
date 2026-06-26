@@ -106,7 +106,12 @@
     "price_per_liter": "Preço por litro",
     "full_tank": "Tanque cheio",
     "station": "Posto (opcional)",
-    "save": "Salvar"
+    "save": "Salvar",
+    "volume": "Volume",
+    "price_per_unit": "Preço/L",
+    "price_per_unit_gal": "Preço/gal",
+    "no_entries": "Nenhum abastecimento registrado",
+    "entry_date": "Data"
   },
   "expense": {
     "title": "Despesas",
