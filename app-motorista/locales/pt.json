@@ -121,7 +121,9 @@
     "date": "Data",
     "description": "Descrição (opcional)",
     "recurring": "Despesa recorrente",
-    "save": "Salvar"
+    "save": "Salvar",
+    "no_entries": "Nenhuma despesa registrada",
+    "date_placeholder": "AAAA-MM-DD"
   },
   "expense_category": {
     "expense.rent": "Aluguel do carro",
