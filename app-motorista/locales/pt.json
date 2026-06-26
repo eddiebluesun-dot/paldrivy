@@ -84,7 +84,13 @@
     "save": "Salvar turno",
     "result_net": "Lucro líquido",
     "result_hours": "Horas trabalhadas",
-    "result_km": "Km rodados"
+    "result_km": "Km rodados",
+    "fuel_missing_notice": "Registre um abastecimento para calcular o custo de combustível",
+    "platform_name": "Plataforma",
+    "no_shifts": "Nenhum turno nos últimos 7 dias",
+    "duration": "Duração",
+    "gross": "Bruto",
+    "net": "Líquido"
   },
   "fuel": {
     "title": "Abastecimentos",

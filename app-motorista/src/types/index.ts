@@ -15,6 +15,7 @@ export interface Profile {
   timezone: string;
   locale: string;
   onboarding_done: boolean;
+  vehicle_id?: string | null;
   created_at: string;
 }
 
@@ -68,19 +69,38 @@ export interface ShiftCalc {
   net_per_meter_cents: number;
 }
 
+export interface ShiftPlatform {
+  platform_name: string;
+  amount_cents: number;
+}
+
+export interface EndShiftData {
+  odometer_end_meters: number | null;
+  platforms: ShiftPlatform[];
+  tolls_cents: number;
+  parking_cents: number;
+  food_cents: number;
+  tips_cents: number;
+  bonuses_cents: number;
+}
+
 export interface Shift {
   id: string;
   user_id: string;
-  vehicle_id: string;
+  vehicle_id: string | null;
   started_at: string;
-  ended_at?: string;
-  start_odometer: number;
-  end_odometer?: number;
+  ended_at?: string | null;
+  odometer_start_meters?: number | null;
+  odometer_end_meters?: number | null;
+  platforms?: ShiftPlatform[] | null;
   tips_cents: number;
   bonuses_cents: number;
   tolls_cents: number;
   parking_cents: number;
   food_cents: number;
+  gross_cents?: number | null;
+  net_cents?: number | null;
+  duration_seconds?: number | null;
   region?: string;
   notes?: string;
   calc?: ShiftCalc;

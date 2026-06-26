@@ -1,3 +1,4 @@
+import { test, expect } from '@jest/globals';
 import { formatMoney, centsToDecimal, decimalToCents } from '../../src/utils/currency';
 
 test('formatMoney BRL', () => {
