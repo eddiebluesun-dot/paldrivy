@@ -1,8 +1,5 @@
 -- supabase/migrations/20260625000000_initial.sql
 
--- EXTENSIONS
-create extension if not exists "uuid-ossp";
-
 -- PROFILES
 create table profiles (
   id uuid primary key references auth.users on delete cascade,
@@ -23,7 +20,7 @@ create policy "own profile" on profiles for all using (auth.uid() = id);
 
 -- VEHICLES
 create table vehicles (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles on delete cascade,
   name text not null,
   brand text not null,
@@ -53,7 +50,7 @@ alter table profiles add constraint profiles_vehicle_id_fkey
 
 -- PLATFORMS (no RLS — public read)
 create table platforms (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   name text not null,
   country_code text,
   type text not null check (type in ('rideshare','taxi_app','taxi_conventional','delivery')),
@@ -62,7 +59,7 @@ create table platforms (
 
 -- SHIFTS
 create table shifts (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles on delete cascade,
   vehicle_id uuid references vehicles on delete set null,
   started_at timestamptz not null,
@@ -88,7 +85,7 @@ create policy "own shifts" on shifts for all using (auth.uid() = user_id);
 
 -- FUEL ENTRIES
 create table fuel_entries (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles on delete cascade,
   vehicle_id uuid references vehicles on delete set null,
   filled_at timestamptz not null,
@@ -107,7 +104,7 @@ create policy "own fuel" on fuel_entries for all using (auth.uid() = user_id);
 
 -- EXPENSES
 create table expenses (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles on delete cascade,
   vehicle_id uuid references vehicles on delete set null,
   category text not null,
@@ -122,7 +119,7 @@ create policy "own expenses" on expenses for all using (auth.uid() = user_id);
 
 -- GOALS
 create table goals (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles on delete cascade,
   type text not null check (type in ('daily','weekly','monthly','per_hour','per_km')),
   target_amount_cents integer not null,
