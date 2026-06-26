@@ -112,9 +112,11 @@ function EndShiftModal({
 
       await endShift(shiftId, payload);
 
-      const { data } = await supabase.functions.invoke('calculate-shift', {
+      const { data, error: calcError } = await supabase.functions.invoke('calculate-shift', {
         body: { shift_id: shiftId },
       });
+
+      if (calcError) throw calcError;
 
       const fuelMissing =
         data != null &&
