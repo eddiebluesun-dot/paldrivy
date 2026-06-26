@@ -90,7 +90,7 @@ function TodayCard({ summary, currencyCode, distanceUnit, locale }: TodayCardPro
   const { t } = useTranslation();
 
   const distanceDisplay = metersToDisplay(summary.distance_meters, distanceUnit).toFixed(1);
-  const distanceLabel = distanceUnit === 'mi' ? t('dashboard.km') : t('dashboard.km');
+  const distanceLabel = t('dashboard.km');
 
   const rows: Array<{ label: string; value: string }> = [
     {
@@ -190,6 +190,7 @@ export default function DashboardScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [weekBuckets, setWeekBuckets] = useState<DayBucket[]>([]);
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
@@ -217,13 +218,17 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (!userId) return;
     setLoading(true);
-    loadData(userId).finally(() => setLoading(false));
+    setFetchError(false);
+    loadData(userId)
+      .catch(() => setFetchError(true))
+      .finally(() => setLoading(false));
   }, [userId, loadData]);
 
   const handleRefresh = useCallback(async () => {
     if (!userId) return;
     setRefreshing(true);
-    await loadData(userId).catch(() => undefined);
+    setFetchError(false);
+    await loadData(userId).catch(() => setFetchError(true));
     setRefreshing(false);
   }, [userId, loadData]);
 
@@ -253,6 +258,10 @@ export default function DashboardScreen() {
         }
       >
         <Text style={styles.screenTitle}>{t('tabs.dashboard')}</Text>
+
+        {fetchError && (
+          <Text style={styles.errorBanner}>{t('common.error')}</Text>
+        )}
 
         {activeShift !== null && <ActiveShiftBanner shift={activeShift} />}
 
@@ -325,6 +334,14 @@ const styles = StyleSheet.create({
       ios: { fontFamily: 'System' },
       android: { fontFamily: 'Roboto' },
     }),
+  },
+  errorBanner: {
+    color: Colors.error,
+    fontSize: 14,
+    backgroundColor: Colors.surfaceAlt,
+    padding: Spacing.sm,
+    borderRadius: Radius.input,
+    marginBottom: Spacing.md,
   },
   activeBanner: {
     backgroundColor: Colors.brandBlue,
