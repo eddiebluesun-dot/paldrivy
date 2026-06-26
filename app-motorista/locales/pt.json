@@ -64,9 +64,14 @@
     "net_per_hour": "Líquido/hora",
     "net_per_km": "Líquido/km",
     "best_platform": "Melhor app",
-    "goal_progress": "Meta do dia",
+    "goal_progress": "Meta do mês",
     "active_shift": "Turno em andamento",
-    "no_shifts": "Nenhum turno hoje"
+    "no_shifts": "Nenhum turno hoje",
+    "hours_worked": "Horas trabalhadas",
+    "km_driven": "Km rodados",
+    "weekly": "Esta semana",
+    "no_data": "Sem dados",
+    "goal_of": "Meta: "
   },
   "shift": {
     "start": "Iniciar turno",
