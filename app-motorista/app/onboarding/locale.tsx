@@ -1,16 +1,14 @@
 import { useState } from 'react';
 import {
-  View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   ScrollView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Picker } from '@react-native-picker/picker';
 import { useRouter } from 'expo-router';
+import { Select } from '../../src/components/Select';
 import { useTranslation } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import { supabase } from '../../src/lib/supabase';
@@ -91,63 +89,42 @@ export default function LocaleScreen() {
         {error ? <Text style={s.error}>{error}</Text> : null}
 
         <Text style={s.label}>{t('onboarding.country')}</Text>
-        <View style={s.pickerWrap}>
-          <Picker
-            selectedValue={lang}
-            onValueChange={(v) => setLang(v as LangCode)}
-            dropdownIconColor={Colors.textSecondary}
-            style={s.picker}
-          >
-            <Picker.Item label="Português" value="pt" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="English" value="en" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Español" value="es" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-          </Picker>
-        </View>
+        <Select
+          value={lang}
+          onValueChange={(v) => setLang(v as LangCode)}
+          items={[
+            { label: 'Português', value: 'pt' },
+            { label: 'English', value: 'en' },
+            { label: 'Español', value: 'es' },
+          ]}
+        />
 
         <Text style={s.label}>{t('onboarding.currency')}</Text>
-        <View style={s.pickerWrap}>
-          <Picker
-            selectedValue={currency}
-            onValueChange={(v) => setCurrency(v as CurrencyCode)}
-            dropdownIconColor={Colors.textSecondary}
-            style={s.picker}
-          >
-            {CURRENCIES.map((c) => (
-              <Picker.Item
-                key={c.code}
-                label={c.label}
-                value={c.code}
-                color={Platform.OS === 'android' ? Colors.textPrimary : undefined}
-              />
-            ))}
-          </Picker>
-        </View>
+        <Select
+          value={currency}
+          onValueChange={(v) => setCurrency(v as CurrencyCode)}
+          items={CURRENCIES.map((c) => ({ label: c.label, value: c.code }))}
+        />
 
         <Text style={s.label}>{t('onboarding.distance_unit')}</Text>
-        <View style={s.pickerWrap}>
-          <Picker
-            selectedValue={distUnit}
-            onValueChange={(v) => setDistUnit(v as DistUnit)}
-            dropdownIconColor={Colors.textSecondary}
-            style={s.picker}
-          >
-            <Picker.Item label={t('onboarding.dist_km')} value="km" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.dist_mi')} value="mi" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-          </Picker>
-        </View>
+        <Select
+          value={distUnit}
+          onValueChange={(v) => setDistUnit(v as DistUnit)}
+          items={[
+            { label: t('onboarding.dist_km'), value: 'km' },
+            { label: t('onboarding.dist_mi'), value: 'mi' },
+          ]}
+        />
 
         <Text style={s.label}>{t('onboarding.volume_unit')}</Text>
-        <View style={s.pickerWrap}>
-          <Picker
-            selectedValue={volUnit}
-            onValueChange={(v) => setVolUnit(v as VolUnit)}
-            dropdownIconColor={Colors.textSecondary}
-            style={s.picker}
-          >
-            <Picker.Item label={t('onboarding.vol_liters')} value="liters" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.vol_gallons')} value="gallons" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-          </Picker>
-        </View>
+        <Select
+          value={volUnit}
+          onValueChange={(v) => setVolUnit(v as VolUnit)}
+          items={[
+            { label: t('onboarding.vol_liters'), value: 'liters' },
+            { label: t('onboarding.vol_gallons'), value: 'gallons' },
+          ]}
+        />
 
         <TouchableOpacity
           style={[s.button, loading && s.buttonDisabled]}
@@ -188,17 +165,6 @@ const s = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,
-  },
-  pickerWrap: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.input,
-    overflow: 'hidden',
-  },
-  picker: {
-    color: Colors.textPrimary,
-    backgroundColor: Colors.surface,
   },
   error: {
     color: Colors.error,

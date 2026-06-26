@@ -8,11 +8,10 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Picker } from '@react-native-picker/picker';
 import { useRouter } from 'expo-router';
+import { Select } from '../../src/components/Select';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../src/lib/supabase';
 import { createVehicle } from '../../src/services/vehicles';
@@ -117,21 +116,18 @@ export default function VehicleScreen() {
         />
 
         <Text style={s.label}>{t('onboarding.fuel_type')}</Text>
-        <View style={s.pickerWrap}>
-          <Picker
-            selectedValue={fuelType}
-            onValueChange={(v) => setFuelType(v as FuelType)}
-            dropdownIconColor={Colors.textSecondary}
-            style={s.picker}
-          >
-            <Picker.Item label={t('onboarding.fuel_gasoline')} value="gasoline" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.fuel_ethanol')} value="ethanol" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.fuel_diesel')} value="diesel" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.fuel_gnv')} value="gnv" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.fuel_electric')} value="electric" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.fuel_hybrid')} value="hybrid" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-          </Picker>
-        </View>
+        <Select
+          value={fuelType}
+          onValueChange={(v) => setFuelType(v as FuelType)}
+          items={[
+            { label: t('onboarding.fuel_gasoline'), value: 'gasoline' },
+            { label: t('onboarding.fuel_ethanol'), value: 'ethanol' },
+            { label: t('onboarding.fuel_diesel'), value: 'diesel' },
+            { label: t('onboarding.fuel_gnv'), value: 'gnv' },
+            { label: t('onboarding.fuel_electric'), value: 'electric' },
+            { label: t('onboarding.fuel_hybrid'), value: 'hybrid' },
+          ]}
+        />
 
         <Text style={s.label}>{t('onboarding.consumption')}</Text>
         <TextInput
@@ -144,18 +140,15 @@ export default function VehicleScreen() {
         />
 
         <Text style={s.label}>{t('onboarding.ownership')}</Text>
-        <View style={s.pickerWrap}>
-          <Picker
-            selectedValue={ownership}
-            onValueChange={(v) => setOwnership(v as OwnershipType)}
-            dropdownIconColor={Colors.textSecondary}
-            style={s.picker}
-          >
-            <Picker.Item label={t('onboarding.ownership_own')} value="own" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.ownership_rent')} value="rent" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label={t('onboarding.ownership_financed')} value="financed" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-          </Picker>
-        </View>
+        <Select
+          value={ownership}
+          onValueChange={(v) => setOwnership(v as OwnershipType)}
+          items={[
+            { label: t('onboarding.ownership_own'), value: 'own' },
+            { label: t('onboarding.ownership_rent'), value: 'rent' },
+            { label: t('onboarding.ownership_financed'), value: 'financed' },
+          ]}
+        />
 
         <Text style={s.label}>{t('onboarding.monthly_cost')}</Text>
         <TextInput
@@ -261,17 +254,6 @@ const s = StyleSheet.create({
     fontSize: 16,
     color: Colors.textPrimary,
     minHeight: 48,
-  },
-  pickerWrap: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.input,
-    overflow: 'hidden',
-  },
-  picker: {
-    color: Colors.textPrimary,
-    backgroundColor: Colors.surface,
   },
   row: {
     flexDirection: 'row',

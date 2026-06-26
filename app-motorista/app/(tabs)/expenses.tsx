@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Picker } from '@react-native-picker/picker';
+import { Select } from '@/src/components/Select';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
@@ -154,24 +154,14 @@ function AddExpenseModal({
 
           {/* Category */}
           <Text style={styles.label}>{t('expense.category')}</Text>
-          <View style={styles.pickerWrapper}>
-            <Picker
-              selectedValue={category}
-              onValueChange={(val) => setCategory(val)}
-              style={styles.picker}
-              dropdownIconColor={Colors.textSecondary}
-              itemStyle={styles.pickerItem}
-            >
-              {EXPENSE_CATEGORIES.map((cat) => (
-                <Picker.Item
-                  key={cat}
-                  label={t(`expense_category.${cat}`)}
-                  value={cat}
-                  color={Platform.OS === 'android' ? Colors.textPrimary : undefined}
-                />
-              ))}
-            </Picker>
-          </View>
+          <Select
+            value={category}
+            onValueChange={(val) => setCategory(val)}
+            items={EXPENSE_CATEGORIES.map((cat) => ({
+              label: t(`expense_category.${cat}`),
+              value: cat,
+            }))}
+          />
 
           {/* Amount */}
           <Text style={styles.label}>{t('expense.amount')}</Text>
@@ -498,21 +488,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,
-  },
-  pickerWrapper: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.input,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.xs,
-    overflow: 'hidden',
-  },
-  picker: {
-    color: Colors.textPrimary,
-  },
-  pickerItem: {
-    color: Colors.textPrimary,
-    backgroundColor: Colors.surface,
   },
   input: {
     backgroundColor: Colors.surface,
