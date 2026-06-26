@@ -1,66 +1,85 @@
+import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Link, Tabs } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
-
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { useTranslation } from 'react-i18next';
+import { Colors } from '@/src/theme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { t } = useTranslation();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
-      }}>
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: Colors.surface,
+          borderTopColor: Colors.border,
+        },
+        tabBarActiveTintColor: Colors.brandBlue,
+        tabBarInactiveTintColor: Colors.textSecondary,
+        tabBarIconStyle: { width: 24, height: 24 },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => (
+          title: t('tabs.dashboard'),
+          tabBarIcon: ({ focused, color }) => (
             <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
+              name={{ ios: focused ? 'house.fill' : 'house', android: focused ? 'home_filled' : 'home', web: focused ? 'home_filled' : 'home' }}
               tintColor={color}
-              size={28}
+              size={24}
             />
-          ),
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable style={{ marginRight: 15 }}>
-                {({ pressed }) => (
-                  <SymbolView
-                    name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                    size={25}
-                    tintColor={Colors[colorScheme].text}
-                    style={{ opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
           ),
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="shifts"
         options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => (
+          title: t('tabs.shifts'),
+          tabBarIcon: ({ focused, color }) => (
             <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
+              name={{ ios: focused ? 'clock.fill' : 'clock', android: focused ? 'access_time_filled' : 'schedule', web: focused ? 'access_time_filled' : 'schedule' }}
               tintColor={color}
-              size={28}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="fuel"
+        options={{
+          title: t('tabs.fuel'),
+          tabBarIcon: ({ focused, color }) => (
+            <SymbolView
+              name={{ ios: focused ? 'flame.fill' : 'flame', android: 'local_fire_department', web: 'local_fire_department' }}
+              tintColor={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="expenses"
+        options={{
+          title: t('tabs.expenses'),
+          tabBarIcon: ({ focused, color }) => (
+            <SymbolView
+              name={{ ios: focused ? 'creditcard.fill' : 'creditcard', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
+              tintColor={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: t('tabs.more'),
+          tabBarIcon: ({ focused, color }) => (
+            <SymbolView
+              name={{ ios: focused ? 'ellipsis.circle.fill' : 'ellipsis.circle', android: 'more_horiz', web: 'more_horiz' }}
+              tintColor={color}
+              size={24}
             />
           ),
         }}

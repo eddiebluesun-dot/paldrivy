@@ -143,6 +143,16 @@
     "food": "Alimentação",
     "other": "Outros"
   },
+  "more": {
+    "title": "Mais",
+    "profile": "Perfil",
+    "settings": "Configurações",
+    "language": "Idioma",
+    "currency": "Moeda",
+    "distance_unit": "Distância",
+    "volume_unit": "Volume",
+    "sign_out": "Sair"
+  },
   "common": {
     "save": "Salvar",
     "cancel": "Cancelar",
