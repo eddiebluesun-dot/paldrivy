@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useAuth } from '../src/hooks/useAuth';
+import { useProfile } from '../src/hooks/useProfile';
 
 export {
   ErrorBoundary,
@@ -40,21 +41,29 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
+  const { session, loading: authLoading } = useAuth();
+  const { profile, loading: profileLoading } = useProfile();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    if (loading) return;
+    if (authLoading || (session && profileLoading)) return;
 
     const inAuth = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === 'onboarding';
 
     if (!session && !inAuth) {
       router.replace('/(auth)/login');
     } else if (session && inAuth) {
-      router.replace('/(tabs)');
+      if (profile && !profile.onboarding_done) {
+        router.replace('/onboarding/locale');
+      } else {
+        router.replace('/(tabs)');
+      }
+    } else if (session && !inAuth && !inOnboarding && profile && !profile.onboarding_done) {
+      router.replace('/onboarding/locale');
     }
-  }, [session, loading, segments]);
+  }, [session, authLoading, profile, profileLoading, segments]);
 
   return <Slot />;
 }
