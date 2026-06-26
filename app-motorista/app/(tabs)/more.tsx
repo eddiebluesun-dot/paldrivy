@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { SymbolView } from 'expo-symbols';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '@/src/lib/supabase';
 import { authSignOut } from '@/src/hooks/useAuth';
 import { useProfile } from '@/src/hooks/useProfile';
@@ -28,11 +28,7 @@ function SettingRow({ label, value }: SettingRowProps) {
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowValue}>{value}</Text>
       </View>
-      <SymbolView
-        name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-        tintColor={Colors.textSecondary}
-        size={16}
-      />
+      <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
     </TouchableOpacity>
   );
 }
@@ -45,15 +41,13 @@ export default function MoreScreen() {
   const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
-    });
+    supabase.auth.getUser()
+      .then(({ data }) => setEmail(data.user?.email ?? null))
+      .catch((e) => console.error('getUser failed:', e));
   }, []);
 
   const handleSignOut = () => {
-    authSignOut().catch(() => {
-      // sign-out errors are transient; nothing the user can do
-    });
+    authSignOut().catch((e) => console.warn('signOut failed:', e));
   };
 
   return (

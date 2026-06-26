@@ -1,14 +1,24 @@
 import { Tabs } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/src/theme';
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const TAB_ICONS: Record<string, [IoniconName, IoniconName]> = {
+  index:    ['home-outline',    'home'],
+  shifts:   ['time-outline',    'time'],
+  fuel:     ['flame-outline',   'flame'],
+  expenses: ['wallet-outline',  'wallet'],
+  more:     ['ellipsis-horizontal-circle-outline', 'ellipsis-horizontal-circle'],
+};
 
 export default function TabLayout() {
   const { t } = useTranslation();
 
   return (
     <Tabs
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
           backgroundColor: Colors.surface,
@@ -16,74 +26,17 @@ export default function TabLayout() {
         },
         tabBarActiveTintColor: Colors.brandBlue,
         tabBarInactiveTintColor: Colors.textSecondary,
-        tabBarIconStyle: { width: 24, height: 24 },
-      }}
+        tabBarIcon: ({ focused, color, size }) => {
+          const [outline, filled] = TAB_ICONS[route.name] ?? ['help-circle-outline', 'help-circle'];
+          return <Ionicons name={focused ? filled : outline} size={size} color={color} />;
+        },
+      })}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabs.dashboard'),
-          tabBarIcon: ({ focused, color }) => (
-            <SymbolView
-              name={{ ios: focused ? 'house.fill' : 'house', android: focused ? 'home_filled' : 'home', web: focused ? 'home_filled' : 'home' }}
-              tintColor={color}
-              size={24}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="shifts"
-        options={{
-          title: t('tabs.shifts'),
-          tabBarIcon: ({ focused, color }) => (
-            <SymbolView
-              name={{ ios: focused ? 'clock.fill' : 'clock', android: focused ? 'access_time_filled' : 'schedule', web: focused ? 'access_time_filled' : 'schedule' }}
-              tintColor={color}
-              size={24}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="fuel"
-        options={{
-          title: t('tabs.fuel'),
-          tabBarIcon: ({ focused, color }) => (
-            <SymbolView
-              name={{ ios: focused ? 'flame.fill' : 'flame', android: 'local_fire_department', web: 'local_fire_department' }}
-              tintColor={color}
-              size={24}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="expenses"
-        options={{
-          title: t('tabs.expenses'),
-          tabBarIcon: ({ focused, color }) => (
-            <SymbolView
-              name={{ ios: focused ? 'creditcard.fill' : 'creditcard', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
-              tintColor={color}
-              size={24}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="more"
-        options={{
-          title: t('tabs.more'),
-          tabBarIcon: ({ focused, color }) => (
-            <SymbolView
-              name={{ ios: focused ? 'ellipsis.circle.fill' : 'ellipsis.circle', android: 'more_horiz', web: 'more_horiz' }}
-              tintColor={color}
-              size={24}
-            />
-          ),
-        }}
-      />
+      <Tabs.Screen name="index"    options={{ title: t('tabs.dashboard') }} />
+      <Tabs.Screen name="shifts"   options={{ title: t('tabs.shifts') }} />
+      <Tabs.Screen name="fuel"     options={{ title: t('tabs.fuel') }} />
+      <Tabs.Screen name="expenses" options={{ title: t('tabs.expenses') }} />
+      <Tabs.Screen name="more"     options={{ title: t('tabs.more') }} />
     </Tabs>
   );
 }
