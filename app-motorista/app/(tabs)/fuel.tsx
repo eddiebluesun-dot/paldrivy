@@ -127,7 +127,8 @@ function AddFuelModal({
 
       resetForm();
       onSaved();
-    } catch {
+    } catch (e) {
+      console.error('addFuelEntry failed:', e);
       setError(t('common.error'));
     } finally {
       setSaving(false);
@@ -308,7 +309,8 @@ export default function FuelScreen() {
     try {
       const data = await getFuelEntries(userId, 30);
       setEntries(data);
-    } catch {
+    } catch (e) {
+      console.error('getFuelEntries failed:', e);
       setScreenError(t('common.error'));
     } finally {
       setLoading(false);
