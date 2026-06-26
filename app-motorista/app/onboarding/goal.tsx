@@ -52,6 +52,24 @@ export default function GoalScreen() {
     }
   };
 
+  const handleSkip = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) {
+        setError(t('common.error'));
+        return;
+      }
+      await markOnboardingDone(data.user.id);
+      router.replace('/(tabs)');
+    } catch {
+      setError(t('common.error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -90,7 +108,7 @@ export default function GoalScreen() {
 
             <TouchableOpacity
               style={[s.secondaryButton, loading && s.buttonDisabled]}
-              onPress={handleFinish}
+              onPress={handleSkip}
               disabled={loading}
               accessibilityRole="button"
               accessibilityLabel={t('onboarding.skip')}

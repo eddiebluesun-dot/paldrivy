@@ -8,16 +8,18 @@ export function useProfile() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        getProfile(data.user.id).then((p) => {
-          setProfile(p);
+    supabase.auth.getUser()
+      .then(({ data }) => {
+        if (data.user) {
+          return getProfile(data.user.id).then((p) => {
+            setProfile(p);
+            setLoading(false);
+          });
+        } else {
           setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
+        }
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   return { profile, loading, setProfile };

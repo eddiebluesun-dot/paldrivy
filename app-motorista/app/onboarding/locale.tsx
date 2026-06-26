@@ -73,7 +73,6 @@ export default function LocaleScreen() {
         country: currency === 'BRL' ? 'BR' : currency === 'USD' ? 'US' : currency === 'EUR' ? 'EU' : 'BR',
         timezone: Localization.getCalendars()[0]?.timeZone ?? 'America/Sao_Paulo',
         onboarding_done: false,
-        created_at: new Date().toISOString(),
       });
       await i18n.changeLanguage(lang);
       router.push('/onboarding/vehicle');
@@ -132,8 +131,8 @@ export default function LocaleScreen() {
             dropdownIconColor={Colors.textSecondary}
             style={s.picker}
           >
-            <Picker.Item label="Quilômetros (km)" value="km" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Milhas (mi)" value="mi" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.dist_km')} value="km" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.dist_mi')} value="mi" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
           </Picker>
         </View>
 
@@ -145,8 +144,8 @@ export default function LocaleScreen() {
             dropdownIconColor={Colors.textSecondary}
             style={s.picker}
           >
-            <Picker.Item label="Litros" value="liters" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Galões" value="gallons" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.vol_liters')} value="liters" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.vol_gallons')} value="gallons" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
           </Picker>
         </View>
 

@@ -124,23 +124,23 @@ export default function VehicleScreen() {
             dropdownIconColor={Colors.textSecondary}
             style={s.picker}
           >
-            <Picker.Item label="Gasolina" value="gasoline" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Etanol" value="ethanol" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Diesel" value="diesel" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="GNV" value="gnv" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Elétrico" value="electric" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Híbrido" value="hybrid" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.fuel_gasoline')} value="gasoline" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.fuel_ethanol')} value="ethanol" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.fuel_diesel')} value="diesel" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.fuel_gnv')} value="gnv" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.fuel_electric')} value="electric" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.fuel_hybrid')} value="hybrid" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
           </Picker>
         </View>
 
-        <Text style={s.label}>Consumo (km/L)</Text>
+        <Text style={s.label}>{t('onboarding.consumption')}</Text>
         <TextInput
           style={s.input}
           value={consumption}
           onChangeText={setConsumption}
           keyboardType="decimal-pad"
           placeholderTextColor={Colors.textSecondary}
-          accessibilityLabel="Consumo km/L"
+          accessibilityLabel={t('onboarding.consumption')}
         />
 
         <Text style={s.label}>{t('onboarding.ownership')}</Text>
@@ -151,9 +151,9 @@ export default function VehicleScreen() {
             dropdownIconColor={Colors.textSecondary}
             style={s.picker}
           >
-            <Picker.Item label="Próprio" value="own" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Alugado" value="rent" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
-            <Picker.Item label="Financiado" value="financed" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.ownership_own')} value="own" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.ownership_rent')} value="rent" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
+            <Picker.Item label={t('onboarding.ownership_financed')} value="financed" color={Platform.OS === 'android' ? Colors.textPrimary : undefined} />
           </Picker>
         </View>
 
@@ -177,14 +177,14 @@ export default function VehicleScreen() {
           accessibilityLabel={t('onboarding.insurance')}
         />
 
-        <Text style={s.label}>Km atual (odômetro)</Text>
+        <Text style={s.label}>{t('onboarding.odometer_current')}</Text>
         <TextInput
           style={s.input}
           value={odometer}
           onChangeText={setOdometer}
           keyboardType="numeric"
           placeholderTextColor={Colors.textSecondary}
-          accessibilityLabel="Km atual"
+          accessibilityLabel={t('onboarding.odometer_current')}
         />
 
         <View style={s.row}>

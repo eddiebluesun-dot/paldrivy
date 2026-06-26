@@ -7,9 +7,11 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 }
 
 export async function upsertProfile(profile: Partial<Profile> & { id: string }): Promise<void> {
-  await supabase.from('profiles').upsert(profile);
+  const { error } = await supabase.from('profiles').upsert(profile);
+  if (error) throw error;
 }
 
 export async function markOnboardingDone(userId: string): Promise<void> {
-  await supabase.from('profiles').update({ onboarding_done: true }).eq('id', userId);
+  const { error } = await supabase.from('profiles').update({ onboarding_done: true }).eq('id', userId);
+  if (error) throw error;
 }

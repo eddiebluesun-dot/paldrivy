@@ -55,12 +55,12 @@ function RootLayoutNav() {
     if (!session && !inAuth) {
       router.replace('/(auth)/login');
     } else if (session && inAuth) {
-      if (profile && !profile.onboarding_done) {
+      if (!profile || !profile.onboarding_done) {
         router.replace('/onboarding/locale');
       } else {
         router.replace('/(tabs)');
       }
-    } else if (session && !inAuth && !inOnboarding && profile && !profile.onboarding_done) {
+    } else if (session && !inAuth && !inOnboarding && (!profile || !profile.onboarding_done)) {
       router.replace('/onboarding/locale');
     }
   }, [session, authLoading, profile, profileLoading, segments]);
