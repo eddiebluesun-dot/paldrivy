@@ -27,22 +27,22 @@ import type { Expense } from '@/src/services/expenses';
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const EXPENSE_CATEGORIES = [
-  'expense.rent',
-  'expense.financing',
-  'expense.insurance',
-  'expense.internet',
-  'expense.tracker',
-  'expense.licensing',
-  'expense.taxi_license',
-  'expense.fuel',
-  'expense.car_wash',
-  'expense.maintenance',
-  'expense.tires',
-  'expense.oil_change',
-  'expense.tolls',
-  'expense.parking',
-  'expense.food',
-  'expense.other',
+  'rent',
+  'financing',
+  'insurance',
+  'internet',
+  'tracker',
+  'licensing',
+  'taxi_license',
+  'fuel',
+  'car_wash',
+  'maintenance',
+  'tires',
+  'oil_change',
+  'tolls',
+  'parking',
+  'food',
+  'other',
 ] as const;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
