@@ -124,7 +124,9 @@
     "price_per_unit": "Preço/L",
     "price_per_unit_gal": "Preço/gal",
     "no_entries": "Nenhum abastecimento registrado",
-    "entry_date": "Data"
+    "entry_date": "Data",
+    "fuel_type": "Tipo de combustível",
+    "price_per_kwh": "Preço/kWh"
   },
   "expense": {
     "title": "Despesas",
@@ -146,7 +148,7 @@
     "tracker": "Rastreador",
     "licensing": "Licenciamento / IPVA",
     "taxi_license": "Alvará de táxi",
-    "fuel": "Combustível",
+    "fuel": "Abastecimento",
     "car_wash": "Lavagem",
     "maintenance": "Manutenção",
     "tires": "Pneus",

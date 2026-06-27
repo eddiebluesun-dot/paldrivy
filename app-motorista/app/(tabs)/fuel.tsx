@@ -21,8 +21,9 @@ import { Colors, Radius, Spacing } from '@/src/theme';
 import { decimalToCents } from '@/src/utils/currency';
 import { displayToMeters, displayToMl, mlToDisplay } from '@/src/utils/units';
 import { addFuelEntry, getFuelEntries } from '@/src/services/fuel';
+import { Select } from '@/src/components/Select';
 import { useProfile } from '@/src/hooks/useProfile';
-import type { FuelEntry } from '@/src/services/fuel';
+import type { FuelEntry, FuelType } from '@/src/services/fuel';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,12 +33,15 @@ function formatDate(iso: string): string {
 
 // ─── add-fuel modal ───────────────────────────────────────────────────────────
 
+const FUEL_TYPES: FuelType[] = ['gasoline', 'ethanol', 'diesel', 'gnv', 'electric', 'hybrid'];
+
 interface AddFuelModalProps {
   visible: boolean;
   userId: string;
   vehicleId: string | null;
   distanceUnit: 'km' | 'mi';
   volumeUnit: 'liters' | 'gallons';
+  defaultFuelType?: FuelType;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -48,23 +52,34 @@ function AddFuelModal({
   vehicleId,
   distanceUnit,
   volumeUnit,
+  defaultFuelType = 'gasoline',
   onClose,
   onSaved,
 }: AddFuelModalProps) {
   const { t } = useTranslation();
 
+  const [fuelType, setFuelType] = useState<FuelType>(defaultFuelType);
   const [odometer, setOdometer] = useState('');
   const [volume, setVolume] = useState('');
-  const [totalAmount, setTotalAmount] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
   const [fullTank, setFullTank] = useState(false);
   const [station, setStation] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isElectric = fuelType === 'electric';
+  const qtyLabel = isElectric ? 'kWh' : volumeUnit === 'gallons' ? t('onboarding.vol_gallons') : t('onboarding.vol_liters');
+  const priceLabel = isElectric ? t('fuel.price_per_kwh') : volumeUnit === 'gallons' ? t('fuel.price_per_unit_gal') : t('fuel.price_per_unit');
+
+  const qtyNum = parseFloat(volume.replace(',', '.')) || 0;
+  const unitPriceNum = parseFloat(unitPrice.replace(',', '.')) || 0;
+  const computedTotal = qtyNum > 0 && unitPriceNum > 0 ? (qtyNum * unitPriceNum).toFixed(2) : '';
+
   function resetForm() {
+    setFuelType(defaultFuelType);
     setOdometer('');
     setVolume('');
-    setTotalAmount('');
+    setUnitPrice('');
     setFullTank(false);
     setStation('');
     setError(null);
@@ -75,51 +90,30 @@ function AddFuelModal({
     onClose();
   }
 
-  const volumeDisplay = parseFloat(volume.replace(',', '.')) || 0;
-  const totalCents = decimalToCents(parseFloat(totalAmount.replace(',', '.')) || 0);
-  const pricePerUnitCents =
-    volumeDisplay > 0 ? Math.round(totalCents / volumeDisplay) : 0;
-  const pricePerUnitLabel =
-    volumeUnit === 'gallons'
-      ? t('fuel.price_per_unit_gal')
-      : t('fuel.price_per_unit');
-  const volumeLabel =
-    volumeUnit === 'gallons' ? t('onboarding.vol_gallons') : t('onboarding.vol_liters');
-
   async function handleSave() {
     setError(null);
-
-    const volumeNum = parseFloat(volume);
-    const totalNum = parseFloat(totalAmount);
-
-    if (!volume.trim() || isNaN(volumeNum) || volumeNum <= 0) {
-      setError(t('common.required'));
-      return;
-    }
-    if (!totalAmount.trim() || isNaN(totalNum) || totalNum <= 0) {
-      setError(t('common.required'));
-      return;
-    }
+    if (!volume.trim() || qtyNum <= 0) { setError(t('common.required')); return; }
+    if (!unitPrice.trim() || unitPriceNum <= 0) { setError(t('common.required')); return; }
 
     setSaving(true);
     try {
-      const odometerMeters =
-        odometer.trim() !== ''
-          ? displayToMeters(parseFloat(odometer), distanceUnit)
-          : null;
-
-      const volumeMl = displayToMl(volumeNum, volumeUnit);
-      const totalCostCents = decimalToCents(totalNum);
-      const pricePerUnit =
-        volumeNum > 0 ? Math.round(totalCostCents / volumeNum) : 0;
+      const odometerMeters = odometer.trim() !== ''
+        ? displayToMeters(parseFloat(odometer.replace(',', '.')), distanceUnit)
+        : null;
+      const volumeMl = isElectric
+        ? Math.round(qtyNum * 1000)
+        : displayToMl(qtyNum, volumeUnit);
+      const totalCostCents = decimalToCents(qtyNum * unitPriceNum);
+      const pricePerUnitCents = decimalToCents(unitPriceNum);
 
       await addFuelEntry({
         user_id: userId,
         vehicle_id: vehicleId,
+        fuel_type: fuelType,
         odometer_meters: odometerMeters,
         volume_ml: volumeMl,
         total_cost_cents: totalCostCents,
-        price_per_unit_cents: pricePerUnit,
+        price_per_unit_cents: pricePerUnitCents,
         full_tank: fullTank,
         station: station.trim() !== '' ? station.trim() : null,
         filled_at: new Date().toISOString(),
@@ -153,6 +147,14 @@ function AddFuelModal({
         >
           <Text style={styles.modalTitle}>{t('fuel.add')}</Text>
 
+          {/* Fuel type */}
+          <Text style={styles.label}>{t('fuel.fuel_type')}</Text>
+          <Select
+            value={fuelType}
+            onValueChange={(v) => setFuelType(v as FuelType)}
+            items={FUEL_TYPES.map(ft => ({ label: t(`onboarding.fuel_${ft}`), value: ft }))}
+          />
+
           {/* Odometer */}
           <Text style={styles.label}>{t('fuel.odometer')}</Text>
           <TextInput
@@ -164,35 +166,33 @@ function AddFuelModal({
             placeholderTextColor={Colors.textSecondary}
           />
 
-          {/* Volume */}
-          <Text style={styles.label}>{volumeLabel}</Text>
+          {/* Quantity */}
+          <Text style={styles.label}>{qtyLabel}</Text>
           <TextInput
             style={styles.input}
             keyboardType="decimal-pad"
             value={volume}
             onChangeText={setVolume}
-            placeholder="0.00"
+            placeholder="0.000"
             placeholderTextColor={Colors.textSecondary}
           />
 
-          {/* Total amount */}
-          <Text style={styles.label}>{t('fuel.total')}</Text>
+          {/* Unit price */}
+          <Text style={styles.label}>{priceLabel}</Text>
           <TextInput
             style={styles.input}
             keyboardType="decimal-pad"
-            value={totalAmount}
-            onChangeText={setTotalAmount}
-            placeholder="0.00"
+            value={unitPrice}
+            onChangeText={setUnitPrice}
+            placeholder="0.000"
             placeholderTextColor={Colors.textSecondary}
           />
 
-          {/* Price per unit (calculated, display-only) */}
-          <Text style={styles.label}>{pricePerUnitLabel}</Text>
+          {/* Total (computed, read-only) */}
+          <Text style={styles.label}>{t('fuel.total')}</Text>
           <View style={styles.readonlyInput}>
-            <Text style={styles.readonlyText}>
-              {pricePerUnitCents > 0
-                ? (pricePerUnitCents / 100).toFixed(3)
-                : '--'}
+            <Text style={[styles.readonlyText, computedTotal !== '' && { color: Colors.accent }]}>
+              {computedTotal !== '' ? computedTotal : '--'}
             </Text>
           </View>
 
@@ -251,14 +251,20 @@ interface FuelItemProps {
 
 function FuelItem({ entry, volumeUnit }: FuelItemProps) {
   const { t } = useTranslation();
-  const volumeDisplay = mlToDisplay(entry.volume_ml, volumeUnit).toFixed(2);
-  const pricePerUnitLabel =
-    volumeUnit === 'gallons'
+  const isElectric = entry.fuel_type === 'electric';
+  const volumeDisplay = isElectric
+    ? (entry.volume_ml / 1000).toFixed(2)
+    : mlToDisplay(entry.volume_ml, volumeUnit).toFixed(2);
+  const qtyUnit = isElectric ? 'kWh' : volumeUnit === 'gallons' ? 'gal' : 'L';
+  const pricePerUnitLabel = isElectric
+    ? t('fuel.price_per_kwh')
+    : volumeUnit === 'gallons'
       ? t('fuel.price_per_unit_gal')
       : t('fuel.price_per_unit');
   const pricePerUnit = (entry.price_per_unit_cents / 100).toFixed(3);
   const total = (entry.total_cost_cents / 100).toFixed(2);
   const date = formatDate(entry.filled_at);
+  const fuelTypeLabel = t(`onboarding.fuel_${entry.fuel_type}`);
 
   return (
     <View style={styles.entryItem}>
@@ -269,8 +275,12 @@ function FuelItem({ entry, volumeUnit }: FuelItemProps) {
         )}
       </View>
       <View style={styles.entryRow}>
+        <Text style={styles.entryLabel}>{t('fuel.fuel_type')}</Text>
+        <Text style={styles.entryValue}>{fuelTypeLabel}</Text>
+      </View>
+      <View style={styles.entryRow}>
         <Text style={styles.entryLabel}>{t('fuel.volume')}</Text>
-        <Text style={styles.entryValue}>{volumeDisplay}</Text>
+        <Text style={styles.entryValue}>{volumeDisplay} {qtyUnit}</Text>
       </View>
       <View style={styles.entryRow}>
         <Text style={styles.entryLabel}>{pricePerUnitLabel}</Text>
@@ -388,6 +398,7 @@ export default function FuelScreen() {
             vehicleId={profile?.vehicle_id ?? null}
             distanceUnit={distanceUnit}
             volumeUnit={volumeUnit}
+            defaultFuelType={(profile as any)?.fuel_type ?? 'gasoline'}
             onClose={() => setModalVisible(false)}
             onSaved={handleSaved}
           />

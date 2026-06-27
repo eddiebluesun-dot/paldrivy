@@ -20,11 +20,16 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { decimalToCents, formatMoney } from '@/src/utils/currency';
+import { displayToMl } from '@/src/utils/units';
 import { addExpense, getExpenses } from '@/src/services/expenses';
+import { addFuelEntry } from '@/src/services/fuel';
+import type { FuelType } from '@/src/services/fuel';
 import { useProfile } from '@/src/hooks/useProfile';
 import type { Expense } from '@/src/services/expenses';
 
 // ─── constants ────────────────────────────────────────────────────────────────
+
+const FUEL_TYPES: FuelType[] = ['gasoline', 'ethanol', 'diesel', 'gnv', 'electric', 'hybrid'];
 
 const EXPENSE_CATEGORIES = [
   'rent',
@@ -60,6 +65,8 @@ function formatDate(iso: string): string {
 interface AddExpenseModalProps {
   visible: boolean;
   userId: string;
+  vehicleId: string | null;
+  volumeUnit: 'liters' | 'gallons';
   currencyCode: string;
   locale: string;
   onClose: () => void;
@@ -69,6 +76,8 @@ interface AddExpenseModalProps {
 function AddExpenseModal({
   visible,
   userId,
+  vehicleId,
+  volumeUnit,
   currencyCode,
   locale,
   onClose,
@@ -81,8 +90,20 @@ function AddExpenseModal({
   const [date, setDate] = useState(todayIso);
   const [description, setDescription] = useState('');
   const [recurring, setRecurring] = useState(false);
+  // fuel-specific
+  const [fuelType, setFuelType] = useState<FuelType>('gasoline');
+  const [fuelQty, setFuelQty] = useState('');
+  const [fuelUnitPrice, setFuelUnitPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isFuel = category === 'fuel';
+  const isElectric = fuelType === 'electric';
+  const qtyLabel = isElectric ? 'kWh' : volumeUnit === 'gallons' ? t('onboarding.vol_gallons') : t('onboarding.vol_liters');
+  const priceLabel = isElectric ? t('fuel.price_per_kwh') : volumeUnit === 'gallons' ? t('fuel.price_per_unit_gal') : t('fuel.price_per_unit');
+  const fuelQtyNum = parseFloat(fuelQty.replace(',', '.')) || 0;
+  const fuelUnitPriceNum = parseFloat(fuelUnitPrice.replace(',', '.')) || 0;
+  const fuelTotal = fuelQtyNum > 0 && fuelUnitPriceNum > 0 ? fuelQtyNum * fuelUnitPriceNum : 0;
 
   function resetForm() {
     setCategory(EXPENSE_CATEGORIES[0]);
@@ -90,6 +111,9 @@ function AddExpenseModal({
     setDate(todayIso());
     setDescription('');
     setRecurring(false);
+    setFuelType('gasoline');
+    setFuelQty('');
+    setFuelUnitPrice('');
     setError(null);
   }
 
@@ -100,30 +124,57 @@ function AddExpenseModal({
 
   async function handleSave() {
     setError(null);
-
-    const amountNum = parseFloat(amount);
-    if (!amount.trim() || isNaN(amountNum) || amountNum <= 0) {
-      setError(t('common.required'));
-      return;
-    }
-
     const trimmedDate = date.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
-      setError(t('common.required'));
-      return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) { setError(t('common.required')); return; }
+
+    if (isFuel) {
+      if (fuelQtyNum <= 0) { setError(t('common.required')); return; }
+      if (fuelUnitPriceNum <= 0) { setError(t('common.required')); return; }
+    } else {
+      const amountNum = parseFloat(amount.replace(',', '.'));
+      if (!amount.trim() || isNaN(amountNum) || amountNum <= 0) { setError(t('common.required')); return; }
     }
 
     setSaving(true);
     try {
-      await addExpense({
-        user_id: userId,
-        category,
-        amount_cents: decimalToCents(amountNum),
-        expense_date: trimmedDate,
-        description: description.trim() !== '' ? description.trim() : null,
-        recurring,
-      });
-
+      if (isFuel) {
+        const totalCostCents = decimalToCents(fuelTotal);
+        const volumeMl = isElectric
+          ? Math.round(fuelQtyNum * 1000)
+          : displayToMl(fuelQtyNum, volumeUnit);
+        await Promise.all([
+          addFuelEntry({
+            user_id: userId,
+            vehicle_id: vehicleId,
+            fuel_type: fuelType,
+            odometer_meters: null,
+            volume_ml: volumeMl,
+            total_cost_cents: totalCostCents,
+            price_per_unit_cents: decimalToCents(fuelUnitPriceNum),
+            full_tank: false,
+            station: null,
+            filled_at: new Date(trimmedDate + 'T12:00:00').toISOString(),
+          }),
+          addExpense({
+            user_id: userId,
+            category,
+            amount_cents: totalCostCents,
+            expense_date: trimmedDate,
+            description: `${t(`onboarding.fuel_${fuelType}`)} — ${fuelQtyNum.toFixed(2)} ${isElectric ? 'kWh' : 'L'} × ${fuelUnitPriceNum.toFixed(3)}`,
+            recurring: false,
+          }),
+        ]);
+      } else {
+        const amountNum = parseFloat(amount.replace(',', '.'));
+        await addExpense({
+          user_id: userId,
+          category,
+          amount_cents: decimalToCents(amountNum),
+          expense_date: trimmedDate,
+          description: description.trim() !== '' ? description.trim() : null,
+          recurring,
+        });
+      }
       resetForm();
       onSaved();
     } catch (e) {
@@ -163,18 +214,80 @@ function AddExpenseModal({
             }))}
           />
 
-          {/* Amount */}
-          <Text style={styles.label}>{t('expense.amount')}</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="decimal-pad"
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="0.00"
-            placeholderTextColor={Colors.textSecondary}
-          />
+          {/* Fuel fields (only when category = fuel) */}
+          {isFuel ? (
+            <>
+              <Text style={styles.label}>{t('fuel.fuel_type')}</Text>
+              <Select
+                value={fuelType}
+                onValueChange={(v) => setFuelType(v as FuelType)}
+                items={FUEL_TYPES.map(ft => ({ label: t(`onboarding.fuel_${ft}`), value: ft }))}
+              />
 
-          {/* Date */}
+              <Text style={styles.label}>{qtyLabel}</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="decimal-pad"
+                value={fuelQty}
+                onChangeText={setFuelQty}
+                placeholder="0.000"
+                placeholderTextColor={Colors.textSecondary}
+              />
+
+              <Text style={styles.label}>{priceLabel}</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="decimal-pad"
+                value={fuelUnitPrice}
+                onChangeText={setFuelUnitPrice}
+                placeholder="0.000"
+                placeholderTextColor={Colors.textSecondary}
+              />
+
+              <Text style={styles.label}>{t('fuel.total')}</Text>
+              <View style={[styles.input, styles.readonlyRow]}>
+                <Text style={[styles.readonlyValue, fuelTotal > 0 && { color: Colors.accent }]}>
+                  {fuelTotal > 0 ? fuelTotal.toFixed(2) : '--'}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              {/* Amount */}
+              <Text style={styles.label}>{t('expense.amount')}</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="decimal-pad"
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="0.00"
+                placeholderTextColor={Colors.textSecondary}
+              />
+
+              {/* Description */}
+              <Text style={styles.label}>{t('expense.description')}</Text>
+              <TextInput
+                style={styles.input}
+                value={description}
+                onChangeText={setDescription}
+                placeholder={t('expense.description')}
+                placeholderTextColor={Colors.textSecondary}
+              />
+
+              {/* Recurring toggle */}
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>{t('expense.recurring')}</Text>
+                <Switch
+                  value={recurring}
+                  onValueChange={setRecurring}
+                  trackColor={{ true: Colors.brandBlue, false: Colors.border }}
+                  thumbColor={Colors.onBrand}
+                />
+              </View>
+            </>
+          )}
+
+          {/* Date (always shown) */}
           <Text style={styles.label}>{t('expense.date')}</Text>
           <TextInput
             style={styles.input}
@@ -184,27 +297,6 @@ function AddExpenseModal({
             placeholderTextColor={Colors.textSecondary}
             autoCapitalize="none"
           />
-
-          {/* Description */}
-          <Text style={styles.label}>{t('expense.description')}</Text>
-          <TextInput
-            style={styles.input}
-            value={description}
-            onChangeText={setDescription}
-            placeholder={t('expense.description')}
-            placeholderTextColor={Colors.textSecondary}
-          />
-
-          {/* Recurring toggle */}
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t('expense.recurring')}</Text>
-            <Switch
-              value={recurring}
-              onValueChange={setRecurring}
-              trackColor={{ true: Colors.brandBlue, false: Colors.border }}
-              thumbColor={Colors.onBrand}
-            />
-          </View>
 
           {error !== null && (
             <Text style={styles.errorText}>{error}</Text>
@@ -311,6 +403,8 @@ export default function ExpensesScreen() {
 
   const currencyCode = profile?.currency_code ?? 'BRL';
   const locale = profile?.locale ?? 'pt-BR';
+  const vehicleId = profile?.vehicle_id ?? null;
+  const volumeUnit = profile?.volume_unit ?? 'liters';
 
   if (loading) {
     return (
@@ -364,6 +458,8 @@ export default function ExpensesScreen() {
           <AddExpenseModal
             visible={modalVisible}
             userId={userId}
+            vehicleId={vehicleId}
+            volumeUnit={volumeUnit}
             currencyCode={currencyCode}
             locale={locale}
             onClose={() => setModalVisible(false)}
@@ -499,6 +595,15 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     fontSize: 15,
     marginBottom: Spacing.xs,
+  },
+  readonlyRow: {
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  readonlyValue: {
+    color: Colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '600',
   },
   switchRow: {
     flexDirection: 'row',

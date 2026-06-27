@@ -1,9 +1,12 @@
 import { supabase } from '../lib/supabase';
 
+export type FuelType = 'gasoline' | 'ethanol' | 'diesel' | 'gnv' | 'electric' | 'hybrid';
+
 export interface FuelEntry {
   id: string;
   user_id: string;
   vehicle_id: string | null;
+  fuel_type: FuelType;
   odometer_meters: number | null;
   volume_ml: number;
   total_cost_cents: number;
