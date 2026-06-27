@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useAuth } from '../src/hooks/useAuth';
-import { useProfile } from '../src/hooks/useProfile';
+import { getProfile } from '../src/services/profile';
 
 export {
   ErrorBoundary,
@@ -28,42 +28,48 @@ export default function RootLayout() {
   }, [fontError]);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
+    if (fontsLoaded) SplashScreen.hideAsync();
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  if (!fontsLoaded) return null;
 
   return <RootLayoutNav />;
 }
 
 function RootLayoutNav() {
   const { session, loading: authLoading } = useAuth();
-  const { profile, loading: profileLoading } = useProfile();
   const router = useRouter();
   const segments = useSegments();
+  const topSegment = segments[0] as string | undefined;
 
   useEffect(() => {
-    if (authLoading || (session && profileLoading)) return;
+    if (authLoading) return;
+    if (!topSegment) return;
 
-    const inAuth = segments[0] === '(auth)';
-    const inOnboarding = segments[0] === 'onboarding';
+    let cancelled = false;
+    const inAuth = topSegment === '(auth)';
+    const inOnboarding = topSegment === 'onboarding';
 
-    if (!session && !inAuth) {
-      router.replace('/(auth)/login');
-    } else if (session && inAuth) {
+    if (!session) {
+      if (!inAuth) router.replace('/(auth)/login');
+      return;
+    }
+
+    // While in onboarding, let the screens handle their own navigation
+    if (inOnboarding) return;
+
+    // Fetch profile fresh so we always see the latest onboarding_done state
+    getProfile(session.user.id).then((profile) => {
+      if (cancelled) return;
       if (!profile || !profile.onboarding_done) {
         router.replace('/onboarding/locale');
-      } else {
+      } else if (inAuth) {
         router.replace('/(tabs)');
       }
-    } else if (session && !inAuth && !inOnboarding && (!profile || !profile.onboarding_done)) {
-      router.replace('/onboarding/locale');
-    }
-  }, [session, authLoading, profile, profileLoading, segments]);
+    }).catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [session, authLoading, topSegment]);
 
   return <Slot />;
 }
