@@ -75,8 +75,8 @@ function AddFuelModal({
     onClose();
   }
 
-  const volumeDisplay = parseFloat(volume) || 0;
-  const totalCents = decimalToCents(parseFloat(totalAmount) || 0);
+  const volumeDisplay = parseFloat(volume.replace(',', '.')) || 0;
+  const totalCents = decimalToCents(parseFloat(totalAmount.replace(',', '.')) || 0);
   const pricePerUnitCents =
     volumeDisplay > 0 ? Math.round(totalCents / volumeDisplay) : 0;
   const pricePerUnitLabel =
