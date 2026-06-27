@@ -66,6 +66,7 @@ export interface EndShiftData {
   food_cents: number;
   tips_cents: number;
   bonuses_cents: number;
+  rides_count: number | null;
 }
 
 export interface Shift {
@@ -85,6 +86,7 @@ export interface Shift {
   gross_cents?: number | null;
   net_cents?: number | null;
   duration_seconds?: number | null;
+  rides_count?: number | null;
   region?: string;
   notes?: string;
   calc?: ShiftCalc;

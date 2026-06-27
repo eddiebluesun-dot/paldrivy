@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { useProfile } from '@/src/hooks/useProfile';
@@ -18,10 +19,11 @@ import { formatMoney } from '@/src/utils/currency';
 import { getActiveShift } from '@/src/services/shifts';
 import {
   getActiveGoal,
+  getMonthlyBuckets,
   getTodaySummary,
   getWeekBuckets,
 } from '@/src/services/dashboard';
-import type { DailySummary, DayBucket } from '@/src/services/dashboard';
+import type { DailySummary, DayBucket, MonthBucket } from '@/src/services/dashboard';
 import type { Shift } from '@/src/types';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -181,6 +183,79 @@ function GoalProgress({ netTodayCents, targetCents, currencyCode, locale }: Goal
   );
 }
 
+// ─── monthly chart ───────────────────────────────────────────────────────────
+
+interface MonthlyChartProps {
+  buckets: MonthBucket[];
+  goalCents: number | null;
+  currencyCode: string;
+  locale: string;
+}
+
+const CHART_H = 100;
+const BAR_W = 10;
+const BAR_GAP = 6;
+const LABEL_H = 18;
+const TOTAL_H = CHART_H + LABEL_H;
+
+function MonthlyChart({ buckets, goalCents, currencyCode, locale }: MonthlyChartProps) {
+  const { t } = useTranslation();
+  const today = new Date().getDate();
+  const maxVal = Math.max(...buckets.map(b => b.net_cents), goalCents ?? 0, 1);
+  const svgW = buckets.length * (BAR_W + BAR_GAP);
+  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+  const dailyGoal = goalCents != null ? goalCents / daysInMonth : null;
+  const goalY = dailyGoal != null ? CHART_H - (dailyGoal / maxVal) * CHART_H : null;
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.goalHeader}>
+        <Text style={styles.cardTitle}>{t('dashboard.monthly_chart')}</Text>
+        {goalCents != null && (
+          <Text style={styles.goalPct}>{formatMoney(goalCents, currencyCode, locale)}</Text>
+        )}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <Svg width={svgW} height={TOTAL_H}>
+          {goalY != null && (
+            <Line
+              x1={0} y1={goalY} x2={svgW} y2={goalY}
+              stroke={Colors.accent} strokeWidth={1} strokeDasharray="4 3" opacity={0.5}
+            />
+          )}
+          {buckets.map((b, i) => {
+            const x = i * (BAR_W + BAR_GAP);
+            const barH = b.net_cents > 0 ? Math.max((b.net_cents / maxVal) * CHART_H, 3) : 2;
+            const y = CHART_H - barH;
+            const isToday = b.day === today;
+            const hasData = b.net_cents > 0;
+            const barColor = isToday
+              ? Colors.accent
+              : hasData
+                ? Colors.success
+                : Colors.surfaceAlt;
+            const showLabel = b.day % 5 === 0 || b.day === 1 || isToday;
+            return (
+              <React.Fragment key={b.day}>
+                <Rect x={x} y={y} width={BAR_W} height={barH} rx={3} fill={barColor} opacity={isToday ? 1 : 0.85} />
+                {showLabel && (
+                  <SvgText
+                    x={x + BAR_W / 2} y={TOTAL_H - 2}
+                    fontSize={9} fill={isToday ? Colors.accent : Colors.textSecondary}
+                    textAnchor="middle" fontWeight={isToday ? '700' : '400'}
+                  >
+                    {b.day}
+                  </SvgText>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </Svg>
+      </ScrollView>
+    </View>
+  );
+}
+
 // ─── main screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
@@ -193,6 +268,7 @@ export default function DashboardScreen() {
   const [fetchError, setFetchError] = useState(false);
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [weekBuckets, setWeekBuckets] = useState<DayBucket[]>([]);
+  const [monthlyBuckets, setMonthlyBuckets] = useState<MonthBucket[]>([]);
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [goalTarget, setGoalTarget] = useState<number | null>(null);
 
@@ -203,14 +279,16 @@ export default function DashboardScreen() {
   }, []);
 
   const loadData = useCallback(async (uid: string) => {
-    const [todaySummary, buckets, active, goal] = await Promise.all([
+    const [todaySummary, buckets, monthly, active, goal] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
+      getMonthlyBuckets(uid),
       getActiveShift(uid),
       getActiveGoal(uid),
     ]);
     setSummary(todaySummary);
     setWeekBuckets(buckets);
+    setMonthlyBuckets(monthly);
     setActiveShift(active);
     setGoalTarget(goal?.target_amount_cents ?? null);
   }, []);
@@ -278,6 +356,15 @@ export default function DashboardScreen() {
           <GoalProgress
             netTodayCents={summary.net_cents}
             targetCents={goalTarget}
+            currencyCode={currencyCode}
+            locale={locale}
+          />
+        )}
+
+        {monthlyBuckets.length > 0 && (
+          <MonthlyChart
+            buckets={monthlyBuckets}
+            goalCents={goalTarget}
             currencyCode={currencyCode}
             locale={locale}
           />

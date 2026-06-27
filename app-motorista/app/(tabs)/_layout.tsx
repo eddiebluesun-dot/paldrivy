@@ -37,6 +37,7 @@ export default function TabLayout() {
       <Tabs.Screen name="fuel"     options={{ title: t('tabs.fuel') }} />
       <Tabs.Screen name="expenses" options={{ title: t('tabs.expenses') }} />
       <Tabs.Screen name="more"     options={{ title: t('tabs.more') }} />
+      <Tabs.Screen name="two"      options={{ href: null }} />
     </Tabs>
   );
 }

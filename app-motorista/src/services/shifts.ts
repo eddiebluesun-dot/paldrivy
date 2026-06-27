@@ -48,6 +48,7 @@ export async function endShift(
       food_cents: payload.food_cents,
       tips_cents: payload.tips_cents,
       bonuses_cents: payload.bonuses_cents,
+      rides_count: payload.rides_count,
     })
     .eq('id', shiftId);
 

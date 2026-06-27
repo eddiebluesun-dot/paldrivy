@@ -74,7 +74,8 @@
     "km_driven": "Km rodados",
     "weekly": "Esta semana",
     "no_data": "Sem dados",
-    "goal_of": "Meta: "
+    "goal_of": "Meta: ",
+    "monthly_chart": "Resumo do mês"
   },
   "shift": {
     "start": "Iniciar turno",
@@ -104,7 +105,8 @@
     "discard": "Descartar turno",
     "discard_title": "Descartar turno de teste",
     "discard_confirm": "O turno atual será excluído sem salvar. Esta ação não pode ser desfeita.",
-    "recent": "ÚLTIMOS 7 DIAS"
+    "recent": "ÚLTIMOS 7 DIAS",
+    "rides_count_label": "Corridas realizadas"
   },
   "fuel": {
     "title": "Abastecimentos",

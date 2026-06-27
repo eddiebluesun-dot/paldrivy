@@ -31,6 +31,17 @@ import {
 import { useProfile } from '@/src/hooks/useProfile';
 import type { EndShiftData, Shift, ShiftPlatform } from '@/src/types';
 
+function platformConfirm(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Confirmar', style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+}
+
 function secondsToHMS(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -61,6 +72,7 @@ function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: End
   const [food, setFood] = useState('');
   const [tips, setTips] = useState('');
   const [bonuses, setBonuses] = useState('');
+  const [ridesCount, setRidesCount] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +100,7 @@ function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: End
         food_cents: decimalToCents(parseFloat(food) || 0),
         tips_cents: decimalToCents(parseFloat(tips) || 0),
         bonuses_cents: decimalToCents(parseFloat(bonuses) || 0),
+        rides_count: ridesCount.trim() !== '' ? parseInt(ridesCount, 10) : null,
       };
       await endShift(shiftId, payload);
       const { data, error: calcError } = await supabase.functions.invoke('calculate-shift', { body: { shift_id: shiftId } });
@@ -135,6 +148,13 @@ function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: End
             <Ionicons name="add-circle-outline" size={16} color={Colors.accent} />
             <Text style={styles.addRowText}>{t('shift.add_platform')}</Text>
           </Pressable>
+
+          <Text style={styles.fieldLabel}>{t('shift.rides_count_label')}</Text>
+          <TextInput
+            style={styles.input} keyboardType="number-pad"
+            value={ridesCount} onChangeText={setRidesCount}
+            placeholder="0" placeholderTextColor={Colors.textSecondary}
+          />
 
           <Text style={styles.fieldLabel}>{t('shift.costs')}</Text>
           {[
@@ -190,14 +210,7 @@ function ShiftItem({ shift, onDelete }: ShiftItemProps) {
       : '--:--:--';
 
   function confirmDelete() {
-    Alert.alert(
-      t('shift.delete_title'),
-      t('shift.delete_confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('common.delete'), style: 'destructive', onPress: () => onDelete(shift.id) },
-      ]
-    );
+    platformConfirm(t('shift.delete_title'), t('shift.delete_confirm'), () => onDelete(shift.id));
   }
 
   return (
@@ -304,27 +317,16 @@ export default function ShiftsScreen() {
   }
 
   function handleDiscardShift() {
-    Alert.alert(
-      t('shift.discard_title'),
-      t('shift.discard_confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('shift.discard'),
-          style: 'destructive',
-          onPress: async () => {
-            if (!activeShift) return;
-            try {
-              await deleteShift(activeShift.id);
-              setActiveShift(null);
-              setElapsed(0);
-            } catch {
-              setScreenError(t('common.error'));
-            }
-          },
-        },
-      ]
-    );
+    platformConfirm(t('shift.discard_title'), t('shift.discard_confirm'), async () => {
+      if (!activeShift) return;
+      try {
+        await deleteShift(activeShift.id);
+        setActiveShift(null);
+        setElapsed(0);
+      } catch {
+        setScreenError(t('common.error'));
+      }
+    });
   }
 
   async function handleDeleteShift(shiftId: string) {
