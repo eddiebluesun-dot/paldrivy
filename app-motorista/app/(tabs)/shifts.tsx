@@ -53,6 +53,58 @@ function formatDuration(startedAt: string): number {
   return Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
 }
 
+// ─── start-shift modal ───────────────────────────────────────────────────────
+
+interface StartShiftModalProps {
+  visible: boolean;
+  distanceUnit: 'km' | 'mi';
+  onClose: () => void;
+  onConfirm: (odometerMeters: number | null) => void;
+}
+
+function StartShiftModal({ visible, distanceUnit, onClose, onConfirm }: StartShiftModalProps) {
+  const { t } = useTranslation();
+  const [odometer, setOdometer] = useState('');
+
+  function handleStart() {
+    const raw = odometer.replace(',', '.').trim();
+    const meters = raw !== '' ? displayToMeters(parseFloat(raw), distanceUnit) : null;
+    onConfirm(meters);
+    setOdometer('');
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.modalTitle}>{t('shift.start')}</Text>
+
+          <Text style={styles.fieldLabel}>{t('shift.odometer_start')}</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="decimal-pad"
+            value={odometer}
+            onChangeText={setOdometer}
+            placeholder={distanceUnit === 'km' ? 'km' : 'mi'}
+            placeholderTextColor={Colors.textSecondary}
+            autoFocus
+          />
+          <Text style={styles.odometerHint}>{t('shift.odometer_start_hint')}</Text>
+
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleStart}>
+            <Ionicons name="play-circle-outline" size={20} color={Colors.onAccent} />
+            <Text style={styles.primaryBtnText}>{t('shift.start_confirm')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+            <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ─── end-shift modal ──────────────────────────────────────────────────────────
 
 interface EndShiftModalProps {
@@ -202,12 +254,20 @@ interface ShiftItemProps {
 
 function ShiftItem({ shift, onDelete }: ShiftItemProps) {
   const { t } = useTranslation();
+  const { profile } = useProfile();
+  const distUnit = profile?.distance_unit ?? 'km';
   const date = new Date(shift.started_at).toLocaleDateString('pt-BR');
   const dur = shift.duration_seconds != null
     ? secondsToHMS(shift.duration_seconds)
     : shift.ended_at != null
       ? secondsToHMS(Math.floor((new Date(shift.ended_at).getTime() - new Date(shift.started_at).getTime()) / 1000))
       : '--:--:--';
+  const kmStart = shift.odometer_start_meters != null
+    ? `${(shift.odometer_start_meters / (distUnit === 'km' ? 1000 : 1609.344)).toFixed(0)} ${distUnit}`
+    : null;
+  const kmEnd = shift.odometer_end_meters != null
+    ? `${(shift.odometer_end_meters / (distUnit === 'km' ? 1000 : 1609.344)).toFixed(0)} ${distUnit}`
+    : null;
 
   function confirmDelete() {
     platformConfirm(t('shift.delete_title'), t('shift.delete_confirm'), () => onDelete(shift.id));
@@ -241,6 +301,14 @@ function ShiftItem({ shift, onDelete }: ShiftItemProps) {
             </Text>
           </View>
         </View>
+        {(kmStart != null || kmEnd != null) && (
+          <View style={styles.kmRow}>
+            <Ionicons name="speedometer-outline" size={12} color={Colors.textSecondary} />
+            <Text style={styles.kmText}>
+              {kmStart ?? '?'} → {kmEnd ?? '?'}
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -258,6 +326,7 @@ export default function ShiftsScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [startModalVisible, setStartModalVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [screenError, setScreenError] = useState<string | null>(null);
@@ -294,12 +363,13 @@ export default function ShiftsScreen() {
     return () => { if (timerRef.current !== null) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [activeShift]);
 
-  async function handleStartShift() {
+  async function handleStartShift(odometerMeters: number | null) {
     if (!userId) return;
+    setStartModalVisible(false);
     setStarting(true);
     setScreenError(null);
     try {
-      const shift = await startShift(userId, profile?.vehicle_id ?? null);
+      const shift = await startShift(userId, profile?.vehicle_id ?? null, odometerMeters);
       setActiveShift(shift);
       setElapsed(0);
     } catch {
@@ -388,7 +458,7 @@ export default function ShiftsScreen() {
         ) : (
           <TouchableOpacity
             style={[styles.startBtn, starting && styles.btnDisabled]}
-            onPress={handleStartShift} disabled={starting}
+            onPress={() => setStartModalVisible(true)} disabled={starting}
           >
             {starting ? <ActivityIndicator color={Colors.onAccent} /> : (
               <>
@@ -412,6 +482,13 @@ export default function ShiftsScreen() {
           ))
         )}
       </ScrollView>
+
+      <StartShiftModal
+        visible={startModalVisible}
+        distanceUnit={profile?.distance_unit ?? 'km'}
+        onClose={() => setStartModalVisible(false)}
+        onConfirm={handleStartShift}
+      />
 
       {activeShift !== null && (
         <EndShiftModal
@@ -525,6 +602,8 @@ const styles = StyleSheet.create({
   shiftStat: { flex: 1 },
   statLabel: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
   statValue: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  kmRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: Spacing.xs },
+  kmText: { color: Colors.textSecondary, fontSize: 11, fontVariant: ['tabular-nums'] },
 
   // Modal
   modalWrapper: { flex: 1, backgroundColor: Colors.background },
@@ -551,12 +630,17 @@ const styles = StyleSheet.create({
   costInput: { width: 110, marginBottom: 0 },
 
   primaryBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: Colors.accent, borderRadius: Radius.button,
-    alignItems: 'center', justifyContent: 'center', minHeight: 52, marginTop: Spacing.sm,
+    minHeight: 52, marginTop: Spacing.sm,
     shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 10, elevation: 5,
   },
   primaryBtnText: { color: Colors.onAccent, fontSize: 16, fontWeight: '800' },
+  odometerHint: {
+    color: Colors.textSecondary, fontSize: 12, marginTop: -Spacing.xs,
+    marginBottom: Spacing.md, paddingHorizontal: 2,
+  },
   cancelBtn: { paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.sm },
   cancelBtnText: { color: Colors.textSecondary, fontSize: 15 },
 });

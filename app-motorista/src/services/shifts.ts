@@ -17,7 +17,8 @@ export async function getActiveShift(userId: string): Promise<Shift | null> {
 
 export async function startShift(
   userId: string,
-  vehicleId: string | null
+  vehicleId: string | null,
+  odometerStartMeters: number | null
 ): Promise<Shift> {
   const { data, error } = await supabase
     .from('shifts')
@@ -25,6 +26,7 @@ export async function startShift(
       user_id: userId,
       vehicle_id: vehicleId,
       started_at: new Date().toISOString(),
+      odometer_start_meters: odometerStartMeters,
     })
     .select('*')
     .single();
