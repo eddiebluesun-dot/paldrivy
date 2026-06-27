@@ -92,7 +92,7 @@ function AddExpenseModal({
   const [recurring, setRecurring] = useState(false);
   // fuel-specific
   const [fuelType, setFuelType] = useState<FuelType>('gasoline');
-  const [fuelQty, setFuelQty] = useState('');
+  const [fuelTotalStr, setFuelTotalStr] = useState('');
   const [fuelUnitPrice, setFuelUnitPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,9 +101,10 @@ function AddExpenseModal({
   const isElectric = fuelType === 'electric';
   const qtyLabel = isElectric ? 'kWh' : volumeUnit === 'gallons' ? t('onboarding.vol_gallons') : t('onboarding.vol_liters');
   const priceLabel = isElectric ? t('fuel.price_per_kwh') : volumeUnit === 'gallons' ? t('fuel.price_per_unit_gal') : t('fuel.price_per_unit');
-  const fuelQtyNum = parseFloat(fuelQty.replace(',', '.')) || 0;
+  const fuelTotalNum = parseFloat(fuelTotalStr.replace(',', '.')) || 0;
   const fuelUnitPriceNum = parseFloat(fuelUnitPrice.replace(',', '.')) || 0;
-  const fuelTotal = fuelQtyNum > 0 && fuelUnitPriceNum > 0 ? fuelQtyNum * fuelUnitPriceNum : 0;
+  // total ÷ price = qty (the computed field)
+  const fuelQtyNum = fuelTotalNum > 0 && fuelUnitPriceNum > 0 ? fuelTotalNum / fuelUnitPriceNum : 0;
 
   function resetForm() {
     setCategory(EXPENSE_CATEGORIES[0]);
@@ -112,7 +113,7 @@ function AddExpenseModal({
     setDescription('');
     setRecurring(false);
     setFuelType('gasoline');
-    setFuelQty('');
+    setFuelTotalStr('');
     setFuelUnitPrice('');
     setError(null);
   }
@@ -128,7 +129,7 @@ function AddExpenseModal({
     if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) { setError(t('common.required')); return; }
 
     if (isFuel) {
-      if (fuelQtyNum <= 0) { setError(t('common.required')); return; }
+      if (fuelTotalNum <= 0) { setError(t('common.required')); return; }
       if (fuelUnitPriceNum <= 0) { setError(t('common.required')); return; }
     } else {
       const amountNum = parseFloat(amount.replace(',', '.'));
@@ -138,10 +139,12 @@ function AddExpenseModal({
     setSaving(true);
     try {
       if (isFuel) {
-        const totalCostCents = decimalToCents(fuelTotal);
+        const totalCostCents = decimalToCents(fuelTotalNum);
         const volumeMl = isElectric
           ? Math.round(fuelQtyNum * 1000)
           : displayToMl(fuelQtyNum, volumeUnit);
+        const qtyDisplay = fuelQtyNum.toFixed(3);
+        const unitLabel = isElectric ? 'kWh' : 'L';
         await Promise.all([
           addFuelEntry({
             user_id: userId,
@@ -160,7 +163,7 @@ function AddExpenseModal({
             category,
             amount_cents: totalCostCents,
             expense_date: trimmedDate,
-            description: `${t(`onboarding.fuel_${fuelType}`)} — ${fuelQtyNum.toFixed(2)} ${isElectric ? 'kWh' : 'L'} × ${fuelUnitPriceNum.toFixed(3)}`,
+            description: `${t(`onboarding.fuel_${fuelType}`)} — ${qtyDisplay} ${unitLabel} × R$${fuelUnitPriceNum.toFixed(3)}`,
             recurring: false,
           }),
         ]);
@@ -208,10 +211,9 @@ function AddExpenseModal({
           <Select
             value={category}
             onValueChange={(val) => setCategory(val)}
-            items={EXPENSE_CATEGORIES.map((cat) => ({
-              label: t(`expense_category.${cat}`),
-              value: cat,
-            }))}
+            items={EXPENSE_CATEGORIES
+              .map((cat) => ({ label: t(`expense_category.${cat}`), value: cat }))
+              .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))}
           />
 
           {/* Fuel fields (only when category = fuel) */}
@@ -224,13 +226,13 @@ function AddExpenseModal({
                 items={FUEL_TYPES.map(ft => ({ label: t(`onboarding.fuel_${ft}`), value: ft }))}
               />
 
-              <Text style={styles.label}>{qtyLabel}</Text>
+              <Text style={styles.label}>{t('fuel.total')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="decimal-pad"
-                value={fuelQty}
-                onChangeText={setFuelQty}
-                placeholder="0.000"
+                value={fuelTotalStr}
+                onChangeText={setFuelTotalStr}
+                placeholder="0.00"
                 placeholderTextColor={Colors.textSecondary}
               />
 
@@ -244,10 +246,10 @@ function AddExpenseModal({
                 placeholderTextColor={Colors.textSecondary}
               />
 
-              <Text style={styles.label}>{t('fuel.total')}</Text>
+              <Text style={styles.label}>{qtyLabel}</Text>
               <View style={[styles.input, styles.readonlyRow]}>
-                <Text style={[styles.readonlyValue, fuelTotal > 0 && { color: Colors.accent }]}>
-                  {fuelTotal > 0 ? fuelTotal.toFixed(2) : '--'}
+                <Text style={[styles.readonlyValue, fuelQtyNum > 0 && { color: Colors.accent }]}>
+                  {fuelQtyNum > 0 ? fuelQtyNum.toFixed(3) : '--'}
                 </Text>
               </View>
             </>

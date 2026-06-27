@@ -60,7 +60,7 @@ function AddFuelModal({
 
   const [fuelType, setFuelType] = useState<FuelType>(defaultFuelType);
   const [odometer, setOdometer] = useState('');
-  const [volume, setVolume] = useState('');
+  const [totalStr, setTotalStr] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [fullTank, setFullTank] = useState(false);
   const [station, setStation] = useState('');
@@ -71,14 +71,15 @@ function AddFuelModal({
   const qtyLabel = isElectric ? 'kWh' : volumeUnit === 'gallons' ? t('onboarding.vol_gallons') : t('onboarding.vol_liters');
   const priceLabel = isElectric ? t('fuel.price_per_kwh') : volumeUnit === 'gallons' ? t('fuel.price_per_unit_gal') : t('fuel.price_per_unit');
 
-  const qtyNum = parseFloat(volume.replace(',', '.')) || 0;
+  const totalNum = parseFloat(totalStr.replace(',', '.')) || 0;
   const unitPriceNum = parseFloat(unitPrice.replace(',', '.')) || 0;
-  const computedTotal = qtyNum > 0 && unitPriceNum > 0 ? (qtyNum * unitPriceNum).toFixed(2) : '';
+  // total ÷ price = qty (computed)
+  const qtyNum = totalNum > 0 && unitPriceNum > 0 ? totalNum / unitPriceNum : 0;
 
   function resetForm() {
     setFuelType(defaultFuelType);
     setOdometer('');
-    setVolume('');
+    setTotalStr('');
     setUnitPrice('');
     setFullTank(false);
     setStation('');
@@ -92,7 +93,7 @@ function AddFuelModal({
 
   async function handleSave() {
     setError(null);
-    if (!volume.trim() || qtyNum <= 0) { setError(t('common.required')); return; }
+    if (!totalStr.trim() || totalNum <= 0) { setError(t('common.required')); return; }
     if (!unitPrice.trim() || unitPriceNum <= 0) { setError(t('common.required')); return; }
 
     setSaving(true);
@@ -103,7 +104,7 @@ function AddFuelModal({
       const volumeMl = isElectric
         ? Math.round(qtyNum * 1000)
         : displayToMl(qtyNum, volumeUnit);
-      const totalCostCents = decimalToCents(qtyNum * unitPriceNum);
+      const totalCostCents = decimalToCents(totalNum);
       const pricePerUnitCents = decimalToCents(unitPriceNum);
 
       await addFuelEntry({
@@ -166,18 +167,18 @@ function AddFuelModal({
             placeholderTextColor={Colors.textSecondary}
           />
 
-          {/* Quantity */}
-          <Text style={styles.label}>{qtyLabel}</Text>
+          {/* Total value (user inputs) */}
+          <Text style={styles.label}>{t('fuel.total')}</Text>
           <TextInput
             style={styles.input}
             keyboardType="decimal-pad"
-            value={volume}
-            onChangeText={setVolume}
-            placeholder="0.000"
+            value={totalStr}
+            onChangeText={setTotalStr}
+            placeholder="0.00"
             placeholderTextColor={Colors.textSecondary}
           />
 
-          {/* Unit price */}
+          {/* Unit price (user inputs) */}
           <Text style={styles.label}>{priceLabel}</Text>
           <TextInput
             style={styles.input}
@@ -188,11 +189,11 @@ function AddFuelModal({
             placeholderTextColor={Colors.textSecondary}
           />
 
-          {/* Total (computed, read-only) */}
-          <Text style={styles.label}>{t('fuel.total')}</Text>
+          {/* Quantity (computed, read-only) */}
+          <Text style={styles.label}>{qtyLabel}</Text>
           <View style={styles.readonlyInput}>
-            <Text style={[styles.readonlyText, computedTotal !== '' && { color: Colors.accent }]}>
-              {computedTotal !== '' ? computedTotal : '--'}
+            <Text style={[styles.readonlyText, qtyNum > 0 && { color: Colors.accent }]}>
+              {qtyNum > 0 ? qtyNum.toFixed(3) : '--'}
             </Text>
           </View>
 
