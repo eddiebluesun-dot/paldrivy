@@ -3,15 +3,19 @@
  * All UI components must reference these constants — never hardcode color values.
  */
 export const Colors = {
-  background: '#020617',
-  surface: '#0F172A',
-  surfaceAlt: '#1E293B',
+  background: '#F8FAFC',
+  surface: '#FFFFFF',
+  surfaceAlt: '#F1F5F9',
   brandBlue: '#2563EB',
+  brandBlueLight: '#DBEAFE',
   onBrand: '#FFFFFF',
-  border: '#334155',
-  textPrimary: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  error: '#F87171',
+  border: '#E2E8F0',
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  error: '#EF4444',
+  errorBg: '#FFF1F2',
+  success: '#10B981',
+  successBg: '#ECFDF5',
 } as const;
 
 export const Radius = {

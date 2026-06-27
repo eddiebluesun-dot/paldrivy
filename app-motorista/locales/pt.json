@@ -9,7 +9,10 @@
     "logout": "Sair",
     "no_account": "Não tem conta? Criar conta",
     "have_account": "Já tem conta? Entrar",
-    "password_min": "Mínimo 6 caracteres"
+    "password_min": "Mínimo 6 caracteres",
+    "forgot_password": "Esqueceu a senha?",
+    "reset_sent": "Link enviado! Verifique seu e-mail.",
+    "send_reset": "Enviar link de recuperação"
   },
   "onboarding": {
     "language_title": "Configure seu perfil",
@@ -146,6 +149,18 @@
   "more": {
     "title": "Mais",
     "profile": "Perfil",
+    "name": "Nome completo",
+    "phone": "Telefone",
+    "email_label": "E-mail",
+    "save_profile": "Salvar perfil",
+    "profile_saved": "Perfil salvo!",
+    "security": "Segurança",
+    "change_password": "Alterar senha",
+    "new_password": "Nova senha",
+    "confirm_password": "Confirmar nova senha",
+    "password_changed": "Senha alterada com sucesso!",
+    "passwords_mismatch": "As senhas não coincidem",
+    "password_min": "Mínimo 6 caracteres",
     "settings": "Configurações",
     "language": "Idioma",
     "currency": "Moeda",

@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -32,33 +33,18 @@ export default function RegisterScreen() {
     setEmailError('');
     setPasswordError('');
     setGeneralError('');
-
-    if (!email.trim()) {
-      setEmailError(t('common.required'));
-      valid = false;
-    }
-    if (!password) {
-      setPasswordError(t('common.required'));
-      valid = false;
-    } else if (password.length < 6) {
-      setPasswordError(t('auth.password_min'));
-      valid = false;
-    }
+    if (!email.trim()) { setEmailError(t('common.required')); valid = false; }
+    if (!password) { setPasswordError(t('common.required')); valid = false; }
+    else if (password.length < 6) { setPasswordError(t('auth.password_min')); valid = false; }
     return valid;
   };
 
   const handleRegister = async () => {
     if (!validate()) return;
-
     setLoading(true);
     const { error } = await authSignUp(email.trim(), password);
     setLoading(false);
-
-    if (error) {
-      setGeneralError(error.message);
-      return;
-    }
-
+    if (error) { setGeneralError(error.message); return; }
     router.replace('/onboarding/locale');
   };
 
@@ -72,10 +58,21 @@ export default function RegisterScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>{t('auth.register')}</Text>
+          {/* Logo */}
+          <View style={styles.logoBlock}>
+            <Image
+              source={require('../../assets/images/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.appName}>{t('app_name')}</Text>
+            <Text style={styles.subtitle}>{t('auth.register')}</Text>
+          </View>
 
           {generalError ? (
-            <Text style={styles.generalError}>{generalError}</Text>
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{generalError}</Text>
+            </View>
           ) : null}
 
           <View style={styles.fieldGroup}>
@@ -83,21 +80,16 @@ export default function RegisterScreen() {
             <TextInput
               style={[styles.input, emailError ? styles.inputError : null]}
               value={email}
-              onChangeText={(v) => {
-                setEmail(v);
-                if (emailError) setEmailError('');
-              }}
+              onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(''); }}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
               textContentType="emailAddress"
               placeholderTextColor={Colors.textSecondary}
-              placeholder={t('auth.email')}
+              placeholder="seu@email.com"
               accessibilityLabel={t('auth.email')}
             />
-            {emailError ? (
-              <Text style={styles.fieldError}>{emailError}</Text>
-            ) : null}
+            {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
           </View>
 
           <View style={styles.fieldGroup}>
@@ -105,19 +97,14 @@ export default function RegisterScreen() {
             <TextInput
               style={[styles.input, passwordError ? styles.inputError : null]}
               value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                if (passwordError) setPasswordError('');
-              }}
+              onChangeText={(v) => { setPassword(v); if (passwordError) setPasswordError(''); }}
               secureTextEntry
               textContentType="newPassword"
               placeholderTextColor={Colors.textSecondary}
-              placeholder={t('auth.password')}
+              placeholder="Mínimo 6 caracteres"
               accessibilityLabel={t('auth.password')}
             />
-            {passwordError ? (
-              <Text style={styles.fieldError}>{passwordError}</Text>
-            ) : null}
+            {passwordError ? <Text style={styles.fieldError}>{passwordError}</Text> : null}
           </View>
 
           <TouchableOpacity
@@ -127,18 +114,21 @@ export default function RegisterScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('auth.register')}
           >
-            {loading ? (
-              <ActivityIndicator color={Colors.onBrand} />
-            ) : (
-              <Text style={styles.primaryButtonText}>{t('auth.register')}</Text>
-            )}
+            {loading
+              ? <ActivityIndicator color={Colors.onBrand} />
+              : <Text style={styles.primaryButtonText}>{t('auth.register')}</Text>}
           </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => router.back()}
             accessibilityRole="button"
-            accessibilityLabel={t('auth.have_account')}
           >
             <Text style={styles.secondaryButtonText}>{t('auth.have_account')}</Text>
           </TouchableOpacity>
@@ -149,47 +139,49 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
+  safe: { flex: 1, backgroundColor: Colors.background },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xl,
+    maxWidth: 480,
+    alignSelf: 'center',
+    width: '100%',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    textAlign: 'center',
+  logoBlock: {
+    alignItems: 'center',
     marginBottom: Spacing.xxl,
-    ...Platform.select({
-      ios: { fontFamily: 'IBM Plex Sans' },
-      android: { fontFamily: 'IBMPlexSans-Bold' },
-    }),
   },
-  generalError: {
-    color: Colors.error,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: Spacing.md,
-    backgroundColor: Colors.surfaceAlt,
-    padding: Spacing.sm,
-    borderRadius: Radius.input,
+  logoImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    marginBottom: Spacing.sm,
   },
-  fieldGroup: {
-    marginBottom: Spacing.md,
+  appName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    letterSpacing: -0.5,
   },
-  label: {
+  subtitle: {
+    fontSize: 15,
     color: Colors.textSecondary,
-    fontSize: 14,
-    marginBottom: Spacing.xs,
+    marginTop: 4,
   },
+  errorBanner: {
+    backgroundColor: Colors.errorBg,
+    borderRadius: Radius.input,
+    padding: Spacing.sm + 4,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorBannerText: { color: Colors.error, fontSize: 14, textAlign: 'center' },
+  fieldGroup: { marginBottom: Spacing.md },
+  label: { color: Colors.textSecondary, fontSize: 14, fontWeight: '500', marginBottom: Spacing.xs },
   input: {
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -201,39 +193,37 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     minHeight: 48,
   },
-  inputError: {
-    borderColor: Colors.error,
-  },
-  fieldError: {
-    color: Colors.error,
-    fontSize: 12,
-    marginTop: Spacing.xs,
-  },
+  inputError: { borderColor: Colors.error },
+  fieldError: { color: Colors.error, fontSize: 12, marginTop: Spacing.xs },
   primaryButton: {
     backgroundColor: Colors.brandBlue,
     borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 52,
     marginTop: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
+    shadowColor: Colors.brandBlue,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryButtonDisabled: {
-    opacity: 0.6,
+  primaryButtonDisabled: { opacity: 0.6 },
+  primaryButtonText: { color: Colors.onBrand, fontSize: 16, fontWeight: '700' },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.lg,
   },
-  primaryButtonText: {
-    color: Colors.onBrand,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { color: Colors.textSecondary, fontSize: 13, marginHorizontal: Spacing.sm },
   secondaryButton: {
+    borderRadius: Radius.button,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
-    marginTop: Spacing.sm,
+    minHeight: 52,
   },
-  secondaryButtonText: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
+  secondaryButtonText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' },
 });
