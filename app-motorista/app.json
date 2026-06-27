@@ -4,7 +4,7 @@
     "slug": "app-motorista",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo.png",
     "scheme": "appmotorista",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -22,7 +22,7 @@
     "web": {
       "bundler": "metro",
       "output": "spa",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/logo.png"
     },
     "plugins": [
       "expo-router",

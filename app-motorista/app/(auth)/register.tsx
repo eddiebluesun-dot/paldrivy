@@ -47,10 +47,7 @@ export default function RegisterScreen() {
 
           {/* Hero */}
           <View style={styles.hero}>
-            <View style={styles.logoRing}>
-              <Image source={require('../../assets/images/icon.png')} style={styles.logoImg} resizeMode="contain" />
-            </View>
-            <Text style={styles.appName}>{t('app_name')}</Text>
+            <Image source={require('../../assets/images/logo.png')} style={styles.logoImg} resizeMode="contain" />
             <Text style={styles.tagline}>{t('auth.register')}</Text>
           </View>
 
@@ -129,18 +126,12 @@ const styles = StyleSheet.create({
     maxWidth: 480, alignSelf: 'center', width: '100%',
   },
 
-  hero: { alignItems: 'center', marginBottom: Spacing.xxl },
-  logoRing: {
-    width: 90, height: 90, borderRadius: 24,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1.5, borderColor: Colors.accent,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: Spacing.md,
-    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45, shadowRadius: 20, elevation: 10,
+  hero: { alignItems: 'center', marginBottom: Spacing.xl },
+  logoImg: {
+    width: 200, height: 200, borderRadius: 28, marginBottom: Spacing.xs,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4, shadowRadius: 20, elevation: 10,
   },
-  logoImg: { width: 58, height: 58, borderRadius: 14 },
-  appName: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -1, marginBottom: 4 },
   tagline: { fontSize: 14, color: Colors.textSecondary },
 
   errorBanner: {
