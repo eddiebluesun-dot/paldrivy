@@ -54,6 +54,11 @@ export async function endShift(
   if (error) throw error;
 }
 
+export async function deleteShift(shiftId: string): Promise<void> {
+  const { error } = await supabase.from('shifts').delete().eq('id', shiftId);
+  if (error) throw error;
+}
+
 export async function getRecentShifts(
   userId: string,
   days = 7

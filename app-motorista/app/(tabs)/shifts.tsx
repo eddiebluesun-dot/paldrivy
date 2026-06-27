@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -13,12 +14,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { decimalToCents } from '@/src/utils/currency';
 import { displayToMeters } from '@/src/utils/units';
 import {
+  deleteShift,
   endShift,
   getActiveShift,
   getRecentShifts,
@@ -26,8 +30,6 @@ import {
 } from '@/src/services/shifts';
 import { useProfile } from '@/src/hooks/useProfile';
 import type { EndShiftData, Shift, ShiftPlatform } from '@/src/types';
-
-// ─── helpers ────────────────────────────────────────────────────────────────
 
 function secondsToHMS(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -40,7 +42,7 @@ function formatDuration(startedAt: string): number {
   return Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
 }
 
-// ─── end-shift modal ─────────────────────────────────────────────────────────
+// ─── end-shift modal ──────────────────────────────────────────────────────────
 
 interface EndShiftModalProps {
   visible: boolean;
@@ -50,18 +52,10 @@ interface EndShiftModalProps {
   onSaved: (fuelMissing: boolean) => void;
 }
 
-function EndShiftModal({
-  visible,
-  shiftId,
-  distanceUnit,
-  onClose,
-  onSaved,
-}: EndShiftModalProps) {
+function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: EndShiftModalProps) {
   const { t } = useTranslation();
   const [odometer, setOdometer] = useState('');
-  const [platforms, setPlatforms] = useState<{ name: string; amount: string }[]>([
-    { name: '', amount: '' },
-  ]);
+  const [platforms, setPlatforms] = useState<{ name: string; amount: string }[]>([{ name: '', amount: '' }]);
   const [tolls, setTolls] = useState('');
   const [parking, setParking] = useState('');
   const [food, setFood] = useState('');
@@ -70,36 +64,22 @@ function EndShiftModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function addPlatformRow() {
-    setPlatforms((prev) => [...prev, { name: '', amount: '' }]);
-  }
+  function addPlatformRow() { setPlatforms(prev => [...prev, { name: '', amount: '' }]); }
 
-  function updatePlatform(
-    index: number,
-    field: 'name' | 'amount',
-    value: string
-  ) {
-    setPlatforms((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
-    );
+  function updatePlatform(index: number, field: 'name' | 'amount', value: string) {
+    setPlatforms(prev => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   }
 
   async function handleSave() {
     setError(null);
     setSaving(true);
     try {
-      const odometerMeters =
-        odometer.trim() !== ''
-          ? displayToMeters(parseFloat(odometer), distanceUnit)
-          : null;
-
+      const odometerMeters = odometer.trim() !== ''
+        ? displayToMeters(parseFloat(odometer), distanceUnit)
+        : null;
       const platformRows: ShiftPlatform[] = platforms
-        .filter((p) => p.name.trim() !== '' || p.amount.trim() !== '')
-        .map((p) => ({
-          platform_name: p.name.trim(),
-          amount_cents: decimalToCents(parseFloat(p.amount) || 0),
-        }));
-
+        .filter(p => p.name.trim() !== '' || p.amount.trim() !== '')
+        .map(p => ({ platform_name: p.name.trim(), amount_cents: decimalToCents(parseFloat(p.amount) || 0) }));
       const payload: EndShiftData = {
         odometer_end_meters: odometerMeters,
         platforms: platformRows,
@@ -109,23 +89,12 @@ function EndShiftModal({
         tips_cents: decimalToCents(parseFloat(tips) || 0),
         bonuses_cents: decimalToCents(parseFloat(bonuses) || 0),
       };
-
       await endShift(shiftId, payload);
-
-      const { data, error: calcError } = await supabase.functions.invoke('calculate-shift', {
-        body: { shift_id: shiftId },
-      });
-
+      const { data, error: calcError } = await supabase.functions.invoke('calculate-shift', { body: { shift_id: shiftId } });
       if (calcError) throw calcError;
-
-      const fuelMissing =
-        data != null &&
-        typeof data === 'object' &&
-        'fuel_price_missing' in data &&
-        data.fuel_price_missing === true;
-
+      const fuelMissing = data != null && typeof data === 'object' && 'fuel_price_missing' in data && data.fuel_price_missing === true;
       onSaved(fuelMissing);
-    } catch (e) {
+    } catch {
       setError(t('common.error'));
     } finally {
       setSaving(false);
@@ -133,61 +102,41 @@ function EndShiftModal({
   }
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        style={styles.modalWrapper}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          style={styles.modalScroll}
-          contentContainerStyle={styles.modalContent}
-          keyboardShouldPersistTaps="handled"
-        >
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.modalTitle}>{t('shift.end')}</Text>
 
-          {/* Odometer */}
-          <Text style={styles.label}>{t('shift.odometer_end')}</Text>
+          <Text style={styles.fieldLabel}>{t('shift.odometer_end')}</Text>
           <TextInput
-            style={styles.input}
-            keyboardType="decimal-pad"
-            value={odometer}
-            onChangeText={setOdometer}
+            style={styles.input} keyboardType="decimal-pad"
+            value={odometer} onChangeText={setOdometer}
             placeholder={distanceUnit === 'km' ? 'km' : 'mi'}
             placeholderTextColor={Colors.textSecondary}
           />
 
-          {/* Platforms */}
-          <Text style={styles.label}>{t('shift.earnings')}</Text>
+          <Text style={styles.fieldLabel}>{t('shift.earnings')}</Text>
           {platforms.map((row, i) => (
             <View key={i} style={styles.platformRow}>
               <TextInput
                 style={[styles.input, styles.platformName]}
-                placeholder={t('shift.platform_name')}
-                placeholderTextColor={Colors.textSecondary}
-                value={row.name}
-                onChangeText={(v) => updatePlatform(i, 'name', v)}
+                placeholder={t('shift.platform_name')} placeholderTextColor={Colors.textSecondary}
+                value={row.name} onChangeText={v => updatePlatform(i, 'name', v)}
               />
               <TextInput
                 style={[styles.input, styles.platformAmount]}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
+                keyboardType="decimal-pad" placeholder="0.00"
                 placeholderTextColor={Colors.textSecondary}
-                value={row.amount}
-                onChangeText={(v) => updatePlatform(i, 'amount', v)}
+                value={row.amount} onChangeText={v => updatePlatform(i, 'amount', v)}
               />
             </View>
           ))}
           <Pressable onPress={addPlatformRow} style={styles.addRow}>
+            <Ionicons name="add-circle-outline" size={16} color={Colors.accent} />
             <Text style={styles.addRowText}>{t('shift.add_platform')}</Text>
           </Pressable>
 
-          {/* Optional costs */}
-          <Text style={styles.label}>{t('shift.costs')}</Text>
+          <Text style={styles.fieldLabel}>{t('shift.costs')}</Text>
           {[
             { label: t('shift.tolls'), value: tolls, onChange: setTolls },
             { label: t('shift.parking'), value: parking, onChange: setParking },
@@ -199,11 +148,9 @@ function EndShiftModal({
               <Text style={styles.costLabel}>{label}</Text>
               <TextInput
                 style={[styles.input, styles.costInput]}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
+                keyboardType="decimal-pad" placeholder="0.00"
                 placeholderTextColor={Colors.textSecondary}
-                value={value}
-                onChangeText={onChange}
+                value={value} onChangeText={onChange}
               />
             </View>
           ))}
@@ -211,19 +158,14 @@ function EndShiftModal({
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
           <TouchableOpacity
-            style={[styles.primaryButton, saving && styles.buttonDisabled]}
-            onPress={handleSave}
-            disabled={saving}
+            style={[styles.primaryBtn, saving && styles.btnDisabled]}
+            onPress={handleSave} disabled={saving}
           >
-            {saving ? (
-              <ActivityIndicator color={Colors.onBrand} />
-            ) : (
-              <Text style={styles.primaryButtonText}>{t('shift.save')}</Text>
-            )}
+            {saving ? <ActivityIndicator color={Colors.onAccent} /> : <Text style={styles.primaryBtnText}>{t('shift.save')}</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
+          <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+            <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -231,52 +173,67 @@ function EndShiftModal({
   );
 }
 
-// ─── shift list item ─────────────────────────────────────────────────────────
+// ─── shift list item ──────────────────────────────────────────────────────────
 
 interface ShiftItemProps {
   shift: Shift;
+  onDelete: (id: string) => void;
 }
 
-function ShiftItem({ shift }: ShiftItemProps) {
+function ShiftItem({ shift, onDelete }: ShiftItemProps) {
   const { t } = useTranslation();
-  const date = new Date(shift.started_at).toLocaleDateString();
-  const dur =
-    shift.duration_seconds != null
-      ? secondsToHMS(shift.duration_seconds)
-      : shift.ended_at != null
-        ? secondsToHMS(
-            Math.floor(
-              (new Date(shift.ended_at).getTime() -
-                new Date(shift.started_at).getTime()) /
-                1000
-            )
-          )
-        : '--:--:--';
+  const date = new Date(shift.started_at).toLocaleDateString('pt-BR');
+  const dur = shift.duration_seconds != null
+    ? secondsToHMS(shift.duration_seconds)
+    : shift.ended_at != null
+      ? secondsToHMS(Math.floor((new Date(shift.ended_at).getTime() - new Date(shift.started_at).getTime()) / 1000))
+      : '--:--:--';
+
+  function confirmDelete() {
+    Alert.alert(
+      t('shift.delete_title'),
+      t('shift.delete_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => onDelete(shift.id) },
+      ]
+    );
+  }
 
   return (
-    <View style={styles.shiftItem}>
-      <Text style={styles.shiftDate}>{date}</Text>
-      <View style={styles.shiftMeta}>
-        <Text style={styles.shiftMetaLabel}>{t('shift.duration')}</Text>
-        <Text style={styles.shiftMetaValue}>{dur}</Text>
-      </View>
-      <View style={styles.shiftMeta}>
-        <Text style={styles.shiftMetaLabel}>{t('shift.gross')}</Text>
-        <Text style={styles.shiftMetaValue}>
-          {shift.gross_cents != null ? (shift.gross_cents / 100).toFixed(2) : '--'}
-        </Text>
-      </View>
-      <View style={styles.shiftMeta}>
-        <Text style={styles.shiftMetaLabel}>{t('shift.net')}</Text>
-        <Text style={styles.shiftMetaValue}>
-          {shift.net_cents != null ? (shift.net_cents / 100).toFixed(2) : '--'}
-        </Text>
+    <View style={styles.shiftCard}>
+      <View style={styles.shiftAccent} />
+      <View style={styles.shiftBody}>
+        <View style={styles.shiftHeader}>
+          <Text style={styles.shiftDate}>{date}</Text>
+          <TouchableOpacity onPress={confirmDelete} style={styles.deleteBtn} accessibilityLabel={t('shift.delete_title')}>
+            <Ionicons name="trash-outline" size={16} color={Colors.error} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.shiftStats}>
+          <View style={styles.shiftStat}>
+            <Text style={styles.statLabel}>{t('shift.duration')}</Text>
+            <Text style={styles.statValue}>{dur}</Text>
+          </View>
+          <View style={styles.shiftStat}>
+            <Text style={styles.statLabel}>{t('shift.gross')}</Text>
+            <Text style={[styles.statValue, { color: Colors.accent }]}>
+              {shift.gross_cents != null ? (shift.gross_cents / 100).toFixed(2) : '--'}
+            </Text>
+          </View>
+          <View style={styles.shiftStat}>
+            <Text style={styles.statLabel}>{t('shift.net')}</Text>
+            <Text style={[styles.statValue, { color: Colors.success }]}>
+              {shift.net_cents != null ? (shift.net_cents / 100).toFixed(2) : '--'}
+            </Text>
+          </View>
+        </View>
       </View>
     </View>
   );
 }
 
-// ─── main screen ─────────────────────────────────────────────────────────────
+// ─── main screen ──────────────────────────────────────────────────────────────
 
 export default function ShiftsScreen() {
   const { t } = useTranslation();
@@ -294,27 +251,18 @@ export default function ShiftsScreen() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Resolve user ID once
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // Load data whenever userId is known
   const refresh = useCallback(async () => {
     if (!userId) return;
     setScreenError(null);
     try {
-      const [active, recent] = await Promise.all([
-        getActiveShift(userId),
-        getRecentShifts(userId, 7),
-      ]);
+      const [active, recent] = await Promise.all([getActiveShift(userId), getRecentShifts(userId, 7)]);
       setActiveShift(active);
       setRecentShifts(recent);
-      if (active) {
-        setElapsed(formatDuration(active.started_at));
-      }
+      if (active) setElapsed(formatDuration(active.started_at));
     } catch {
       setScreenError(t('common.error'));
     } finally {
@@ -322,30 +270,15 @@ export default function ShiftsScreen() {
     }
   }, [userId, t]);
 
-  useEffect(() => {
-    if (userId) {
-      refresh();
-    }
-  }, [userId, refresh]);
+  useEffect(() => { if (userId) refresh(); }, [userId, refresh]);
 
-  // Live timer
   useEffect(() => {
     if (activeShift) {
-      timerRef.current = setInterval(() => {
-        setElapsed(formatDuration(activeShift.started_at));
-      }, 1000);
+      timerRef.current = setInterval(() => setElapsed(formatDuration(activeShift.started_at)), 1000);
     } else {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      if (timerRef.current !== null) { clearInterval(timerRef.current); timerRef.current = null; }
     }
-    return () => {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
+    return () => { if (timerRef.current !== null) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [activeShift]);
 
   async function handleStartShift() {
@@ -363,79 +296,120 @@ export default function ShiftsScreen() {
     }
   }
 
-  function handleEndShiftPress() {
-    setModalVisible(true);
-  }
-
   async function handleShiftSaved(fuelMissing: boolean) {
     setModalVisible(false);
     setActiveShift(null);
-    if (fuelMissing) {
-      setNotice(t('shift.fuel_missing_notice'));
-    }
+    if (fuelMissing) setNotice(t('shift.fuel_missing_notice'));
     await refresh();
+  }
+
+  function handleDiscardShift() {
+    Alert.alert(
+      t('shift.discard_title'),
+      t('shift.discard_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('shift.discard'),
+          style: 'destructive',
+          onPress: async () => {
+            if (!activeShift) return;
+            try {
+              await deleteShift(activeShift.id);
+              setActiveShift(null);
+              setElapsed(0);
+            } catch {
+              setScreenError(t('common.error'));
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleDeleteShift(shiftId: string) {
+    try {
+      await deleteShift(shiftId);
+      setRecentShifts(prev => prev.filter(s => s.id !== shiftId));
+    } catch {
+      setScreenError(t('common.error'));
+    }
   }
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={Colors.brandBlue} />
+        <ActivityIndicator color={Colors.accent} size="large" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {notice !== null && (
-        <View style={styles.notice}>
-          <Text style={styles.noticeText}>{notice}</Text>
-          <Pressable onPress={() => setNotice(null)}>
-            <Text style={styles.noticeDismiss}>×</Text>
-          </Pressable>
-        </View>
-      )}
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.screenTitle}>{t('tabs.shifts')}</Text>
 
-      {screenError !== null && (
-        <Text style={styles.errorText}>{screenError}</Text>
-      )}
+        {notice !== null && (
+          <View style={styles.notice}>
+            <Ionicons name="information-circle-outline" size={16} color={Colors.brandBlue} />
+            <Text style={styles.noticeText}>{notice}</Text>
+            <Pressable onPress={() => setNotice(null)} style={styles.noticeDismiss}>
+              <Ionicons name="close" size={18} color={Colors.textSecondary} />
+            </Pressable>
+          </View>
+        )}
 
-      {activeShift !== null ? (
-        <View style={styles.activeSection}>
-          <Text style={styles.timerLabel}>{t('dashboard.active_shift')}</Text>
-          <Text style={styles.timer}>{secondsToHMS(elapsed)}</Text>
+        {screenError !== null && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{screenError}</Text>
+          </View>
+        )}
+
+        {activeShift !== null ? (
+          <View style={styles.activeCard}>
+            <View style={styles.activeCardTop}>
+              <View style={styles.activeDotRow}>
+                <View style={styles.activeDot} />
+                <Text style={styles.activeLabel}>TURNO ATIVO</Text>
+              </View>
+            </View>
+            <Text style={styles.timer}>{secondsToHMS(elapsed)}</Text>
+            <TouchableOpacity style={styles.endBtn} onPress={() => setModalVisible(true)}>
+              <Ionicons name="stop-circle-outline" size={20} color={Colors.onAccent} />
+              <Text style={styles.endBtnText}>{t('shift.end')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.discardBtn} onPress={handleDiscardShift}>
+              <Ionicons name="trash-outline" size={16} color={Colors.error} />
+              <Text style={styles.discardBtnText}>{t('shift.discard')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
           <TouchableOpacity
-            style={styles.endButton}
-            onPress={handleEndShiftPress}
+            style={[styles.startBtn, starting && styles.btnDisabled]}
+            onPress={handleStartShift} disabled={starting}
           >
-            <Text style={styles.primaryButtonText}>{t('shift.end')}</Text>
+            {starting ? <ActivityIndicator color={Colors.onAccent} /> : (
+              <>
+                <Ionicons name="play-circle-outline" size={22} color={Colors.onAccent} />
+                <Text style={styles.startBtnText}>{t('shift.start')}</Text>
+              </>
+            )}
           </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={[styles.primaryButton, starting && styles.buttonDisabled]}
-          onPress={handleStartShift}
-          disabled={starting}
-        >
-          {starting ? (
-            <ActivityIndicator color={Colors.onBrand} />
-          ) : (
-            <Text style={styles.primaryButtonText}>{t('shift.start')}</Text>
-          )}
-        </TouchableOpacity>
-      )}
+        )}
 
-      <Text style={styles.sectionTitle}>{t('tabs.shifts')}</Text>
+        <Text style={styles.sectionTitle}>{t('shift.recent')}</Text>
 
-      {recentShifts.length === 0 ? (
-        <Text style={styles.emptyText}>{t('shift.no_shifts')}</Text>
-      ) : (
-        <FlatList
-          data={recentShifts}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ShiftItem shift={item} />}
-          style={styles.list}
-        />
-      )}
+        {recentShifts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="car-outline" size={40} color={Colors.borderBright} />
+            <Text style={styles.emptyText}>{t('shift.no_shifts')}</Text>
+          </View>
+        ) : (
+          recentShifts.map(item => (
+            <ShiftItem key={item.id} shift={item} onDelete={handleDeleteShift} />
+          ))
+        )}
+      </ScrollView>
 
       {activeShift !== null && (
         <EndShiftModal
@@ -446,217 +420,141 @@ export default function ShiftsScreen() {
           onSaved={handleShiftSaved}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
-// ─── styles ──────────────────────────────────────────────────────────────────
+// ─── styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    padding: Spacing.md,
+  safe: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flex: 1 },
+  content: { padding: Spacing.md, paddingBottom: Spacing.xxl },
+  center: { flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
+
+  screenTitle: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: Spacing.lg, letterSpacing: -0.5 },
+
+  notice: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.surfaceAlt, borderRadius: Radius.input,
+    padding: Spacing.md, marginBottom: Spacing.md,
+    borderLeftWidth: 3, borderLeftColor: Colors.brandBlue,
   },
-  center: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+  noticeText: { color: Colors.textPrimary, flex: 1, fontSize: 13 },
+  noticeDismiss: { padding: 4 },
+
+  errorBanner: {
+    backgroundColor: Colors.errorBg, borderRadius: Radius.input,
+    padding: Spacing.sm, marginBottom: Spacing.md,
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
   },
-  activeSection: {
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
+  errorText: { color: Colors.error, fontSize: 13, textAlign: 'center' },
+
+  // Active shift card
+  activeCard: {
+    backgroundColor: Colors.surface, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)',
+    padding: Spacing.lg, marginBottom: Spacing.lg, alignItems: 'center',
+    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2, shadowRadius: 20, elevation: 8,
   },
-  timerLabel: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    marginBottom: Spacing.xs,
-  },
+  activeCardTop: { width: '100%', marginBottom: Spacing.md },
+  activeDotRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
+  activeLabel: { color: Colors.success, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
+
   timer: {
-    color: Colors.textPrimary,
-    fontSize: 48,
-    fontWeight: 'bold',
+    fontSize: 56, fontWeight: '800', color: Colors.accent,
     fontVariant: ['tabular-nums'],
-    marginBottom: Spacing.md,
+    letterSpacing: 2, marginBottom: Spacing.lg,
     ...Platform.select({
       ios: { fontFamily: 'Menlo' },
       android: { fontFamily: 'monospace' },
     }),
   },
-  primaryButton: {
-    backgroundColor: Colors.brandBlue,
-    borderRadius: Radius.button,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
+
+  endBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.button, paddingVertical: 14, paddingHorizontal: Spacing.xl,
+    width: '100%', justifyContent: 'center', marginBottom: Spacing.sm,
   },
-  endButton: {
-    backgroundColor: Colors.error,
-    borderRadius: Radius.button,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    alignItems: 'center',
+  endBtnText: { color: Colors.onAccent, fontSize: 16, fontWeight: '800' },
+
+  discardBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: Radius.button, paddingVertical: 12,
+    paddingHorizontal: Spacing.xl, width: '100%', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.4)',
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  discardBtnText: { color: Colors.error, fontSize: 14, fontWeight: '600' },
+
+  // Start button
+  startBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: Colors.accent, borderRadius: Radius.button,
+    paddingVertical: 16, marginBottom: Spacing.lg,
+    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
   },
-  primaryButtonText: {
-    color: Colors.onBrand,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-  },
-  cancelButtonText: {
-    color: Colors.textSecondary,
-    fontSize: 16,
-  },
+  startBtnText: { color: Colors.onAccent, fontSize: 17, fontWeight: '800' },
+  btnDisabled: { opacity: 0.6 },
+
   sectionTitle: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: Spacing.sm,
+    color: Colors.textSecondary, fontSize: 11, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: Spacing.sm,
   },
-  emptyText: {
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: Spacing.lg,
+
+  emptyState: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm },
+  emptyText: { color: Colors.textSecondary, fontSize: 14 },
+
+  // Shift item card
+  shiftCard: {
+    flexDirection: 'row', backgroundColor: Colors.surface,
+    borderRadius: 14, marginBottom: Spacing.sm,
+    borderWidth: 1, borderColor: Colors.border, overflow: 'hidden',
   },
-  list: {
-    flex: 1,
-  },
-  shiftItem: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.input,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  shiftDate: {
-    color: Colors.textPrimary,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
-  },
-  shiftMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  shiftMetaLabel: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-  },
-  shiftMetaValue: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-  },
-  notice: {
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.input,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.brandBlue,
-  },
-  noticeText: {
-    color: Colors.textPrimary,
-    flex: 1,
-    fontSize: 13,
-  },
-  noticeDismiss: {
-    color: Colors.textSecondary,
-    fontSize: 20,
-    marginLeft: Spacing.sm,
-  },
-  errorText: {
-    color: Colors.error,
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
-  },
-  // Modal styles
-  modalWrapper: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalScroll: {
-    flex: 1,
-  },
-  modalContent: {
-    padding: Spacing.md,
-    paddingBottom: Spacing.xxl,
-  },
-  modalTitle: {
-    color: Colors.textPrimary,
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
+  shiftAccent: { width: 4, backgroundColor: Colors.accent },
+  shiftBody: { flex: 1, padding: Spacing.md },
+  shiftHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
+  shiftDate: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
+  deleteBtn: { padding: 6, marginRight: -4 },
+  shiftStats: { flexDirection: 'row', gap: Spacing.md },
+  shiftStat: { flex: 1 },
+  statLabel: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  statValue: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
+
+  // Modal
+  modalWrapper: { flex: 1, backgroundColor: Colors.background },
+  modalScroll: { flex: 1 },
+  modalContent: { padding: Spacing.md, paddingBottom: Spacing.xxl },
+  modalTitle: { color: Colors.textPrimary, fontSize: 22, fontWeight: '800', marginBottom: Spacing.lg },
+  fieldLabel: {
+    color: Colors.textSecondary, fontSize: 11, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 1, marginTop: Spacing.md, marginBottom: Spacing.xs,
   },
   input: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.input,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    color: Colors.textPrimary,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    fontSize: 15,
-    marginBottom: Spacing.xs,
+    backgroundColor: Colors.surfaceAlt, borderRadius: Radius.input,
+    borderWidth: 1, borderColor: Colors.border,
+    color: Colors.textPrimary, paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2, fontSize: 15, marginBottom: Spacing.xs, minHeight: 48,
   },
-  platformRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
+  platformRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
+  platformName: { flex: 1, marginBottom: 0 },
+  platformAmount: { width: 100, marginBottom: 0 },
+  addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
+  addRowText: { color: Colors.accent, fontSize: 14, fontWeight: '600' },
+  costRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs, gap: Spacing.sm },
+  costLabel: { color: Colors.textSecondary, fontSize: 14, flex: 1 },
+  costInput: { width: 110, marginBottom: 0 },
+
+  primaryBtn: {
+    backgroundColor: Colors.accent, borderRadius: Radius.button,
+    alignItems: 'center', justifyContent: 'center', minHeight: 52, marginTop: Spacing.sm,
+    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 10, elevation: 5,
   },
-  platformName: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  platformAmount: {
-    width: 100,
-    marginBottom: 0,
-  },
-  addRow: {
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  addRowText: {
-    color: Colors.brandBlue,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  costRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.xs,
-    gap: Spacing.sm,
-  },
-  costLabel: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    flex: 1,
-  },
-  costInput: {
-    width: 110,
-    marginBottom: 0,
-  },
+  primaryBtnText: { color: Colors.onAccent, fontSize: 16, fontWeight: '800' },
+  cancelBtn: { paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.sm },
+  cancelBtnText: { color: Colors.textSecondary, fontSize: 15 },
 });

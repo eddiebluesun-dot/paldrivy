@@ -98,7 +98,13 @@
     "no_shifts": "Nenhum turno nos últimos 7 dias",
     "duration": "Duração",
     "gross": "Bruto",
-    "net": "Líquido"
+    "net": "Líquido",
+    "delete_title": "Excluir turno",
+    "delete_confirm": "Excluir este turno permanentemente? Esta ação não pode ser desfeita.",
+    "discard": "Descartar turno",
+    "discard_title": "Descartar turno de teste",
+    "discard_confirm": "O turno atual será excluído sem salvar. Esta ação não pode ser desfeita.",
+    "recent": "ÚLTIMOS 7 DIAS"
   },
   "fuel": {
     "title": "Abastecimentos",

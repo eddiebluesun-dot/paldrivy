@@ -24,7 +24,7 @@ export default function TabLayout() {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
         },
-        tabBarActiveTintColor: Colors.brandBlue,
+        tabBarActiveTintColor: Colors.accent,
         tabBarInactiveTintColor: Colors.textSecondary,
         tabBarIcon: ({ focused, color, size }) => {
           const [outline, filled] = TAB_ICONS[route.name] ?? ['help-circle-outline', 'help-circle'];

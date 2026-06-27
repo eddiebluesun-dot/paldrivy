@@ -1,26 +1,27 @@
-/**
- * DriveWise brand design tokens.
- * All UI components must reference these constants — never hardcode color values.
- */
 export const Colors = {
-  background: '#F8FAFC',
-  surface: '#FFFFFF',
-  surfaceAlt: '#F1F5F9',
-  brandBlue: '#2563EB',
-  brandBlueLight: '#DBEAFE',
+  background: '#080C14',
+  surface: '#0F1624',
+  surfaceAlt: '#141D2E',
+  surfaceElevated: '#1A2438',
+  accent: '#F59E0B',
+  accentDim: 'rgba(245, 158, 11, 0.14)',
+  brandBlue: '#3B82F6',
+  brandBlueLight: 'rgba(59, 130, 246, 0.14)',
   onBrand: '#FFFFFF',
-  border: '#E2E8F0',
-  textPrimary: '#0F172A',
-  textSecondary: '#64748B',
+  onAccent: '#000000',
+  border: '#1A2640',
+  borderBright: '#28365A',
+  textPrimary: '#E8EDF5',
+  textSecondary: '#607090',
   error: '#EF4444',
-  errorBg: '#FFF1F2',
+  errorBg: 'rgba(239, 68, 68, 0.12)',
   success: '#10B981',
-  successBg: '#ECFDF5',
+  successBg: 'rgba(16, 185, 129, 0.12)',
 } as const;
 
 export const Radius = {
   button: 999,
-  input: 8,
+  input: 10,
 } as const;
 
 export const Spacing = {

@@ -1,19 +1,12 @@
 import { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Image,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { authSignUp } from '../../src/hooks/useAuth';
 import { Colors, Radius, Spacing } from '../../src/theme';
 
@@ -27,12 +20,11 @@ export default function RegisterScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [generalError, setGeneralError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const validate = (): boolean => {
     let valid = true;
-    setEmailError('');
-    setPasswordError('');
-    setGeneralError('');
+    setEmailError(''); setPasswordError(''); setGeneralError('');
     if (!email.trim()) { setEmailError(t('common.required')); valid = false; }
     if (!password) { setPasswordError(t('common.required')); valid = false; }
     else if (password.length < 6) { setPasswordError(t('auth.password_min')); valid = false; }
@@ -50,73 +42,67 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Logo */}
-          <View style={styles.logoBlock}>
-            <Image
-              source={require('../../assets/images/icon.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.logoRing}>
+              <Image source={require('../../assets/images/icon.png')} style={styles.logoImg} resizeMode="contain" />
+            </View>
             <Text style={styles.appName}>{t('app_name')}</Text>
-            <Text style={styles.subtitle}>{t('auth.register')}</Text>
+            <Text style={styles.tagline}>{t('auth.register')}</Text>
           </View>
 
           {generalError ? (
             <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
               <Text style={styles.errorBannerText}>{generalError}</Text>
             </View>
           ) : null}
 
+          {/* Email */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>{t('auth.email')}</Text>
             <TextInput
-              style={[styles.input, emailError ? styles.inputError : null]}
+              style={[styles.input, emailError ? styles.inputErr : null]}
               value={email}
-              onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(''); }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              placeholderTextColor={Colors.textSecondary}
-              placeholder="seu@email.com"
+              onChangeText={v => { setEmail(v); if (emailError) setEmailError(''); }}
+              autoCapitalize="none" autoCorrect={false}
+              keyboardType="email-address" textContentType="emailAddress"
+              placeholderTextColor={Colors.textSecondary} placeholder="seu@email.com"
               accessibilityLabel={t('auth.email')}
             />
             {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
           </View>
 
+          {/* Password */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>{t('auth.password')}</Text>
-            <TextInput
-              style={[styles.input, passwordError ? styles.inputError : null]}
-              value={password}
-              onChangeText={(v) => { setPassword(v); if (passwordError) setPasswordError(''); }}
-              secureTextEntry
-              textContentType="newPassword"
-              placeholderTextColor={Colors.textSecondary}
-              placeholder="Mínimo 6 caracteres"
-              accessibilityLabel={t('auth.password')}
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.input, styles.passwordInput, passwordError ? styles.inputErr : null]}
+                value={password}
+                onChangeText={v => { setPassword(v); if (passwordError) setPasswordError(''); }}
+                secureTextEntry={!showPassword} textContentType="newPassword"
+                placeholderTextColor={Colors.textSecondary} placeholder="Mínimo 6 caracteres"
+                accessibilityLabel={t('auth.password')}
+              />
+              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(v => !v)}
+                accessibilityLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
             {passwordError ? <Text style={styles.fieldError}>{passwordError}</Text> : null}
           </View>
 
           <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-            accessibilityRole="button"
-            accessibilityLabel={t('auth.register')}
+            style={[styles.primaryBtn, loading && styles.btnDisabled]}
+            onPress={handleRegister} disabled={loading} accessibilityRole="button"
           >
             {loading
-              ? <ActivityIndicator color={Colors.onBrand} />
-              : <Text style={styles.primaryButtonText}>{t('auth.register')}</Text>}
+              ? <ActivityIndicator color={Colors.onAccent} />
+              : <Text style={styles.primaryBtnText}>{t('auth.register')}</Text>}
           </TouchableOpacity>
 
           <View style={styles.dividerRow}>
@@ -125,12 +111,8 @@ export default function RegisterScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => router.back()}
-            accessibilityRole="button"
-          >
-            <Text style={styles.secondaryButtonText}>{t('auth.have_account')}</Text>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} accessibilityRole="button">
+            <Text style={styles.secondaryBtnText}>{t('auth.have_account')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -142,88 +124,66 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   flex: { flex: 1 },
   scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xl,
-    maxWidth: 480,
-    alignSelf: 'center',
-    width: '100%',
+    flexGrow: 1, justifyContent: 'center',
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xl,
+    maxWidth: 480, alignSelf: 'center', width: '100%',
   },
-  logoBlock: {
-    alignItems: 'center',
-    marginBottom: Spacing.xxl,
-  },
-  logoImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    marginBottom: Spacing.sm,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  errorBanner: {
-    backgroundColor: Colors.errorBg,
-    borderRadius: Radius.input,
-    padding: Spacing.sm + 4,
+
+  hero: { alignItems: 'center', marginBottom: Spacing.xxl },
+  logoRing: {
+    width: 90, height: 90, borderRadius: 24,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5, borderColor: Colors.accent,
+    alignItems: 'center', justifyContent: 'center',
     marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#FECACA',
+    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45, shadowRadius: 20, elevation: 10,
   },
-  errorBannerText: { color: Colors.error, fontSize: 14, textAlign: 'center' },
+  logoImg: { width: 58, height: 58, borderRadius: 14 },
+  appName: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -1, marginBottom: 4 },
+  tagline: { fontSize: 14, color: Colors.textSecondary },
+
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.errorBg, borderRadius: Radius.input,
+    padding: Spacing.sm + 4, marginBottom: Spacing.md,
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
+  },
+  errorBannerText: { color: Colors.error, fontSize: 14, flex: 1 },
+
   fieldGroup: { marginBottom: Spacing.md },
-  label: { color: Colors.textSecondary, fontSize: 14, fontWeight: '500', marginBottom: Spacing.xs },
+  label: {
+    color: Colors.textSecondary, fontSize: 11, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.xs,
+  },
   input: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.input,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 4,
-    fontSize: 16,
-    color: Colors.textPrimary,
-    minHeight: 48,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.input, paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 4, fontSize: 16, color: Colors.textPrimary, minHeight: 52,
   },
-  inputError: { borderColor: Colors.error },
+  passwordRow: { position: 'relative' },
+  passwordInput: { paddingRight: 48 },
+  eyeBtn: { position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', width: 44 },
+  inputErr: { borderColor: Colors.error },
   fieldError: { color: Colors.error, fontSize: 12, marginTop: Spacing.xs },
-  primaryButton: {
-    backgroundColor: Colors.brandBlue,
-    borderRadius: Radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 52,
+
+  primaryBtn: {
+    backgroundColor: Colors.accent, borderRadius: Radius.button,
+    alignItems: 'center', justifyContent: 'center', minHeight: 56,
     marginTop: Spacing.sm,
-    shadowColor: Colors.brandBlue,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
   },
-  primaryButtonDisabled: { opacity: 0.6 },
-  primaryButtonText: { color: Colors.onBrand, fontSize: 16, fontWeight: '700' },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.lg,
-  },
+  btnDisabled: { opacity: 0.6 },
+  primaryBtnText: { color: Colors.onAccent, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.lg },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { color: Colors.textSecondary, fontSize: 13, marginHorizontal: Spacing.sm },
-  secondaryButton: {
-    borderRadius: Radius.button,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 52,
+
+  secondaryBtn: {
+    borderRadius: Radius.button, borderWidth: 1.5, borderColor: Colors.borderBright,
+    alignItems: 'center', justifyContent: 'center', minHeight: 52,
   },
-  secondaryButtonText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' },
+  secondaryBtnText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' },
 });
