@@ -14,8 +14,8 @@ function secondsToHHMM(s: number): string {
 const GAUGE_R = 76;
 const GAUGE_CX = 100;
 const GAUGE_CY = 90;
-// Upper semicircle: M (left) A R R 0 1 0 (right), large-arc=1, sweep=0 (counter-clockwise)
-const TRACK_D = `M ${GAUGE_CX - GAUGE_R} ${GAUGE_CY} A ${GAUGE_R} ${GAUGE_R} 0 1 0 ${GAUGE_CX + GAUGE_R} ${GAUGE_CY}`;
+// Upper semicircle: large-arc=0, sweep=1 (clockwise on screen = upward from left to right)
+const TRACK_D = `M ${GAUGE_CX - GAUGE_R} ${GAUGE_CY} A ${GAUGE_R} ${GAUGE_R} 0 0 1 ${GAUGE_CX + GAUGE_R} ${GAUGE_CY}`;
 const HALF_CIRC = Math.PI * GAUGE_R; // ≈ 238.76
 
 interface MicroStat {
@@ -88,7 +88,7 @@ export function CockpitCard({
 
       {/* SVG Gauge */}
       <View style={styles.gaugeWrap}>
-        <Svg width={200} height={110} viewBox="0 0 200 110">
+        <Svg width={200} height={130} viewBox="0 0 200 130">
           {/* Track */}
           <Path
             d={TRACK_D}
