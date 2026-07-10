@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Path, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Text as SvgText } from 'react-native-svg';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors, Radius, Spacing } from '../theme';
 import { formatMoney } from '../utils/currency';
@@ -89,29 +89,21 @@ export function CockpitCard({
       {/* SVG Gauge */}
       <View style={styles.gaugeWrap}>
         <Svg width={200} height={110} viewBox="0 0 200 110">
-          <Defs>
-            <LinearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="#EF4444" />
-              <Stop offset="55%" stopColor={Colors.accent} />
-              <Stop offset="100%" stopColor={Colors.accent} />
-            </LinearGradient>
-          </Defs>
-
           {/* Track */}
           <Path
             d={TRACK_D}
             fill="none"
-            stroke={Colors.surfaceAlt}
+            stroke="rgba(255,255,255,0.10)"
             strokeWidth={12}
             strokeLinecap="round"
           />
 
-          {/* Fill arc */}
+          {/* Fill arc — solid colors for cross-platform compatibility */}
           {pct > 0 && (
             <Path
               d={TRACK_D}
               fill="none"
-              stroke={metGoal ? Colors.success : 'url(#gaugeGrad)'}
+              stroke={metGoal ? Colors.success : pct < 0.5 ? Colors.error : Colors.accent}
               strokeWidth={12}
               strokeLinecap="round"
               strokeDasharray={`${dashFill} ${dashEmpty}`}
