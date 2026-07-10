@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { streakFromDates } from '../utils/cockpitUtils';
 export {
   workingDaysInMonth,
   getDailyGoalCents,
