@@ -37,7 +37,7 @@ export default function RegisterScreen() {
     const { error } = await authSignUp(email.trim(), password);
     setLoading(false);
     if (error) { setGeneralError(error.message); return; }
-    router.replace('/onboarding/locale');
+    router.replace('/onboarding/consent');
   };
 
   return (
@@ -47,7 +47,8 @@ export default function RegisterScreen() {
 
           {/* Hero */}
           <View style={styles.hero}>
-            <Image source={require('../../assets/images/logo.png')} style={styles.logoImg} resizeMode="contain" />
+            <Image source={require('../../assets/images/icon.png')} style={styles.logoImg} resizeMode="contain" />
+            <Text style={styles.wordmark}>PalDrivy</Text>
             <Text style={styles.tagline}>{t('auth.register')}</Text>
           </View>
 
@@ -127,10 +128,10 @@ const styles = StyleSheet.create({
   },
 
   hero: { alignItems: 'center', marginBottom: Spacing.xl },
-  logoImg: {
-    width: 200, height: 200, borderRadius: 28, marginBottom: Spacing.xs,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4, shadowRadius: 20, elevation: 10,
+  logoImg: { width: 96, height: 96, borderRadius: 22, marginBottom: Spacing.sm },
+  wordmark: {
+    color: Colors.textPrimary, fontSize: 28, fontWeight: '800',
+    letterSpacing: -0.5, marginBottom: 4,
   },
   tagline: { fontSize: 14, color: Colors.textSecondary },
 
