@@ -141,16 +141,10 @@ export async function getUserDetail(userId: string) {
   const monthIso = monthStart.toISOString();
   const monthDate = monthIso.slice(0, 10);
 
-  const [profileRes, subsRes, shiftsRes, expRes, fuelRes,
+  const [profileRes, subsRes,
     allShiftsRes, allExpRes, allFuelRes, mShiftsRes, mExpRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
     supabase.from('subscriptions').select('*, plan:plans(*)').eq('user_id', userId).limit(1),
-    supabase.from('shifts').select('gross_cents, net_cents, started_at')
-      .eq('user_id', userId).order('started_at', { ascending: false }).limit(10),
-    supabase.from('expenses').select('amount_cents, category, expense_date')
-      .eq('user_id', userId).order('expense_date', { ascending: false }).limit(10),
-    supabase.from('fuel_entries').select('total_cost_cents, filled_at')
-      .eq('user_id', userId).order('filled_at', { ascending: false }).limit(5),
     supabase.from('shifts').select('gross_cents,net_cents').eq('user_id', userId).not('ended_at', 'is', null),
     supabase.from('expenses').select('amount_cents').eq('user_id', userId),
     supabase.from('fuel_entries').select('total_cost_cents').eq('user_id', userId),
@@ -167,9 +161,6 @@ export async function getUserDetail(userId: string) {
   const profile = (profileRes.data as any) ?? { id: userId, name: null, phone: null, role: 'driver', has_profile: false };
   return {
     profile: { ...profile, subscription: (subsRes.data ?? [])[0] ?? null },
-    recentShifts: (shiftsRes.data ?? []) as { gross_cents: number | null; net_cents: number | null; started_at: string }[],
-    recentExpenses: (expRes.data ?? []) as { amount_cents: number; category: string; expense_date: string }[],
-    recentFuel: (fuelRes.data ?? []) as { total_cost_cents: number; filled_at: string }[],
     stats: {
       total_shifts:          (allShiftsRes.data ?? []).length,
       total_gross_cents:     s(allShiftsRes.data, 'gross_cents'),
@@ -181,6 +172,33 @@ export async function getUserDetail(userId: string) {
       month_expenses_cents:  s(mExpRes.data, 'amount_cents'),
     },
   };
+}
+
+export async function getUserShiftsPage(userId: string, offset: number, limit = 20) {
+  const { data, error } = await supabase.from('shifts')
+    .select('gross_cents, net_cents, started_at')
+    .eq('user_id', userId).order('started_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as { gross_cents: number | null; net_cents: number | null; started_at: string }[];
+}
+
+export async function getUserExpensesPage(userId: string, offset: number, limit = 20) {
+  const { data, error } = await supabase.from('expenses')
+    .select('amount_cents, category, expense_date')
+    .eq('user_id', userId).order('expense_date', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as { amount_cents: number; category: string; expense_date: string }[];
+}
+
+export async function getUserFuelPage(userId: string, offset: number, limit = 20) {
+  const { data, error } = await supabase.from('fuel_entries')
+    .select('total_cost_cents, filled_at')
+    .eq('user_id', userId).order('filled_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as { total_cost_cents: number; filled_at: string }[];
 }
 
 // ─── Plans ───────────────────────────────────────────────────────────────────

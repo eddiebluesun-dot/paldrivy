@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { getUserDetail, updateUserRole, updateUserProfile, getPlans, upsertSubscription, deleteUser } from '../services/admin';
+import { getUserDetail, updateUserRole, updateUserProfile, getPlans, upsertSubscription, deleteUser,
+  getUserShiftsPage, getUserExpensesPage, getUserFuelPage } from '../services/admin';
 import { countryFlag, countryName } from '../utils/countries';
 import type { Plan } from '../types';
 
@@ -30,6 +31,8 @@ const SUB_STATUS_LABEL: Record<string, string> = {
 const COUNTRIES = [
   'BR','US','GB','AR','CL','CO','MX','PE','UY','PY','BO','EC','VE','PT','ES','FR','DE','IT','CA','AU',
 ];
+
+const PAGE_SIZE = 20;
 
 const CURRENCIES = ['BRL','USD','GBP','EUR','ARS','CLP','COP','MXN'];
 const LOCALES    = ['pt-BR','en-US','en-GB','es-419','es-ES','fr-FR','de-DE','pt-PT'];
@@ -225,13 +228,55 @@ export default function UserDetail() {
   });
   const [notes, setNotes] = useState('');
 
+  const [shiftsList, setShiftsList] = useState<{ gross_cents: number | null; net_cents: number | null; started_at: string }[]>([]);
+  const [shiftsOffset, setShiftsOffset] = useState(0);
+  const [shiftsHasMore, setShiftsHasMore] = useState(true);
+
+  const [expensesList, setExpensesList] = useState<{ amount_cents: number; category: string; expense_date: string }[]>([]);
+  const [expensesOffset, setExpensesOffset] = useState(0);
+  const [expensesHasMore, setExpensesHasMore] = useState(true);
+
+  const [fuelList, setFuelList] = useState<{ total_cost_cents: number; filled_at: string }[]>([]);
+  const [fuelOffset, setFuelOffset] = useState(0);
+  const [fuelHasMore, setFuelHasMore] = useState(true);
+
+  async function loadMoreShifts() {
+    if (!id) return;
+    const page = await getUserShiftsPage(id, shiftsOffset);
+    setShiftsList(prev => [...prev, ...page]);
+    setShiftsOffset(o => o + page.length);
+    setShiftsHasMore(page.length === PAGE_SIZE);
+  }
+
+  async function loadMoreExpenses() {
+    if (!id) return;
+    const page = await getUserExpensesPage(id, expensesOffset);
+    setExpensesList(prev => [...prev, ...page]);
+    setExpensesOffset(o => o + page.length);
+    setExpensesHasMore(page.length === PAGE_SIZE);
+  }
+
+  async function loadMoreFuel() {
+    if (!id) return;
+    const page = await getUserFuelPage(id, fuelOffset);
+    setFuelList(prev => [...prev, ...page]);
+    setFuelOffset(o => o + page.length);
+    setFuelHasMore(page.length === PAGE_SIZE);
+  }
+
   async function load() {
     if (!id) return;
     setLoading(true);
-    const [d, p] = await Promise.all([getUserDetail(id), getPlans()]);
+    const [d, p, sPage, ePage, fPage] = await Promise.all([
+      getUserDetail(id), getPlans(),
+      getUserShiftsPage(id, 0), getUserExpensesPage(id, 0), getUserFuelPage(id, 0),
+    ]);
     setData(d);
     setPlans(p);
     setPlanId(d.profile.subscription?.plan_id ?? p[0]?.id ?? '');
+    setShiftsList(sPage);   setShiftsOffset(sPage.length);   setShiftsHasMore(sPage.length === PAGE_SIZE);
+    setExpensesList(ePage); setExpensesOffset(ePage.length); setExpensesHasMore(ePage.length === PAGE_SIZE);
+    setFuelList(fPage);     setFuelOffset(fPage.length);     setFuelHasMore(fPage.length === PAGE_SIZE);
     setLoading(false);
   }
 
@@ -291,7 +336,7 @@ export default function UserDetail() {
   if (loading) return <Layout title="Usuário"><div className="text-gray-500 py-8 text-center">Carregando...</div></Layout>;
   if (!data)   return <Layout title="Usuário"><div className="text-red-400 py-8 text-center">Usuário não encontrado.</div></Layout>;
 
-  const { profile, recentShifts, recentExpenses, recentFuel, stats } = data;
+  const { profile, stats } = data;
   const sub = profile.subscription;
 
   return (
@@ -445,10 +490,10 @@ export default function UserDetail() {
 
         <div className="grid md:grid-cols-3 gap-4">
           <div className="bg-[#111827] rounded-xl border border-white/8 p-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Últimos turnos</p>
-            {recentShifts.length === 0 ? <p className="text-xs text-gray-600">Nenhum</p> : (
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Turnos</p>
+            {shiftsList.length === 0 ? <p className="text-xs text-gray-600">Nenhum</p> : (
               <ul className="space-y-2">
-                {recentShifts.map((s, i) => (
+                {shiftsList.map((s, i) => (
                   <li key={i} className="text-xs text-gray-300 flex justify-between">
                     <span>{new Date(s.started_at).toLocaleDateString('pt-BR')}</span>
                     <span className="font-medium text-emerald-400">{fmt(s.gross_cents)}</span>
@@ -456,12 +501,15 @@ export default function UserDetail() {
                 ))}
               </ul>
             )}
+            {shiftsHasMore && (
+              <button onClick={loadMoreShifts} className="mt-3 text-xs text-[#F59E0B] hover:underline">Carregar mais</button>
+            )}
           </div>
           <div className="bg-[#111827] rounded-xl border border-white/8 p-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Últimas despesas</p>
-            {recentExpenses.length === 0 ? <p className="text-xs text-gray-600">Nenhuma</p> : (
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Despesas</p>
+            {expensesList.length === 0 ? <p className="text-xs text-gray-600">Nenhuma</p> : (
               <ul className="space-y-2">
-                {recentExpenses.map((e, i) => (
+                {expensesList.map((e, i) => (
                   <li key={i} className="text-xs text-gray-300 flex justify-between">
                     <span className="truncate mr-2">{e.category}</span>
                     <span className="font-medium text-red-400 flex-shrink-0">{fmt(e.amount_cents)}</span>
@@ -469,18 +517,24 @@ export default function UserDetail() {
                 ))}
               </ul>
             )}
+            {expensesHasMore && (
+              <button onClick={loadMoreExpenses} className="mt-3 text-xs text-[#F59E0B] hover:underline">Carregar mais</button>
+            )}
           </div>
           <div className="bg-[#111827] rounded-xl border border-white/8 p-5">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Abastecimentos</p>
-            {recentFuel.length === 0 ? <p className="text-xs text-gray-600">Nenhum</p> : (
+            {fuelList.length === 0 ? <p className="text-xs text-gray-600">Nenhum</p> : (
               <ul className="space-y-2">
-                {recentFuel.map((f, i) => (
+                {fuelList.map((f, i) => (
                   <li key={i} className="text-xs text-gray-300 flex justify-between">
                     <span>{new Date(f.filled_at).toLocaleDateString('pt-BR')}</span>
                     <span className="font-medium text-[#F59E0B]">{fmt(f.total_cost_cents)}</span>
                   </li>
                 ))}
               </ul>
+            )}
+            {fuelHasMore && (
+              <button onClick={loadMoreFuel} className="mt-3 text-xs text-[#F59E0B] hover:underline">Carregar mais</button>
             )}
           </div>
         </div>
