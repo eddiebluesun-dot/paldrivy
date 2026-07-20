@@ -254,14 +254,25 @@ export async function togglePlanActive(planId: string, active: boolean): Promise
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
 export async function getSubscriptions(status = ''): Promise<Subscription[]> {
+  // subscriptions.user_id has no FK to profiles (only to auth.users), so PostgREST
+  // can't embed profiles here — fetch separately and merge, same as getCountryStats().
   let q = supabase.from('subscriptions')
-    .select('*, profile:profiles(id,name,role), plan:plans(id,name,price_cents,interval)')
+    .select('*, plan:plans(id,name,price_cents,interval)')
     .order('created_at', { ascending: false })
     .limit(200);
   if (status) q = q.eq('status', status);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as unknown as Subscription[];
+  const subs = (data ?? []) as unknown as Subscription[];
+
+  if (subs.length === 0) return subs;
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id,name,role')
+    .in('id', subs.map(s => s.user_id));
+  const profileById = new Map(((profiles ?? []) as any[]).map(p => [p.id, p]));
+
+  return subs.map(s => ({ ...s, profile: profileById.get(s.user_id) ?? undefined }));
 }
 
 export async function upsertSubscription(sub: {
