@@ -3,12 +3,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 const NAV = [
-  { to: '/',             label: 'Dashboard',    icon: '▦' },
-  { to: '/users',        label: 'Usuários',     icon: '👥' },
-  { to: '/stats',        label: 'Estatísticas', icon: '🌍' },
-  { to: '/plans',        label: 'Planos',       icon: '🏷️' },
-  { to: '/subscriptions',label: 'Assinaturas',  icon: '📋' },
-  { to: '/legal',        label: 'Legal / LGPD', icon: '⚖️' },
+  { to: '/',             label: 'Dashboard',      icon: '▦' },
+  { to: '/users',        label: 'Usuários',       icon: '👥' },
+  { to: '/stats',        label: 'Estatísticas',   icon: '🌍' },
+  { to: '/plans',        label: 'Planos',         icon: '🏷️' },
+  { to: '/subscriptions',label: 'Assinaturas',    icon: '📋' },
+  { to: '/notifications',label: 'Notificações',   icon: '🔔' },
+  { to: '/legal',        label: 'Legal / LGPD',   icon: '⚖️' },
 ];
 
 interface LayoutProps {

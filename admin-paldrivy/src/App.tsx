@@ -7,6 +7,7 @@ import Users from './pages/Users';
 import UserDetail from './pages/UserDetail';
 import Plans from './pages/Plans';
 import Subscriptions from './pages/Subscriptions';
+import Notifications from './pages/Notifications';
 import LegalDocs from './pages/LegalDocs';
 import Stats from './pages/Stats';
 
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/users/:id" element={<AuthGuard state={authState}><UserDetail /></AuthGuard>} />
         <Route path="/plans" element={<AuthGuard state={authState}><Plans /></AuthGuard>} />
         <Route path="/subscriptions" element={<AuthGuard state={authState}><Subscriptions /></AuthGuard>} />
+        <Route path="/notifications" element={<AuthGuard state={authState}><Notifications /></AuthGuard>} />
         <Route path="/legal"  element={<AuthGuard state={authState}><LegalDocs /></AuthGuard>} />
         <Route path="/stats"  element={<AuthGuard state={authState}><Stats /></AuthGuard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
