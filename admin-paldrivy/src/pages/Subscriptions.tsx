@@ -156,21 +156,37 @@ function AssignModal({ plans, onSave, onCancel }: AssignModalProps) {
 }
 
 export default function Subscriptions() {
-  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [allSubs, setAllSubs] = useState<Subscription[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
+  const [planFilter, setPlanFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
 
   async function load() {
     setLoading(true);
-    const [s, p] = await Promise.all([getSubscriptions(statusFilter), getPlans()]);
-    setSubs(s);
+    const [s, p] = await Promise.all([getSubscriptions(''), getPlans()]);
+    setAllSubs(s);
     setPlans(p);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { load(); }, []);
+
+  const statusCounts = new Map<string, number>();
+  for (const s of allSubs) statusCounts.set(s.status, (statusCounts.get(s.status) ?? 0) + 1);
+
+  const planCounts = new Map<string, { id: string; count: number }>();
+  for (const s of allSubs) {
+    const name = (s as any).plan?.name ?? 'Sem plano';
+    const id = s.plan_id ?? '';
+    planCounts.set(name, { id, count: (planCounts.get(name)?.count ?? 0) + 1 });
+  }
+
+  const subs = allSubs.filter(s =>
+    (!statusFilter || s.status === statusFilter) &&
+    (!planFilter || s.plan_id === planFilter)
+  );
 
   async function handleCancel(id: string) {
     if (!confirm('Cancelar esta assinatura?')) return;
@@ -187,7 +203,8 @@ export default function Subscriptions() {
   return (
     <Layout title="Assinaturas">
       <div className="space-y-4">
-        <div className="flex justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Por status</p>
           <div className="flex gap-2 flex-wrap">
             {STATUS_OPTS.map(({ value, label }) => (
               <button key={value} onClick={() => setStatusFilter(value)}
@@ -196,10 +213,37 @@ export default function Subscriptions() {
                     ? 'bg-[#F59E0B] text-[#0B1221] border-[#F59E0B] font-bold'
                     : 'border-white/15 text-gray-400 hover:bg-white/5'
                 }`}>
-                {label}
+                {label}{value && ` (${statusCounts.get(value) ?? 0})`}
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Por plano</p>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setPlanFilter('')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                planFilter === ''
+                  ? 'bg-[#F59E0B] text-[#0B1221] border-[#F59E0B] font-bold'
+                  : 'border-white/15 text-gray-400 hover:bg-white/5'
+              }`}>
+              Todos os planos
+            </button>
+            {Array.from(planCounts.entries()).map(([name, { id, count }]) => (
+              <button key={name} onClick={() => setPlanFilter(id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  planFilter === id
+                    ? 'bg-[#F59E0B] text-[#0B1221] border-[#F59E0B] font-bold'
+                    : 'border-white/15 text-gray-400 hover:bg-white/5'
+                }`}>
+                {name} ({count})
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end">
           <button onClick={() => setAssigning(true)}
             className="bg-[#F59E0B] text-[#0B1221] px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#D97706]">
             + Atribuir
