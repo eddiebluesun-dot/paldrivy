@@ -5,11 +5,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { useProfile } from '@/src/hooks/useProfile';
+import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
+import { PremiumGate } from '@/src/components/PremiumGate';
 import { metersToDisplay } from '@/src/utils/units';
 import { decimalToCents, formatMoney } from '@/src/utils/currency';
 import { getActiveShift } from '@/src/services/shifts';
@@ -19,6 +21,10 @@ import {
   type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket, type MonthlyTotals,
 } from '@/src/services/dashboard';
 import {
+  getInAppNotifications, deleteInAppNotification, clearInAppNotifications,
+  type InAppNotification,
+} from '@/src/services/notifications';
+import {
   getMonthHistory, getStreak, type MonthHistoryItem,
 } from '@/src/services/cockpit';
 import { getDailyGoalCents } from '@/src/utils/cockpitUtils';
@@ -26,6 +32,7 @@ import { VehiclePill } from '@/src/components/VehiclePill';
 import { StreakBar } from '@/src/components/StreakBar';
 import { CockpitCard } from '@/src/components/CockpitCard';
 import { MonthHistoryCard } from '@/src/components/MonthHistoryCard';
+import { MonthDetailSheet } from '@/src/components/MonthDetailSheet';
 import type { Shift } from '@/src/types';
 
 function secondsToHHMM(s: number): string {
@@ -294,61 +301,75 @@ function GoalEditModal({ visible, currentGoal, goalWorkingDays, userId, onSaved,
 
 // ─── profit card ─────────────────────────────────────────────────────────────
 
-function ProfitCard({ totals, currencyCode, locale }: { totals: MonthlyTotals; currencyCode: string; locale: string }) {
+function ProfitCard({ totals, currencyCode, locale, distanceUnit }: {
+  totals: MonthlyTotals; currencyCode: string; locale: string; distanceUnit: string;
+}) {
   const { t } = useTranslation();
   const totalExpenses = totals.expenses_cents + totals.fuel_cents;
   const profit = totals.gross_cents - totalExpenses;
   const g = totals.gross_cents;
-  const margin  = g > 0 ? Math.round((profit              / g) * 100) : 0;
-  const fuelPct = g > 0 ? Math.round((totals.fuel_cents   / g) * 100) : 0;
-  const expPct  = g > 0 ? Math.round((totals.expenses_cents / g) * 100) : 0;
-  const color = margin >= 60 ? Colors.success : margin >= 40 ? Colors.accent : Colors.error;
-
+  const margin     = g > 0 ? Math.round((profit / g) * 100) : 0;
+  const fuelPct    = g > 0 ? Math.round((totals.fuel_cents / g) * 100) : 0;
+  const expPct     = g > 0 ? Math.round((totals.expenses_cents / g) * 100) : 0;
   const profitColor = margin >= 50 ? Colors.success : margin >= 25 ? Colors.accent : Colors.error;
-  const pctItems = [
-    { icon: 'water-outline' as const,   label: t('dashboard.fuel_pct'),      pct: fuelPct,  color: '#F59E0B' },
-    { icon: 'receipt-outline' as const, label: t('dashboard.other_expenses'), pct: expPct,  color: Colors.error },
-    { icon: 'trending-up' as const,     label: t('dashboard.real_profit'),    pct: margin,   color: profitColor },
+  const distScale  = distanceUnit === 'km' ? 1000 : 1609.344;
+  const distTotal  = totals.km_meters / distScale;
+  const netKm      = distTotal > 0 && profit > 0 ? Math.round(profit / distTotal) : null;
+
+  const neonBoxes = [
+    { label: t('dashboard.fuel_pct'),      value: `${fuelPct}%`,  color: Colors.accent,  border: 'rgba(245,158,11,0.35)',  bg: 'rgba(245,158,11,0.08)' },
+    { label: t('dashboard.other_expenses'), value: `${expPct}%`,  color: Colors.error,   border: 'rgba(239,68,68,0.35)',   bg: 'rgba(239,68,68,0.08)' },
+    { label: t('dashboard.real_profit'),    value: `${margin}%`,  color: profitColor,
+      border: profitColor === Colors.success ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)',
+      bg:     profitColor === Colors.success ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)' },
   ];
 
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>{t('dashboard.earnings_expenses_month')}</Text>
 
-      {/* Values row */}
-      <View style={{ flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm }}>
+      {/* Stacked values */}
+      <View style={{ gap: 6, marginBottom: Spacing.md }}>
         {([
-          { label: t('dashboard.revenue_label'),   value: g,             c: Colors.accent },
-          { label: t('dashboard.expenses_label'),  value: totalExpenses, c: Colors.error  },
-          { label: t('dashboard.real_profit'),     value: profit,        c: profitColor   },
+          { label: t('dashboard.revenue_label'),  value: g,             c: Colors.accent },
+          { label: t('dashboard.expenses_label'), value: totalExpenses, c: Colors.error  },
+          { label: t('dashboard.real_profit'),    value: profit,        c: profitColor   },
         ] as const).map(item => (
-          <View key={item.label} style={{ flex: 1, borderTopWidth: 2, borderTopColor: item.c, paddingTop: Spacing.xs, alignItems: 'center' }}>
-            <Text style={styles.consumptionUnit}>{item.label}</Text>
-            <Text style={{ color: item.c, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+          <View key={item.label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '500' }}>{item.label}</Text>
+            <Text style={{ color: item.c, fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
               {formatMoney(item.value, currencyCode, locale)}
             </Text>
           </View>
         ))}
-      </View>
-
-      {/* Margin progress bar */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.md }}>
-        <View style={{ flex: 1, height: 6, backgroundColor: Colors.surfaceAlt, borderRadius: 3, overflow: 'hidden' }}>
-          <View style={{ width: `${Math.max(0, Math.min(margin, 100))}%` as any, height: 6, backgroundColor: color, borderRadius: 3 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 2 }}>
+          <View style={{ backgroundColor: profitColor === Colors.success ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 2, borderWidth: 1, borderColor: profitColor === Colors.success ? 'rgba(16,185,129,0.30)' : 'rgba(245,158,11,0.30)' }}>
+            <Text style={{ color: profitColor, fontSize: 11, fontWeight: '800' }}>{margin}% {t('dashboard.margin_pct')}</Text>
+          </View>
         </View>
-        <Text style={{ color, fontWeight: '800', fontSize: 13, fontVariant: ['tabular-nums'] }}>{margin}{t('dashboard.margin_pct')}</Text>
       </View>
 
-      {/* % breakdown pills */}
+      {/* Neon breakdown boxes */}
       <View style={{ flexDirection: 'row', gap: 6 }}>
-        {pctItems.map(item => (
-          <View key={item.label} style={{ flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: Spacing.sm, alignItems: 'center', gap: 3 }}>
-            <Ionicons name={item.icon} size={13} color={item.color} />
-            <Text style={{ color: item.color, fontSize: 15, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{item.pct}%</Text>
-            <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '600', textTransform: 'uppercase', textAlign: 'center', letterSpacing: 0.3 }}>{item.label}</Text>
+        {neonBoxes.map(box => (
+          <View key={box.label} style={{
+            flex: 1, borderRadius: 12, padding: 8, alignItems: 'center', gap: 3,
+            backgroundColor: box.bg, borderWidth: 1.5, borderColor: box.border,
+            ...Platform.select({ ios: { shadowColor: box.color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.28, shadowRadius: 6 }, android: { elevation: 3 } }),
+          }}>
+            <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>{box.label}</Text>
+            <Text style={{ color: box.color, fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{box.value}</Text>
           </View>
         ))}
       </View>
+
+      {netKm !== null && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.sm }}>
+          <Ionicons name="trending-up" size={13} color={Colors.success} />
+          <Text style={{ color: Colors.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('dashboard.net_per_km')}</Text>
+          <Text style={{ color: Colors.success, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{formatMoney(netKm, currencyCode, locale)}/{distanceUnit}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -394,45 +415,176 @@ function FuelConsumptionCard({ trend }: { trend: ConsumptionTrend }) {
 
 // ─── monthly chart ────────────────────────────────────────────────────────────
 
-const CHART_H = 180, BAR_W = 10, BAR_GAP = 6, LABEL_H = 18, TOTAL_H = CHART_H + LABEL_H;
-
-function MonthlyChart({ buckets, goalCents, currencyCode, locale }: {
+function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, selectedDay, consumptionTrend }: {
   buckets: MonthBucket[]; goalCents: number | null; currencyCode: string; locale: string;
+  onDayPress?: (day: number) => void; selectedDay?: number | null;
+  consumptionTrend?: ConsumptionTrend | null;
 }) {
   const { t } = useTranslation();
   const today = new Date().getDate();
   const monthlyTotal = buckets.reduce((s, b) => s + b.net_cents, 0);
-  const remaining = goalCents != null ? Math.max(goalCents - monthlyTotal, 0) : null;
-  const dailyGoal = goalCents != null ? Math.ceil(goalCents / daysInCurrentMonth()) : 0;
-  const maxVal = Math.max(...buckets.map(b => b.net_cents), dailyGoal, 1);
-  const svgW = buckets.length * (BAR_W + BAR_GAP);
-  const goalY = goalCents != null ? CHART_H - (dailyGoal / maxVal) * CHART_H : null;
+  const hasGoal = goalCents != null && goalCents > 0;
+  const pct = hasGoal ? Math.min(monthlyTotal / goalCents!, 1) : 0;
+  const remaining = hasGoal ? Math.max(goalCents! - monthlyTotal, 0) : 0;
+
+  // Donut math
+  const D_SIZE = 130;
+  const D_CX = D_SIZE / 2;
+  const D_CY = D_SIZE / 2;
+  const D_R = 50;
+  const D_CIRC = 2 * Math.PI * D_R;
+  const D_GAP = pct > 0 && pct < 1 ? 3 : 0;
+  const achievedDash = Math.max(D_CIRC * pct - D_GAP, 0);
+  const remainingDash = Math.max(D_CIRC * (1 - pct) - D_GAP, 0);
+
+  const maxVal = Math.max(...buckets.map(b => b.net_cents), 1);
+  const BAR_H = 52;
+
+  const trendChangePct = consumptionTrend?.change_pct ?? null;
+  const trendImproved = (trendChangePct ?? 0) > 0;
+  const trendHasAlert = trendChangePct !== null && Math.abs(trendChangePct) >= 10;
+
   return (
     <View style={styles.card}>
-      <View style={styles.cardRowBetween}>
-        <Text style={styles.cardTitle}>{t('dashboard.monthly_chart')}</Text>
-        <Text style={[styles.goalPct, { color: Colors.success }]}>{formatMoney(monthlyTotal, currencyCode, locale)}</Text>
+      <Text style={styles.cardTitle}>{t('dashboard.monthly_chart')}</Text>
+
+      {/* 2-column: donut left + stats right */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        {/* Donut with center overlay */}
+        <View style={{ width: D_SIZE, height: D_SIZE, position: 'relative' }}>
+          <Svg width={D_SIZE} height={D_SIZE} viewBox={`0 0 ${D_SIZE} ${D_SIZE}`}>
+            <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={11} />
+            {hasGoal && pct < 1 && remainingDash > 0 && (
+              <>
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.error}
+                  strokeWidth={22} opacity={0.07} strokeLinecap="butt"
+                  strokeDasharray={`${remainingDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25}
+                  transform={`rotate(${pct * 360}, ${D_CX}, ${D_CY})`} />
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.error}
+                  strokeWidth={14} opacity={0.15} strokeLinecap="butt"
+                  strokeDasharray={`${remainingDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25}
+                  transform={`rotate(${pct * 360}, ${D_CX}, ${D_CY})`} />
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.error}
+                  strokeWidth={9} strokeLinecap="butt"
+                  strokeDasharray={`${remainingDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25}
+                  transform={`rotate(${pct * 360}, ${D_CX}, ${D_CY})`} />
+              </>
+            )}
+            {hasGoal && pct > 0 && (
+              <>
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.success}
+                  strokeWidth={22} opacity={0.07} strokeLinecap="butt"
+                  strokeDasharray={`${achievedDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25} />
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.success}
+                  strokeWidth={14} opacity={0.15} strokeLinecap="butt"
+                  strokeDasharray={`${achievedDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25} />
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.success}
+                  strokeWidth={9} strokeLinecap="butt"
+                  strokeDasharray={`${achievedDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25} />
+              </>
+            )}
+          </Svg>
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+            <Text style={{ color: hasGoal ? (pct >= 1 ? Colors.success : Colors.textPrimary) : Colors.textSecondary, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+              {hasGoal ? `${Math.round(pct * 100)}%` : '—'}
+            </Text>
+            <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>
+              {pct >= 1 ? t('dashboard.goal_reached') : t('dashboard.donut_done')}
+            </Text>
+          </View>
+        </View>
+
+        {/* Right stats */}
+        <View style={{ flex: 1, gap: 6 }}>
+          <Text style={{ color: Colors.textPrimary, fontSize: 22, fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: -0.5 }}
+            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {formatMoney(monthlyTotal, currencyCode, locale)}
+          </Text>
+          <Text style={{ color: Colors.textSecondary, fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+            {t('dashboard.monthly_chart')}
+          </Text>
+          {hasGoal ? (
+            <>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: Colors.textSecondary, fontSize: 11 }}>{t('dashboard.donut_done')}</Text>
+                <Text style={{ color: Colors.success, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{formatMoney(monthlyTotal, currencyCode, locale)}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: Colors.textSecondary, fontSize: 11 }}>{t('dashboard.donut_remaining')}</Text>
+                <Text style={{ color: remaining > 0 ? Colors.error : Colors.success, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{formatMoney(remaining, currencyCode, locale)}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: Colors.textSecondary, fontSize: 11 }}>{t('dashboard.donut_goal')}</Text>
+                <Text style={{ color: Colors.accent, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{formatMoney(goalCents!, currencyCode, locale)}</Text>
+              </View>
+            </>
+          ) : (
+            <Text style={{ color: Colors.textSecondary, fontSize: 11 }}>{t('dashboard.cockpit_no_goal')}</Text>
+          )}
+        </View>
       </View>
-      {remaining !== null && remaining > 0 && <Text style={styles.goalRemaining}>{t('dashboard.goal_remaining', { amount: formatMoney(remaining, currencyCode, locale) })}</Text>}
-      {remaining !== null && remaining === 0 && <Text style={[styles.goalRemaining, { color: Colors.success }]}>{t('dashboard.goal_reached')}</Text>}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <Svg width={svgW} height={TOTAL_H}>
-          {goalY != null && <Line x1={0} y1={goalY} x2={svgW} y2={goalY} stroke={Colors.accent} strokeWidth={1} strokeDasharray="4 3" opacity={0.5} />}
-          {buckets.map((b, i) => {
-            const x = i * (BAR_W + BAR_GAP);
-            const barH = b.net_cents > 0 ? Math.max((b.net_cents / maxVal) * CHART_H, 3) : 2;
+
+      {/* Daily bars */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+        <View style={{ flexDirection: 'row', gap: 3, paddingHorizontal: 4 }}>
+          {buckets.map(b => {
             const isToday = b.day === today;
+            const isSelected = b.day === selectedDay;
+            const hasData = b.net_cents > 0;
+            const barPct = hasData ? Math.max(b.net_cents / maxVal, 0.07) : 0.04;
+            const barColor = isSelected || isToday ? Colors.accent : Colors.success;
             return (
-              <React.Fragment key={b.day}>
-                <Rect x={x} y={CHART_H - barH} width={BAR_W} height={barH} rx={3} fill={isToday ? Colors.accent : b.net_cents > 0 ? Colors.success : Colors.surfaceAlt} opacity={isToday ? 1 : 0.85} />
-                {(b.day % 5 === 0 || b.day === 1 || isToday) && (
-                  <SvgText x={x + BAR_W / 2} y={TOTAL_H - 2} fontSize={9} fill={isToday ? Colors.accent : Colors.textSecondary} textAnchor="middle" fontWeight={isToday ? '700' : '400'}>{b.day}</SvgText>
-                )}
-              </React.Fragment>
+              <TouchableOpacity key={b.day} onPress={() => onDayPress?.(b.day)} activeOpacity={0.7}
+                style={{ alignItems: 'center', width: 18 }}>
+                <View style={{ width: 10, height: BAR_H, justifyContent: 'flex-end' }}>
+                  <View style={{
+                    width: 10, height: Math.max(BAR_H * barPct, hasData ? 4 : 2),
+                    borderRadius: 3,
+                    backgroundColor: hasData ? barColor : 'rgba(255,255,255,0.08)',
+                    ...(hasData ? Platform.select({
+                      ios: { shadowColor: barColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.75, shadowRadius: 4 },
+                      android: { elevation: 2 },
+                    }) : {}),
+                  }} />
+                </View>
+                <Text style={{ fontSize: 7, color: isSelected || isToday ? Colors.accent : Colors.textSecondary, fontWeight: isSelected || isToday ? '700' : '400', marginTop: 3 }}>
+                  {b.day}
+                </Text>
+              </TouchableOpacity>
             );
           })}
-        </Svg>
+        </View>
       </ScrollView>
+
+      {/* Consumo Real — merged from FuelConsumptionCard */}
+      {consumptionTrend && (
+        <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <Ionicons name="speedometer-outline" size={13} color={Colors.textSecondary} />
+            <Text style={{ color: Colors.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }}>{t('dashboard.fuel_consumption_title')}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {[
+              { value: consumptionTrend.overall.km_per_l.toFixed(1), label: t('dashboard.km_avg'), color: Colors.success },
+              { value: consumptionTrend.overall.total_km.toFixed(0), label: t('dashboard.km_calculated'), color: Colors.textPrimary },
+              { value: String(consumptionTrend.overall.segments), label: t('dashboard.fueling_count'), color: Colors.accent },
+            ].map(item => (
+              <View key={item.label} style={{ flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: 8, alignItems: 'center', gap: 2 }}>
+                <Text style={{ color: item.color, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{item.value}</Text>
+                <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3, textAlign: 'center' }}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+          {trendHasAlert && consumptionTrend.recent && (
+            <View style={[styles.consumptionAlert, { marginTop: 8, backgroundColor: trendImproved ? Colors.successBg : Colors.accentDim }]}>
+              <Ionicons name={trendImproved ? 'trending-up-outline' : 'trending-down-outline'} size={13} color={trendImproved ? Colors.success : Colors.accent} />
+              <Text style={[styles.consumptionAlertText, { color: trendImproved ? Colors.success : Colors.accent }]}>
+                {trendImproved ? t('dashboard.consumption_improved') : t('dashboard.consumption_worsened')}: {consumptionTrend.overall.km_per_l.toFixed(1)} → {consumptionTrend.recent.km_per_l.toFixed(1)} km/L ({trendChangePct! > 0 ? '+' : ''}{trendChangePct!.toFixed(1)}%)
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -453,12 +605,25 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
     getDayDetail(userId, dateStr).then(setDetail).catch(() => setDetail(null)).finally(() => setLoading(false));
   }, [visible, dateStr, userId]);
 
-  const label = dateStr ? new Date(dateStr + 'T12:00:00').toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  const label = dateStr ? (() => {
+    const s = new Date(dateStr + 'T12:00:00').toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+    return locale.startsWith('pt')
+      ? s.replace(/([ -])([A-ZÁÉÍÓÚÃÕÂÊÔÀÜ])/g, (_, sep, c) => sep + c.toLowerCase())
+      : s;
+  })() : '';
   const shifts = detail?.shifts ?? [];
   const totalGross = shifts.reduce((s, sh) => s + (sh.gross_cents ?? 0), 0);
   const totalNet = shifts.reduce((s, sh) => s + (sh.net_cents ?? 0), 0);
   const totalDur = shifts.reduce((s, sh) => s + durationFromShift(sh), 0);
   const totalKm = shifts.reduce((s, sh) => sh.odometer_start_meters != null && sh.odometer_end_meters != null ? s + (sh.odometer_end_meters - sh.odometer_start_meters) : s, 0);
+  const dayOdomStart = shifts.reduce<number | null>((min, sh) => {
+    if (sh.odometer_start_meters == null) return min;
+    return min == null ? sh.odometer_start_meters : Math.min(min, sh.odometer_start_meters);
+  }, null);
+  const dayOdomEnd = shifts.reduce<number | null>((max, sh) => {
+    if (sh.odometer_end_meters == null) return max;
+    return max == null ? sh.odometer_end_meters : Math.max(max, sh.odometer_end_meters);
+  }, null);
   const totalExpensesCents = (detail?.expenses_cents ?? 0) + (detail?.fuel_cents ?? 0);
   const realNet = totalNet - totalExpensesCents;
 
@@ -519,6 +684,12 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
               <Text style={styles.detailSectionTitle}>{t('dashboard.day_productivity_section')}</Text>
               <Row label={t('dashboard.day_hours_worked')} value={secondsToHHMM(totalDur)} />
               <Row label={t(distanceUnit === 'km' ? 'dashboard.day_km_driven_km' : 'dashboard.day_km_driven_mi')} value={`${metersToDisplay(totalKm, distanceUnit).toFixed(1)} ${distanceUnit}`} />
+              {dayOdomStart != null && (
+                <Row label={t('dashboard.day_odometer_start')} value={`${(dayOdomStart / 1000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} km`} />
+              )}
+              {dayOdomEnd != null && (
+                <Row label={t('dashboard.day_odometer_end')} value={`${(dayOdomEnd / 1000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} km`} />
+              )}
               <Row label={t('dashboard.day_shifts')} value={String(shifts.length)} />
               {totalDur > 0 && totalGross > 0 && <Row label={t('dashboard.day_gross_per_hour')} value={formatMoney(Math.round((totalGross / totalDur) * 3600), currencyCode, locale)} />}
               {totalDur > 0 && realNet > 0 && <Row label={t('dashboard.day_net_real_per_hour')} value={formatMoney(Math.round((realNet / totalDur) * 3600), currencyCode, locale)} />}
@@ -562,76 +733,201 @@ function WeekBucketItem({ bucket, currencyCode, locale, language, onPress }: {
 
 // ─── week bar chart ───────────────────────────────────────────────────────────
 
-const WBAR_H = 160;
+const WBAR_H = 120;
 
-function BreakdownPills({ totals }: { totals: MonthlyTotals }) {
+function WeekNeonBoxes({ totals, currencyCode, locale, distanceUnit }: {
+  totals: MonthlyTotals; currencyCode: string; locale: string; distanceUnit: string;
+}) {
   const { t } = useTranslation();
   const g = totals.gross_cents;
   if (g === 0) return null;
-  const fuelPct = Math.round((totals.fuel_cents / g) * 100);
-  const expPct  = Math.round((totals.expenses_cents / g) * 100);
-  const profit  = g - totals.fuel_cents - totals.expenses_cents;
-  const margin  = Math.round((profit / g) * 100);
-  const profitColor = margin >= 50 ? Colors.success : margin >= 25 ? Colors.accent : Colors.error;
-  const pills = [
-    { icon: 'water-outline' as const,   label: t('dashboard.day_fuel_pct'),     pct: fuelPct, color: '#F59E0B' },
-    { icon: 'receipt-outline' as const, label: t('dashboard.day_expenses_pct'), pct: expPct,  color: Colors.error },
-    { icon: 'trending-up' as const,     label: t('dashboard.day_profit_pct'),   pct: margin,  color: profitColor },
+  const fuelPct  = Math.round((totals.fuel_cents / g) * 100);
+  const expPct   = Math.round((totals.expenses_cents / g) * 100);
+  const profit   = g - totals.fuel_cents - totals.expenses_cents;
+  const profitColor = profit / g >= 0.5 ? Colors.success : profit / g >= 0.25 ? Colors.accent : Colors.error;
+  const distScale = distanceUnit === 'km' ? 1000 : 1609.344;
+  const distTotal = totals.km_meters / distScale;
+  const netKm = distTotal > 0 && profit > 0 ? Math.round(profit / distTotal) : null;
+
+  const boxes = [
+    { label: t('dashboard.day_fuel_pct'),     value: `${fuelPct}%`,  sub: t('dashboard.day_fuel_pct'),     color: Colors.accent,  border: 'rgba(245,158,11,0.35)', bg: 'rgba(245,158,11,0.08)' },
+    { label: t('dashboard.day_expenses_pct'), value: `${expPct}%`,   sub: t('dashboard.day_expenses_pct'), color: Colors.error,   border: 'rgba(239,68,68,0.35)',  bg: 'rgba(239,68,68,0.08)' },
+    { label: '~ ' + t('dashboard.net_per_km').toUpperCase(), value: netKm ? `${formatMoney(netKm, currencyCode, locale)}/${distanceUnit}` : '—', sub: t('dashboard.net_per_km'), color: profitColor, border: profitColor === Colors.success ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)', bg: profitColor === Colors.success ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)' },
   ];
+
   return (
-    <View style={{ flexDirection: 'row', gap: 6, marginTop: Spacing.sm }}>
-      {pills.map(item => (
-        <View key={item.label} style={{ flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: Spacing.sm, alignItems: 'center', gap: 2 }}>
-          <Ionicons name={item.icon} size={11} color={item.color} />
-          <Text style={{ color: item.color, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{item.pct}%</Text>
-          <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '600', textTransform: 'uppercase', textAlign: 'center', letterSpacing: 0.3 }}>{item.label}</Text>
+    <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+      {boxes.map(box => (
+        <View key={box.label} style={{
+          flex: 1, borderRadius: 12, padding: 8, alignItems: 'center', gap: 3,
+          backgroundColor: box.bg, borderWidth: 1.5, borderColor: box.border,
+          ...Platform.select({ ios: { shadowColor: box.color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.30, shadowRadius: 6 }, android: { elevation: 3 } }),
+        }}>
+          <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>{box.label}</Text>
+          <Text style={{ color: box.color, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'], textAlign: 'center' }}>{box.value}</Text>
         </View>
       ))}
     </View>
   );
 }
 
-function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, onPress }: {
-  buckets: DayBucket[]; weekTotals: MonthlyTotals | null; currencyCode: string; locale: string; language: string; onPress: (d: string) => void;
+function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, distanceUnit, onPress }: {
+  buckets: DayBucket[]; weekTotals: MonthlyTotals | null; currencyCode: string; locale: string; language: string; distanceUnit: string; onPress: (d: string) => void;
 }) {
   const { t } = useTranslation();
   const maxVal = Math.max(...buckets.map(b => b.net_cents), 1);
   const today = new Date().toISOString().slice(0, 10);
   const weekTotal = buckets.reduce((s, b) => s + b.net_cents, 0);
+  const weekKm = weekTotals ? (weekTotals.km_meters / 1000).toFixed(1) : null;
+  const distScale = distanceUnit === 'km' ? 1000 : 1609.344;
+  const distTotal = weekTotals ? weekTotals.km_meters / distScale : 0;
+  const profit = weekTotals ? weekTotals.gross_cents - weekTotals.fuel_cents - weekTotals.expenses_cents : 0;
+  const netKm = distTotal > 0 && profit > 0 ? Math.round(profit / distTotal) : null;
 
   return (
     <View style={styles.card}>
+      {/* Header */}
       <View style={styles.cardRowBetween}>
         <Text style={styles.cardTitle}>{t('dashboard.weekly_title')}</Text>
-        {weekTotal > 0 && (
-          <Text style={{ color: Colors.success, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
-            {formatMoney(weekTotal, currencyCode, locale)}
-          </Text>
+        {weekKm && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.surfaceAlt, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ color: Colors.textSecondary, fontSize: 10 }}>~</Text>
+            <Text style={{ color: Colors.textSecondary, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{weekKm} {distanceUnit}</Text>
+          </View>
         )}
       </View>
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {buckets.map(b => {
-          const isToday = b.date === today;
-          const hasData = b.net_cents > 0;
-          const barPct = hasData ? Math.max(b.net_cents / maxVal, 0.06) : 0.04;
-          const dayLabel = new Date(b.date + 'T12:00:00').toLocaleDateString(language, { weekday: 'short' }).replace('.', '').toUpperCase().slice(0, 3);
-          const dayNum = new Date(b.date + 'T12:00:00').getDate();
-          return (
-            <TouchableOpacity key={b.date} onPress={() => onPress(b.date)} style={{ flex: 1, alignItems: 'center' }} activeOpacity={0.7}>
-              <Text style={{ fontSize: 8, color: isToday ? Colors.accent : Colors.textSecondary, fontVariant: ['tabular-nums'], fontWeight: isToday ? '700' : '400', marginBottom: 4, minHeight: 13, textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
-                {hasData ? formatMoney(b.net_cents, currencyCode, locale) : ''}
+
+      {/* 2-column body: bars + right summary */}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        {/* Bars */}
+        <View style={{ flex: 1, flexDirection: 'row', gap: 4 }}>
+          {buckets.map(b => {
+            const isToday = b.date === today;
+            const hasData = b.net_cents > 0;
+            const barPct = hasData ? Math.max(b.net_cents / maxVal, 0.06) : 0.04;
+            const barColor = isToday ? Colors.accent : Colors.success;
+            const dayLabel = new Date(b.date + 'T12:00:00').toLocaleDateString(language, { weekday: 'short' }).replace('.', '').toUpperCase().slice(0, 3);
+            const dayNum = new Date(b.date + 'T12:00:00').getDate();
+            return (
+              <TouchableOpacity key={b.date} onPress={() => onPress(b.date)} style={{ flex: 1, alignItems: 'center' }} activeOpacity={0.7}>
+                <Text style={{ fontSize: 7, color: isToday ? Colors.accent : Colors.textSecondary, fontVariant: ['tabular-nums'], fontWeight: isToday ? '700' : '400', marginBottom: 3, minHeight: 11, textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
+                  {hasData ? formatMoney(b.net_cents, currencyCode, locale) : ''}
+                </Text>
+                <View style={{ width: '100%', height: WBAR_H, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, justifyContent: 'flex-end' }}>
+                  {hasData ? (
+                    <View style={{
+                      width: '100%', height: WBAR_H * barPct,
+                      borderRadius: 6, backgroundColor: barColor,
+                      ...Platform.select({
+                        ios: { shadowColor: barColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.80, shadowRadius: 8 },
+                        android: { elevation: 4 },
+                      }),
+                    }} />
+                  ) : (
+                    <View style={{ width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                  )}
+                </View>
+                <Text style={{ fontSize: 9, color: isToday ? Colors.accent : Colors.textSecondary, fontWeight: isToday ? '700' : '500', marginTop: 5 }}>{dayLabel}</Text>
+                <Text style={{ fontSize: 11, color: isToday ? Colors.accent : Colors.textPrimary, fontWeight: isToday ? '800' : '600', marginTop: 1 }}>{dayNum}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Right summary column */}
+        {weekTotal > 0 && (
+          <View style={{ width: 84, alignItems: 'flex-end', justifyContent: 'center', gap: 6 }}>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>SEMANA</Text>
+              <Text style={{ color: Colors.accent, fontSize: 18, fontWeight: '900', fontVariant: ['tabular-nums'] }}
+                numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(weekTotal, currencyCode, locale)}
               </Text>
-              <View style={{ width: '100%', height: WBAR_H, backgroundColor: Colors.surfaceAlt, borderRadius: 8, justifyContent: 'flex-end', overflow: 'hidden' }}>
-                <View style={{ width: '100%', height: WBAR_H * barPct, backgroundColor: isToday ? Colors.accent : Colors.success, borderRadius: 8, opacity: isToday ? 1 : 0.65 }} />
+            </View>
+            {netKm !== null && (
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ color: Colors.success, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+                  ~ {formatMoney(netKm, currencyCode, locale)}/{distanceUnit}
+                </Text>
+                <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 }}>{t('dashboard.net_per_km')}</Text>
               </View>
-              <Text style={{ fontSize: 10, color: isToday ? Colors.accent : Colors.textSecondary, fontWeight: isToday ? '700' : '500', marginTop: 6 }}>{dayLabel}</Text>
-              <Text style={{ fontSize: 12, color: isToday ? Colors.accent : Colors.textPrimary, fontWeight: isToday ? '800' : '600', marginTop: 1 }}>{dayNum}</Text>
-            </TouchableOpacity>
-          );
-        })}
+            )}
+          </View>
+        )}
       </View>
-      {weekTotals !== null && <BreakdownPills totals={weekTotals} />}
+
+      {weekTotals !== null && <WeekNeonBoxes totals={weekTotals} currencyCode={currencyCode} locale={locale} distanceUnit={distanceUnit} />}
     </View>
+  );
+}
+
+// ─── in-app notifications modal ───────────────────────────────────────────────
+
+function NotificationsModal({ visible, onClose, onChanged }: {
+  visible: boolean; onClose: () => void; onChanged: () => void;
+}) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<InAppNotification[]>([]);
+
+  useEffect(() => {
+    if (visible) getInAppNotifications().then(setItems).catch(() => {});
+  }, [visible]);
+
+  async function handleDelete(id: string) {
+    await deleteInAppNotification(id).catch(() => {});
+    setItems(prev => prev.filter(n => n.id !== id));
+    onChanged();
+  }
+
+  async function handleClearAll() {
+    await clearInAppNotifications().catch(() => {});
+    setItems([]);
+    onChanged();
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={['top', 'bottom']}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+          <Text style={{ color: Colors.textPrimary, fontSize: 18, fontWeight: '700' }}>{t('notifications.title')}</Text>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+            {items.length > 0 && (
+              <TouchableOpacity onPress={handleClearAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ color: Colors.error, fontSize: 13, fontWeight: '600' }}>{t('notifications.clear_all')}</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {items.length === 0 ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="notifications-off-outline" size={40} color={Colors.textSecondary} style={{ marginBottom: 12 }} />
+            <Text style={{ color: Colors.textSecondary, fontSize: 15 }}>{t('notifications.empty')}</Text>
+          </View>
+        ) : (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing.md }}>
+            {items.map(item => (
+              <View key={item.id} style={{ backgroundColor: Colors.surface, borderRadius: 12, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                <Ionicons name="notifications-outline" size={18} color={Colors.accent} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: Colors.textPrimary, fontSize: 14, fontWeight: '700', marginBottom: 2 }}>{item.title}</Text>
+                  <Text style={{ color: Colors.textSecondary, fontSize: 13 }}>{item.body}</Text>
+                  <Text style={{ color: Colors.textSecondary, fontSize: 11, marginTop: 4 }}>
+                    {new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    </Modal>
   );
 }
 
@@ -641,6 +937,7 @@ export default function DashboardScreen() {
   const { t, i18n } = useTranslation();
   const { profile } = useProfile();
   const [userId, setUserId] = useState<string | null>(null);
+  const { isPremium } = usePremiumStatus(userId);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(false);
@@ -656,9 +953,20 @@ export default function DashboardScreen() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [monthHistory, setMonthHistory] = useState<MonthHistoryItem[]>([]);
+  const [monthDetailItem, setMonthDetailItem] = useState<MonthHistoryItem | null>(null);
   const [streak, setStreak] = useState(0);
+  const [cockpitDateStr, setCockpitDateStr] = useState<string | null>(null);
+  const [cockpitDetail, setCockpitDetail] = useState<DayDetail | null>(null);
+  const [selectedMonthDay, setSelectedMonthDay] = useState<number | null>(null);
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+
+  function refreshNotifCount() {
+    getInAppNotifications().then(ns => setNotifCount(ns.length)).catch(() => {});
+  }
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, []);
+  useEffect(() => { refreshNotifCount(); }, []);
 
   const loadData = useCallback(async (uid: string) => {
     const vehicleP = profile?.vehicle_id
@@ -710,6 +1018,23 @@ export default function DashboardScreen() {
     if (userId) await loadData(userId).catch(() => {});
   }
 
+  const handleMonthlyDayPress = useCallback((day: number) => {
+    const todayDay = new Date().getDate();
+    if (day === todayDay) {
+      setCockpitDateStr(null);
+      setCockpitDetail(null);
+      setSelectedMonthDay(null);
+      return;
+    }
+    const n = new Date();
+    const d = new Date(n.getFullYear(), n.getMonth(), day);
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    setSelectedMonthDay(day);
+    setCockpitDateStr(ds);
+    setCockpitDetail(null);
+    if (userId) getDayDetail(userId, ds).then(setCockpitDetail).catch(() => {});
+  }, [userId]);
+
   const currencyCode = profile?.currency_code ?? 'BRL';
   const distanceUnit = profile?.distance_unit ?? 'km';
   const locale = profile?.locale ?? i18n.language;
@@ -726,25 +1051,80 @@ export default function DashboardScreen() {
       )
     : 0;
 
+  const cockpitIsToday = cockpitDateStr === null;
+  const cockpitShifts = cockpitDetail?.shifts ?? [];
+  const cockpitGrossCents = cockpitIsToday
+    ? (summary?.gross_cents ?? 0)
+    : cockpitShifts.reduce((s, sh) => s + (sh.gross_cents ?? 0), 0);
+  const cockpitDurationSeconds = cockpitIsToday
+    ? (summary?.duration_seconds ?? 0)
+    : cockpitShifts.reduce((s, sh) => s + durationFromShift(sh), 0);
+  const cockpitDistanceMeters = cockpitIsToday
+    ? (summary?.distance_meters ?? 0)
+    : cockpitShifts.reduce((s, sh) =>
+        sh.odometer_start_meters != null && sh.odometer_end_meters != null
+          ? s + (sh.odometer_end_meters - sh.odometer_start_meters)
+          : s, 0);
+  const cockpitRides = cockpitIsToday ? (summary?.shifts_count ?? 0) : cockpitShifts.length;
+  const cockpitExpensesCents = cockpitIsToday
+    ? ((summary?.expenses_cents ?? 0) + (summary?.fuel_cents ?? 0))
+    : ((cockpitDetail?.expenses_cents ?? 0) + (cockpitDetail?.fuel_cents ?? 0));
+  const cockpitOdomStart = cockpitIsToday
+    ? (summary?.odometer_start_meters ?? null)
+    : cockpitShifts.reduce<number | null>((min, sh) => {
+        if (sh.odometer_start_meters == null) return min;
+        return min == null ? sh.odometer_start_meters : Math.min(min, sh.odometer_start_meters);
+      }, null);
+  const cockpitOdomEnd = cockpitIsToday
+    ? (summary?.odometer_end_meters ?? null)
+    : cockpitShifts.reduce<number | null>((max, sh) => {
+        if (sh.odometer_end_meters == null) return max;
+        return max == null ? sh.odometer_end_meters : Math.max(max, sh.odometer_end_meters);
+      }, null);
+  const cockpitDateLabel = cockpitDateStr
+    ? new Date(cockpitDateStr + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+    : undefined;
+  const resetCockpit = !cockpitIsToday
+    ? () => { setCockpitDateStr(null); setCockpitDetail(null); setSelectedMonthDay(null); }
+    : undefined;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.accent} />}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.headerGreeting}>
                 {profile?.name ? t('dashboard.greeting_named', { name: profile.name.split(' ')[0] }) : t('dashboard.greeting_anon')}
+                {' '}
+                <Text style={{ color: Colors.brandBlue }}>💜</Text>
               </Text>
-              <Text style={styles.headerSub}>{new Date().toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+              <Text style={styles.headerSub}>{
+                (() => {
+                  const s = new Date().toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+                  return locale.startsWith('pt')
+                    ? s.replace(/([ -])([A-ZÁÉÍÓÚÃÕÂÊÔÀÜ])/g, (_, sep, c) => sep + c.toLowerCase())
+                    : s;
+                })()
+              }</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <TouchableOpacity onPress={handleRefresh} disabled={refreshing} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Ionicons name="refresh-outline" size={20} color={refreshing ? Colors.borderBright : Colors.textSecondary} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity onPress={() => setNotifModalVisible(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <View>
+                  <Ionicons name="notifications-outline" size={22} color={Colors.textSecondary} />
+                  {notifCount > 0 && (
+                    <View style={{ position: 'absolute', top: -3, right: -3, width: 14, height: 14, borderRadius: 7, backgroundColor: Colors.error, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>{notifCount > 9 ? '9+' : notifCount}</Text>
+                    </View>
+                  )}
+                </View>
               </TouchableOpacity>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>{profile?.name ? profile.name.charAt(0).toUpperCase() : 'D'}</Text>
-              </View>
+              <TouchableOpacity onPress={handleRefresh} disabled={refreshing} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <View style={styles.flameBtn}>
+                  <Ionicons name={refreshing ? 'sync-outline' : 'flame'} size={18} color={Colors.accent} />
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -771,34 +1151,53 @@ export default function DashboardScreen() {
         {activeShift !== null && <ActiveShiftBanner shift={activeShift} />}
 
         <CockpitCard
-          todayGrossCents={summary?.gross_cents ?? 0}
+          todayGrossCents={cockpitGrossCents}
           dailyGoalCents={dailyGoalCents}
-          rides={0}
-          durationSeconds={summary?.duration_seconds ?? 0}
-          distanceMeters={summary?.distance_meters ?? 0}
-          expensesTodayCents={(summary?.expenses_cents ?? 0) + (summary?.fuel_cents ?? 0)}
+          rides={cockpitRides}
+          durationSeconds={cockpitDurationSeconds}
+          distanceMeters={cockpitDistanceMeters}
+          expensesTodayCents={cockpitExpensesCents}
           distanceUnit={distanceUnit}
           currencyCode={currencyCode}
           locale={locale}
           onEditGoal={() => setGoalModalVisible(true)}
+          dateLabel={cockpitDateLabel}
+          onResetToday={resetCockpit}
+          odometerStartMeters={cockpitOdomStart}
+          odometerEndMeters={cockpitOdomEnd}
+          activeDaysThisMonth={monthlyBuckets.filter(b => b.net_cents > 0).length}
         />
 
-        {monthlyBuckets.length > 0 && <MonthlyChart buckets={monthlyBuckets} goalCents={goal?.target_amount_cents ?? null} currencyCode={currencyCode} locale={locale} />}
-        {consumptionTrend !== null && <FuelConsumptionCard trend={consumptionTrend} />}
+        <PremiumGate isPremium={isPremium} reason="dashboard_locked">
+          <>
+            {weekBuckets.length > 0 && (
+              <WeekBarChart buckets={weekBuckets} weekTotals={weekTotals} currencyCode={currencyCode} locale={locale} language={i18n.language} distanceUnit={distanceUnit} onPress={setSelectedDay} />
+            )}
 
-        {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
-          <ProfitCard totals={monthlyTotals} currencyCode={currencyCode} locale={locale} />
-        )}
+            {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
+              <ProfitCard totals={monthlyTotals} currencyCode={currencyCode} locale={locale} distanceUnit={distanceUnit} />
+            )}
+            {monthlyBuckets.length > 0 && (
+              <MonthlyChart
+                buckets={monthlyBuckets}
+                goalCents={goal?.target_amount_cents ?? null}
+                currencyCode={currencyCode}
+                locale={locale}
+                onDayPress={handleMonthlyDayPress}
+                selectedDay={selectedMonthDay}
+                consumptionTrend={consumptionTrend}
+              />
+            )}
 
-        {weekBuckets.length > 0 && (
-          <WeekBarChart buckets={weekBuckets} weekTotals={weekTotals} currencyCode={currencyCode} locale={locale} language={i18n.language} onPress={setSelectedDay} />
-        )}
-
-        <MonthHistoryCard items={monthHistory} currencyCode={currencyCode} locale={locale} />
+            <MonthHistoryCard items={monthHistory} currencyCode={currencyCode} locale={locale} onMonthPress={setMonthDetailItem} />
+          </>
+        </PremiumGate>
       </ScrollView>
 
       <DayDetailModal visible={selectedDay !== null} dateStr={selectedDay} userId={userId} onClose={() => setSelectedDay(null)} distanceUnit={distanceUnit} currencyCode={currencyCode} locale={locale} />
+      <MonthDetailSheet visible={monthDetailItem !== null} item={monthDetailItem} userId={userId ?? ''} currencyCode={currencyCode} locale={locale} onClose={() => setMonthDetailItem(null)} onDayPress={(dateStr) => { setMonthDetailItem(null); setTimeout(() => setSelectedDay(dateStr), 350); }} />
       <GoalEditModal visible={goalModalVisible} currentGoal={goal?.target_amount_cents ?? null} goalWorkingDays={goal?.working_days ?? null} userId={userId} onSaved={handleGoalSaved} onClose={() => setGoalModalVisible(false)} currencyCode={currencyCode} locale={locale} />
+      <NotificationsModal visible={notifModalVisible} onClose={() => setNotifModalVisible(false)} onChanged={refreshNotifCount} />
     </SafeAreaView>
   );
 }
@@ -824,6 +1223,20 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerGreeting: { color: Colors.textPrimary, fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   headerSub: { color: Colors.textSecondary, fontSize: 13, marginTop: 2, textTransform: 'capitalize' },
+  flameBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(245,158,11,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 10 },
+      android: { elevation: 5 },
+    }),
+  },
   avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: Colors.onAccent, fontSize: 17, fontWeight: '800' },
   // error
