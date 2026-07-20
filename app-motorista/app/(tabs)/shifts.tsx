@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,11 +24,19 @@ import { displayToMeters } from '@/src/utils/units';
 import {
   deleteShift,
   endShift,
+  FreeLimitError,
   getActiveShift,
   getRecentShifts,
+  pauseShift,
+  resumeShift,
   startShift,
+  updateShift,
 } from '@/src/services/shifts';
+import { getUserPlatforms } from '@/src/services/platforms';
+import type { ShiftPause } from '@/src/types';
 import { useProfile } from '@/src/hooks/useProfile';
+import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
+import { UpgradeModal } from '@/src/components/UpgradeModal';
 import type { EndShiftData, Shift, ShiftPlatform } from '@/src/types';
 
 function platformConfirm(title: string, message: string, onConfirm: () => void) {
@@ -53,7 +61,22 @@ function formatDuration(startedAt: string): number {
   return Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
 }
 
-// ─── start-shift modal ───────────────────────────────────────────────────────
+function pausedSeconds(pauses: ShiftPause[]): number {
+  return pauses.reduce((sum, p) => {
+    const end = p.ended_at ? new Date(p.ended_at) : new Date();
+    return sum + Math.floor((end.getTime() - new Date(p.started_at).getTime()) / 1000);
+  }, 0);
+}
+
+function activeDuration(startedAt: string, pauses: ShiftPause[]): number {
+  return Math.max(formatDuration(startedAt) - pausedSeconds(pauses), 0);
+}
+
+function parse(s: string): number {
+  return parseFloat(s.replace(',', '.')) || 0;
+}
+
+// ─── start shift modal ────────────────────────────────────────────────────────
 
 interface StartShiftModalProps {
   visible: boolean;
@@ -78,24 +101,18 @@ function StartShiftModal({ visible, distanceUnit, onClose, onConfirm }: StartShi
       <KeyboardAvoidingView style={styles.modalWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.modalTitle}>{t('shift.start')}</Text>
-
           <Text style={styles.fieldLabel}>{t('shift.odometer_start')}</Text>
           <TextInput
-            style={styles.input}
-            keyboardType="decimal-pad"
-            value={odometer}
-            onChangeText={setOdometer}
+            style={styles.input} keyboardType="decimal-pad"
+            value={odometer} onChangeText={setOdometer}
             placeholder={distanceUnit === 'km' ? 'km' : 'mi'}
-            placeholderTextColor={Colors.textSecondary}
-            autoFocus
+            placeholderTextColor={Colors.textSecondary} autoFocus
           />
           <Text style={styles.odometerHint}>{t('shift.odometer_start_hint')}</Text>
-
           <TouchableOpacity style={styles.primaryBtn} onPress={handleStart}>
             <Ionicons name="play-circle-outline" size={20} color={Colors.onAccent} />
             <Text style={styles.primaryBtnText}>{t('shift.start_confirm')}</Text>
           </TouchableOpacity>
-
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
             <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
@@ -105,60 +122,140 @@ function StartShiftModal({ visible, distanceUnit, onClose, onConfirm }: StartShi
   );
 }
 
-// ─── end-shift modal ──────────────────────────────────────────────────────────
+// ─── shift form modal (end + edit) ───────────────────────────────────────────
 
-interface EndShiftModalProps {
+interface ShiftFormModalProps {
   visible: boolean;
+  mode: 'end' | 'edit';
   shiftId: string;
+  startedAt?: string;
+  existingShift?: Shift;
   distanceUnit: 'km' | 'mi';
+  pauses?: ShiftPause[];
   onClose: () => void;
-  onSaved: (fuelMissing: boolean) => void;
+  onSaved: () => void;
 }
 
-function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: EndShiftModalProps) {
+function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, distanceUnit, pauses, onClose, onSaved }: ShiftFormModalProps) {
   const { t } = useTranslation();
   const [odometer, setOdometer] = useState('');
   const [platforms, setPlatforms] = useState<{ name: string; amount: string }[]>([{ name: '', amount: '' }]);
-  const [tolls, setTolls] = useState('');
-  const [parking, setParking] = useState('');
-  const [food, setFood] = useState('');
   const [tips, setTips] = useState('');
   const [bonuses, setBonuses] = useState('');
   const [ridesCount, setRidesCount] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editStartedAt, setEditStartedAt] = useState('');
+  const [editEndedAt, setEditEndedAt] = useState('');
 
-  function addPlatformRow() { setPlatforms(prev => [...prev, { name: '', amount: '' }]); }
+  // Load saved platforms to pre-fill the end-shift form
+  useEffect(() => {
+    if (!visible || mode !== 'end') return;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return;
+      getUserPlatforms(data.user.id).then(saved => {
+        if (saved.length > 0) {
+          setPlatforms(saved.map(p => ({ name: p.platform_name, amount: '' })));
+        }
+      }).catch(() => {});
+    });
+  }, [visible, mode]);
+
+  function isoToDisplay(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function displayToIso(display: string): string | undefined {
+    // expects DD/MM/YYYY HH:mm
+    const m = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
+    if (!m) return undefined;
+    const [, dd, mm, yyyy, hh, min] = m;
+    const d = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min));
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+
+  useEffect(() => {
+    if (!visible) return;
+    if (mode === 'edit' && existingShift) {
+      const div = distanceUnit === 'km' ? 1000 : 1609.344;
+      setOdometer(existingShift.odometer_end_meters != null ? (existingShift.odometer_end_meters / div).toFixed(0) : '');
+      setPlatforms(
+        existingShift.platforms?.length
+          ? existingShift.platforms.map((p) => ({ name: p.platform_name, amount: (p.amount_cents / 100).toFixed(2) }))
+          : [{ name: '', amount: '' }]
+      );
+      setTips(existingShift.tips_cents ? (existingShift.tips_cents / 100).toFixed(2) : '');
+      setBonuses(existingShift.bonuses_cents ? (existingShift.bonuses_cents / 100).toFixed(2) : '');
+      setRidesCount(existingShift.rides_count?.toString() ?? '');
+      setEditStartedAt(isoToDisplay(existingShift.started_at));
+      setEditEndedAt(isoToDisplay(existingShift.ended_at));
+    } else {
+      setOdometer('');
+      setPlatforms([{ name: '', amount: '' }]);
+      setTips('');
+      setBonuses('');
+      setRidesCount('');
+      setEditStartedAt('');
+      setEditEndedAt('');
+    }
+    setError(null);
+  }, [visible, shiftId, mode, distanceUnit]);
 
   function updatePlatform(index: number, field: 'name' | 'amount', value: string) {
-    setPlatforms(prev => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+    setPlatforms((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   }
 
   async function handleSave() {
     setError(null);
+    if (mode === 'end') {
+      if (!odometer.trim()) {
+        setError(t('shift.validation_odometer_required'));
+        return;
+      }
+      const validPlatforms = platforms.filter(p => p.name.trim() && p.amount.trim() && parse(p.amount) > 0);
+      if (validPlatforms.length === 0) {
+        setError(t('shift.validation_platform_required'));
+        return;
+      }
+      if (!ridesCount.trim() || parseInt(ridesCount, 10) <= 0) {
+        setError(t('shift.validation_rides_required'));
+        return;
+      }
+    }
     setSaving(true);
     try {
-      const odometerMeters = odometer.trim() !== ''
-        ? displayToMeters(parseFloat(odometer), distanceUnit)
-        : null;
+      const odometerMeters = odometer.trim() ? displayToMeters(parse(odometer), distanceUnit) : null;
       const platformRows: ShiftPlatform[] = platforms
-        .filter(p => p.name.trim() !== '' || p.amount.trim() !== '')
-        .map(p => ({ platform_name: p.name.trim(), amount_cents: decimalToCents(parseFloat(p.amount) || 0) }));
+        .filter((p) => p.name.trim() !== '' || p.amount.trim() !== '')
+        .map((p) => ({ platform_name: p.name.trim(), amount_cents: decimalToCents(parse(p.amount)) }));
       const payload: EndShiftData = {
         odometer_end_meters: odometerMeters,
         platforms: platformRows,
-        tolls_cents: decimalToCents(parseFloat(tolls) || 0),
-        parking_cents: decimalToCents(parseFloat(parking) || 0),
-        food_cents: decimalToCents(parseFloat(food) || 0),
-        tips_cents: decimalToCents(parseFloat(tips) || 0),
-        bonuses_cents: decimalToCents(parseFloat(bonuses) || 0),
-        rides_count: ridesCount.trim() !== '' ? parseInt(ridesCount, 10) : null,
+        tolls_cents: 0,
+        parking_cents: 0,
+        food_cents: 0,
+        tips_cents: decimalToCents(parse(tips)),
+        bonuses_cents: decimalToCents(parse(bonuses)),
+        rides_count: ridesCount.trim() ? parseInt(ridesCount, 10) : null,
       };
-      await endShift(shiftId, payload);
-      const { data, error: calcError } = await supabase.functions.invoke('calculate-shift', { body: { shift_id: shiftId } });
-      if (calcError) throw calcError;
-      const fuelMissing = data != null && typeof data === 'object' && 'fuel_price_missing' in data && data.fuel_price_missing === true;
-      onSaved(fuelMissing);
+      if (mode === 'end') {
+        await endShift(shiftId, payload, startedAt, pauses ?? []);
+      } else {
+        const parsedStart = editStartedAt.trim() ? displayToIso(editStartedAt) : existingShift?.started_at;
+        const parsedEnd = editEndedAt.trim() ? displayToIso(editEndedAt) : existingShift?.ended_at;
+        if ((editStartedAt.trim() && !parsedStart) || (editEndedAt.trim() && !parsedEnd)) {
+          setError(t('shift.time_format_hint'));
+          setSaving(false);
+          return;
+        }
+        await updateShift(shiftId, payload, parsedStart, parsedEnd ?? undefined);
+      }
+      // Edge Function enriches with fuel cost — non-blocking
+      supabase.functions.invoke('calculate-shift', { body: { shift_id: shiftId } }).catch(() => {});
+      onSaved();
     } catch {
       setError(t('common.error'));
     } finally {
@@ -166,18 +263,42 @@ function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: End
     }
   }
 
+  const title = mode === 'end' ? t('shift.end') : t('shift.edit');
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.modalWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.modalTitle}>{t('shift.end')}</Text>
+          <Text style={styles.modalTitle}>{title}</Text>
+
+          {mode === 'edit' && (
+            <>
+              <Text style={styles.fieldLabel}>{t('shift.start_time')}</Text>
+              <TextInput
+                style={styles.input}
+                value={editStartedAt}
+                onChangeText={setEditStartedAt}
+                placeholder={t('shift.time_format_hint')}
+                placeholderTextColor={Colors.textSecondary}
+                keyboardType="numbers-and-punctuation"
+              />
+              <Text style={styles.fieldLabel}>{t('shift.end_time')}</Text>
+              <TextInput
+                style={styles.input}
+                value={editEndedAt}
+                onChangeText={setEditEndedAt}
+                placeholder={t('shift.time_format_hint')}
+                placeholderTextColor={Colors.textSecondary}
+                keyboardType="numbers-and-punctuation"
+              />
+            </>
+          )}
 
           <Text style={styles.fieldLabel}>{t('shift.odometer_end')}</Text>
           <TextInput
             style={styles.input} keyboardType="decimal-pad"
             value={odometer} onChangeText={setOdometer}
-            placeholder={distanceUnit === 'km' ? 'km' : 'mi'}
-            placeholderTextColor={Colors.textSecondary}
+            placeholder={distanceUnit} placeholderTextColor={Colors.textSecondary}
           />
 
           <Text style={styles.fieldLabel}>{t('shift.earnings')}</Text>
@@ -186,17 +307,16 @@ function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: End
               <TextInput
                 style={[styles.input, styles.platformName]}
                 placeholder={t('shift.platform_name')} placeholderTextColor={Colors.textSecondary}
-                value={row.name} onChangeText={v => updatePlatform(i, 'name', v)}
+                value={row.name} onChangeText={(v) => updatePlatform(i, 'name', v)}
               />
               <TextInput
                 style={[styles.input, styles.platformAmount]}
-                keyboardType="decimal-pad" placeholder="0.00"
-                placeholderTextColor={Colors.textSecondary}
-                value={row.amount} onChangeText={v => updatePlatform(i, 'amount', v)}
+                keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={Colors.textSecondary}
+                value={row.amount} onChangeText={(v) => updatePlatform(i, 'amount', v)}
               />
             </View>
           ))}
-          <Pressable onPress={addPlatformRow} style={styles.addRow}>
+          <Pressable onPress={() => setPlatforms((prev) => [...prev, { name: '', amount: '' }])} style={styles.addRow}>
             <Ionicons name="add-circle-outline" size={16} color={Colors.accent} />
             <Text style={styles.addRowText}>{t('shift.add_platform')}</Text>
           </Pressable>
@@ -208,34 +328,20 @@ function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: End
             placeholder="0" placeholderTextColor={Colors.textSecondary}
           />
 
-          <Text style={styles.fieldLabel}>{t('shift.costs')}</Text>
-          {[
-            { label: t('shift.tolls'), value: tolls, onChange: setTolls },
-            { label: t('shift.parking'), value: parking, onChange: setParking },
-            { label: t('shift.food'), value: food, onChange: setFood },
-            { label: t('shift.tips'), value: tips, onChange: setTips },
-            { label: t('shift.bonuses'), value: bonuses, onChange: setBonuses },
-          ].map(({ label, value, onChange }) => (
-            <View key={label} style={styles.costRow}>
-              <Text style={styles.costLabel}>{label}</Text>
-              <TextInput
-                style={[styles.input, styles.costInput]}
-                keyboardType="decimal-pad" placeholder="0.00"
-                placeholderTextColor={Colors.textSecondary}
-                value={value} onChangeText={onChange}
-              />
-            </View>
-          ))}
+          <View style={styles.costRow}>
+            <Text style={styles.costLabel}>{t('shift.tips')}</Text>
+            <TextInput style={[styles.input, styles.costInput]} keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={Colors.textSecondary} value={tips} onChangeText={setTips} />
+          </View>
+          <View style={styles.costRow}>
+            <Text style={styles.costLabel}>{t('shift.bonuses')}</Text>
+            <TextInput style={[styles.input, styles.costInput]} keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={Colors.textSecondary} value={bonuses} onChangeText={setBonuses} />
+          </View>
 
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
-          <TouchableOpacity
-            style={[styles.primaryBtn, saving && styles.btnDisabled]}
-            onPress={handleSave} disabled={saving}
-          >
+          <TouchableOpacity style={[styles.primaryBtn, saving && styles.btnDisabled]} onPress={handleSave} disabled={saving}>
             {saving ? <ActivityIndicator color={Colors.onAccent} /> : <Text style={styles.primaryBtnText}>{t('shift.save')}</Text>}
           </TouchableOpacity>
-
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
             <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
@@ -250,28 +356,23 @@ function EndShiftModal({ visible, shiftId, distanceUnit, onClose, onSaved }: End
 interface ShiftItemProps {
   shift: Shift;
   onDelete: (id: string) => void;
+  onEdit: (shift: Shift) => void;
 }
 
-function ShiftItem({ shift, onDelete }: ShiftItemProps) {
+function ShiftItem({ shift, onDelete, onEdit }: ShiftItemProps) {
   const { t } = useTranslation();
   const { profile } = useProfile();
   const distUnit = profile?.distance_unit ?? 'km';
   const date = new Date(shift.started_at).toLocaleDateString('pt-BR');
-  const dur = shift.duration_seconds != null
-    ? secondsToHMS(shift.duration_seconds)
-    : shift.ended_at != null
-      ? secondsToHMS(Math.floor((new Date(shift.ended_at).getTime() - new Date(shift.started_at).getTime()) / 1000))
-      : '--:--:--';
-  const kmStart = shift.odometer_start_meters != null
-    ? `${(shift.odometer_start_meters / (distUnit === 'km' ? 1000 : 1609.344)).toFixed(0)} ${distUnit}`
-    : null;
-  const kmEnd = shift.odometer_end_meters != null
-    ? `${(shift.odometer_end_meters / (distUnit === 'km' ? 1000 : 1609.344)).toFixed(0)} ${distUnit}`
-    : null;
-
-  function confirmDelete() {
-    platformConfirm(t('shift.delete_title'), t('shift.delete_confirm'), () => onDelete(shift.id));
-  }
+  const dur =
+    shift.duration_seconds != null
+      ? secondsToHMS(shift.duration_seconds)
+      : shift.ended_at != null
+        ? secondsToHMS(Math.floor((new Date(shift.ended_at).getTime() - new Date(shift.started_at).getTime()) / 1000))
+        : '--:--:--';
+  const div = distUnit === 'km' ? 1000 : 1609.344;
+  const kmStart = shift.odometer_start_meters != null ? `${(shift.odometer_start_meters / div).toFixed(0)} ${distUnit}` : null;
+  const kmEnd = shift.odometer_end_meters != null ? `${(shift.odometer_end_meters / div).toFixed(0)} ${distUnit}` : null;
 
   return (
     <View style={styles.shiftCard}>
@@ -279,9 +380,17 @@ function ShiftItem({ shift, onDelete }: ShiftItemProps) {
       <View style={styles.shiftBody}>
         <View style={styles.shiftHeader}>
           <Text style={styles.shiftDate}>{date}</Text>
-          <TouchableOpacity onPress={confirmDelete} style={styles.deleteBtn} accessibilityLabel={t('shift.delete_title')}>
-            <Ionicons name="trash-outline" size={16} color={Colors.error} />
-          </TouchableOpacity>
+          <View style={styles.shiftActions}>
+            <TouchableOpacity onPress={() => onEdit(shift)} style={styles.actionBtn} accessibilityLabel={t('shift.edit')}>
+              <Ionicons name="pencil-outline" size={15} color={Colors.brandBlue} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => platformConfirm(t('shift.delete_title'), t('shift.delete_confirm'), () => onDelete(shift.id))}
+              style={styles.actionBtn} accessibilityLabel={t('shift.delete_title')}
+            >
+              <Ionicons name="trash-outline" size={15} color={Colors.error} />
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.shiftStats}>
           <View style={styles.shiftStat}>
@@ -304,9 +413,7 @@ function ShiftItem({ shift, onDelete }: ShiftItemProps) {
         {(kmStart != null || kmEnd != null) && (
           <View style={styles.kmRow}>
             <Ionicons name="speedometer-outline" size={12} color={Colors.textSecondary} />
-            <Text style={styles.kmText}>
-              {kmStart ?? '?'} → {kmEnd ?? '?'}
-            </Text>
+            <Text style={styles.kmText}>{kmStart ?? '?'} → {kmEnd ?? '?'}</Text>
           </View>
         )}
       </View>
@@ -321,16 +428,18 @@ export default function ShiftsScreen() {
   const { profile } = useProfile();
 
   const [userId, setUserId] = useState<string | null>(null);
+  const { isPremium } = usePremiumStatus(userId);
+  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [recentShifts, setRecentShifts] = useState<Shift[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startModalVisible, setStartModalVisible] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [endModalVisible, setEndModalVisible] = useState(false);
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [screenError, setScreenError] = useState<string | null>(null);
-
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -354,9 +463,22 @@ export default function ShiftsScreen() {
 
   useEffect(() => { if (userId) refresh(); }, [userId, refresh]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
+
   useEffect(() => {
     if (activeShift) {
-      timerRef.current = setInterval(() => setElapsed(formatDuration(activeShift.started_at)), 1000);
+      const pauses = activeShift.pauses ?? [];
+      const isPaused = pauses.length > 0 && !pauses[pauses.length - 1].ended_at;
+      if (!isPaused) {
+        timerRef.current = setInterval(() => setElapsed(activeDuration(activeShift.started_at, activeShift.pauses ?? [])), 1000);
+      } else {
+        setElapsed(activeDuration(activeShift.started_at, pauses));
+        if (timerRef.current !== null) { clearInterval(timerRef.current); timerRef.current = null; }
+      }
     } else {
       if (timerRef.current !== null) { clearInterval(timerRef.current); timerRef.current = null; }
     }
@@ -369,21 +491,45 @@ export default function ShiftsScreen() {
     setStarting(true);
     setScreenError(null);
     try {
-      const shift = await startShift(userId, profile?.vehicle_id ?? null, odometerMeters);
+      const shift = await startShift(userId, profile?.vehicle_id ?? null, odometerMeters, isPremium);
       setActiveShift(shift);
       setElapsed(0);
-    } catch {
-      setScreenError(t('common.error'));
+    } catch (e) {
+      if (e instanceof FreeLimitError) {
+        setUpgradeModalVisible(true);
+      } else {
+        setScreenError(t('common.error'));
+      }
     } finally {
       setStarting(false);
     }
   }
 
-  async function handleShiftSaved(fuelMissing: boolean) {
-    setModalVisible(false);
+  async function handleShiftSaved() {
+    setEndModalVisible(false);
     setActiveShift(null);
-    if (fuelMissing) setNotice(t('shift.fuel_missing_notice'));
     await refresh();
+  }
+
+  async function handleEditSaved() {
+    setEditingShift(null);
+    await refresh();
+  }
+
+  async function handlePauseShift() {
+    if (!activeShift) return;
+    try {
+      await pauseShift(activeShift.id, activeShift.pauses ?? []);
+      await refresh();
+    } catch { setScreenError(t('common.error')); }
+  }
+
+  async function handleResumeShift() {
+    if (!activeShift) return;
+    try {
+      await resumeShift(activeShift.id, activeShift.pauses ?? []);
+      await refresh();
+    } catch { setScreenError(t('common.error')); }
   }
 
   function handleDiscardShift() {
@@ -402,7 +548,7 @@ export default function ShiftsScreen() {
   async function handleDeleteShift(shiftId: string) {
     try {
       await deleteShift(shiftId);
-      setRecentShifts(prev => prev.filter(s => s.id !== shiftId));
+      setRecentShifts((prev) => prev.filter((s) => s.id !== shiftId));
     } catch {
       setScreenError(t('common.error'));
     }
@@ -418,18 +564,12 @@ export default function ShiftsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.accent} />}
+      >
         <Text style={styles.screenTitle}>{t('tabs.shifts')}</Text>
-
-        {notice !== null && (
-          <View style={styles.notice}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.brandBlue} />
-            <Text style={styles.noticeText}>{notice}</Text>
-            <Pressable onPress={() => setNotice(null)} style={styles.noticeDismiss}>
-              <Ionicons name="close" size={18} color={Colors.textSecondary} />
-            </Pressable>
-          </View>
-        )}
 
         {screenError !== null && (
           <View style={styles.errorBanner}>
@@ -437,25 +577,40 @@ export default function ShiftsScreen() {
           </View>
         )}
 
-        {activeShift !== null ? (
-          <View style={styles.activeCard}>
-            <View style={styles.activeCardTop}>
+        {activeShift !== null ? (() => {
+          const pauses = activeShift.pauses ?? [];
+          const isPaused = pauses.length > 0 && !pauses[pauses.length - 1].ended_at;
+          return (
+            <View style={styles.activeCard}>
               <View style={styles.activeDotRow}>
-                <View style={styles.activeDot} />
-                <Text style={styles.activeLabel}>TURNO ATIVO</Text>
+                <View style={[styles.activeDot, isPaused && { backgroundColor: Colors.accent }]} />
+                <Text style={styles.activeLabel}>{isPaused ? 'TURNO PAUSADO' : 'TURNO ATIVO'}</Text>
               </View>
+              <Text style={[styles.timer, isPaused && { color: Colors.accent }]}>{secondsToHMS(elapsed)}</Text>
+              <View style={styles.activeActions}>
+                {isPaused ? (
+                  <TouchableOpacity style={styles.resumeBtn} onPress={handleResumeShift}>
+                    <Ionicons name="play-outline" size={18} color={Colors.success} />
+                    <Text style={styles.resumeBtnText}>Retomar</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={styles.pauseBtn} onPress={handlePauseShift}>
+                    <Ionicons name="pause-outline" size={18} color={Colors.accent} />
+                    <Text style={styles.pauseBtnText}>Pausar</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.endBtn} onPress={() => setEndModalVisible(true)}>
+                  <Ionicons name="stop-circle-outline" size={18} color={Colors.onAccent} />
+                  <Text style={styles.endBtnText}>{t('shift.end')}</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.discardBtn} onPress={handleDiscardShift}>
+                <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                <Text style={styles.discardBtnText}>{t('shift.discard')}</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.timer}>{secondsToHMS(elapsed)}</Text>
-            <TouchableOpacity style={styles.endBtn} onPress={() => setModalVisible(true)}>
-              <Ionicons name="stop-circle-outline" size={20} color={Colors.onAccent} />
-              <Text style={styles.endBtnText}>{t('shift.end')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.discardBtn} onPress={handleDiscardShift}>
-              <Ionicons name="trash-outline" size={16} color={Colors.error} />
-              <Text style={styles.discardBtnText}>{t('shift.discard')}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
+          );
+        })() : (
           <TouchableOpacity
             style={[styles.startBtn, starting && styles.btnDisabled]}
             onPress={() => setStartModalVisible(true)} disabled={starting}
@@ -477,8 +632,8 @@ export default function ShiftsScreen() {
             <Text style={styles.emptyText}>{t('shift.no_shifts')}</Text>
           </View>
         ) : (
-          recentShifts.map(item => (
-            <ShiftItem key={item.id} shift={item} onDelete={handleDeleteShift} />
+          recentShifts.map((item) => (
+            <ShiftItem key={item.id} shift={item} onDelete={handleDeleteShift} onEdit={setEditingShift} />
           ))
         )}
       </ScrollView>
@@ -490,13 +645,34 @@ export default function ShiftsScreen() {
         onConfirm={handleStartShift}
       />
 
+      <UpgradeModal
+        visible={upgradeModalVisible}
+        reason="shifts_limit"
+        onClose={() => setUpgradeModalVisible(false)}
+      />
+
       {activeShift !== null && (
-        <EndShiftModal
-          visible={modalVisible}
+        <ShiftFormModal
+          visible={endModalVisible}
+          mode="end"
           shiftId={activeShift.id}
+          startedAt={activeShift.started_at}
+          pauses={activeShift.pauses}
           distanceUnit={profile?.distance_unit ?? 'km'}
-          onClose={() => setModalVisible(false)}
+          onClose={() => setEndModalVisible(false)}
           onSaved={handleShiftSaved}
+        />
+      )}
+
+      {editingShift !== null && (
+        <ShiftFormModal
+          visible={true}
+          mode="edit"
+          shiftId={editingShift.id}
+          existingShift={editingShift}
+          distanceUnit={profile?.distance_unit ?? 'km'}
+          onClose={() => setEditingShift(null)}
+          onSaved={handleEditSaved}
         />
       )}
     </SafeAreaView>
@@ -513,15 +689,6 @@ const styles = StyleSheet.create({
 
   screenTitle: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: Spacing.lg, letterSpacing: -0.5 },
 
-  notice: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.surfaceAlt, borderRadius: Radius.input,
-    padding: Spacing.md, marginBottom: Spacing.md,
-    borderLeftWidth: 3, borderLeftColor: Colors.brandBlue,
-  },
-  noticeText: { color: Colors.textPrimary, flex: 1, fontSize: 13 },
-  noticeDismiss: { padding: 4 },
-
   errorBanner: {
     backgroundColor: Colors.errorBg, borderRadius: Radius.input,
     padding: Spacing.sm, marginBottom: Spacing.md,
@@ -529,52 +696,52 @@ const styles = StyleSheet.create({
   },
   errorText: { color: Colors.error, fontSize: 13, textAlign: 'center' },
 
-  // Active shift card
   activeCard: {
     backgroundColor: Colors.surface, borderRadius: 20,
     borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)',
     padding: Spacing.lg, marginBottom: Spacing.lg, alignItems: 'center',
-    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2, shadowRadius: 20, elevation: 8,
   },
-  activeCardTop: { width: '100%', marginBottom: Spacing.md },
-  activeDotRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  activeDotRow: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginBottom: Spacing.md },
   activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
   activeLabel: { color: Colors.success, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
-
   timer: {
     fontSize: 56, fontWeight: '800', color: Colors.accent,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: 2, marginBottom: Spacing.lg,
-    ...Platform.select({
-      ios: { fontFamily: 'Menlo' },
-      android: { fontFamily: 'monospace' },
-    }),
+    fontVariant: ['tabular-nums'], letterSpacing: 2, marginBottom: Spacing.lg,
+    ...Platform.select({ ios: { fontFamily: 'Menlo' }, android: { fontFamily: 'monospace' } }),
   },
-
+  activeActions: { flexDirection: 'row', gap: Spacing.sm, width: '100%', marginBottom: Spacing.sm },
+  pauseBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: Radius.button, paddingVertical: 14,
+    borderWidth: 1.5, borderColor: 'rgba(245,158,11,0.5)',
+  },
+  pauseBtnText: { color: Colors.accent, fontSize: 15, fontWeight: '700' },
+  resumeBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: Radius.button, paddingVertical: 14,
+    borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.5)',
+  },
+  resumeBtnText: { color: Colors.success, fontSize: 15, fontWeight: '700' },
   endBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.button, paddingVertical: 14, paddingHorizontal: Spacing.xl,
-    width: '100%', justifyContent: 'center', marginBottom: Spacing.sm,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.accent, borderRadius: Radius.button,
+    paddingVertical: 14, paddingHorizontal: Spacing.md,
+    justifyContent: 'center',
   },
-  endBtnText: { color: Colors.onAccent, fontSize: 16, fontWeight: '800' },
-
+  endBtnText: { color: Colors.onAccent, fontSize: 15, fontWeight: '800' },
   discardBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderRadius: Radius.button, paddingVertical: 12,
-    paddingHorizontal: Spacing.xl, width: '100%', justifyContent: 'center',
+    borderRadius: Radius.button, paddingVertical: 12, paddingHorizontal: Spacing.xl,
+    width: '100%', justifyContent: 'center',
     borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.4)',
   },
   discardBtnText: { color: Colors.error, fontSize: 14, fontWeight: '600' },
-
-  // Start button
   startBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: Colors.accent, borderRadius: Radius.button,
-    paddingVertical: 16, marginBottom: Spacing.lg,
+    paddingVertical: 18, marginBottom: Spacing.lg,
     shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
+    shadowOpacity: 0.4, shadowRadius: 12, elevation: 6,
   },
   startBtnText: { color: Colors.onAccent, fontSize: 17, fontWeight: '800' },
   btnDisabled: { opacity: 0.6 },
@@ -583,21 +750,20 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary, fontSize: 11, fontWeight: '700',
     textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: Spacing.sm,
   },
-
   emptyState: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm },
   emptyText: { color: Colors.textSecondary, fontSize: 14 },
 
-  // Shift item card
   shiftCard: {
     flexDirection: 'row', backgroundColor: Colors.surface,
-    borderRadius: 14, marginBottom: Spacing.sm,
+    borderRadius: Radius.card, marginBottom: Spacing.sm,
     borderWidth: 1, borderColor: Colors.border, overflow: 'hidden',
   },
   shiftAccent: { width: 4, backgroundColor: Colors.accent },
   shiftBody: { flex: 1, padding: Spacing.md },
   shiftHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
   shiftDate: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
-  deleteBtn: { padding: 6, marginRight: -4 },
+  shiftActions: { flexDirection: 'row', gap: Spacing.xs },
+  actionBtn: { padding: 8 },
   shiftStats: { flexDirection: 'row', gap: Spacing.md },
   shiftStat: { flex: 1 },
   statLabel: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
@@ -605,7 +771,6 @@ const styles = StyleSheet.create({
   kmRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: Spacing.xs },
   kmText: { color: Colors.textSecondary, fontSize: 11, fontVariant: ['tabular-nums'] },
 
-  // Modal
   modalWrapper: { flex: 1, backgroundColor: Colors.background },
   modalScroll: { flex: 1 },
   modalContent: { padding: Spacing.md, paddingBottom: Spacing.xxl },
@@ -628,19 +793,13 @@ const styles = StyleSheet.create({
   costRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs, gap: Spacing.sm },
   costLabel: { color: Colors.textSecondary, fontSize: 14, flex: 1 },
   costInput: { width: 110, marginBottom: 0 },
-
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: Colors.accent, borderRadius: Radius.button,
     minHeight: 52, marginTop: Spacing.sm,
-    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 10, elevation: 5,
   },
   primaryBtnText: { color: Colors.onAccent, fontSize: 16, fontWeight: '800' },
-  odometerHint: {
-    color: Colors.textSecondary, fontSize: 12, marginTop: -Spacing.xs,
-    marginBottom: Spacing.md, paddingHorizontal: 2,
-  },
+  odometerHint: { color: Colors.textSecondary, fontSize: 12, marginTop: -Spacing.xs, marginBottom: Spacing.md, paddingHorizontal: 2 },
   cancelBtn: { paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.sm },
   cancelBtnText: { color: Colors.textSecondary, fontSize: 15 },
 });
