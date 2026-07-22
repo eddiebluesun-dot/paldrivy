@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.paldrivy.app",
-      "versionCode": 11,
+      "versionCode": 12,
       "adaptiveIcon": {
         "backgroundColor": "#0B1221",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
