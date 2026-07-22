@@ -7,7 +7,11 @@ export const authSignIn = (email: string, password: string) =>
   supabase.auth.signInWithPassword({ email, password });
 
 export const authSignUp = (email: string, password: string) =>
-  supabase.auth.signUp({ email, password });
+  supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: 'https://app.paldrivy.com' },
+  });
 
 export const authSignOut = () => supabase.auth.signOut();
 

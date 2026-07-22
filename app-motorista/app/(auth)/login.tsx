@@ -4,7 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { authSignIn } from '../../src/hooks/useAuth';
@@ -14,8 +14,9 @@ import { Colors, Radius, Spacing } from '../../src/theme';
 export default function LoginScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(emailParam ?? '');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');

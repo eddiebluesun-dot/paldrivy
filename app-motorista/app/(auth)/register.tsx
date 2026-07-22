@@ -37,7 +37,7 @@ export default function RegisterScreen() {
     const { error } = await authSignUp(email.trim(), password);
     setLoading(false);
     if (error) { setGeneralError(error.message); return; }
-    router.replace('/onboarding/consent');
+    router.replace({ pathname: '/(auth)/verify-email', params: { email: email.trim() } });
   };
 
   return (

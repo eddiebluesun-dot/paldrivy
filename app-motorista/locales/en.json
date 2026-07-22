@@ -12,7 +12,14 @@
                  "password_min":  "Minimum 6 characters",
                  "forgot_password":  "Forgot password?",
                  "reset_sent":  "Link sent! Check your email.",
-                 "send_reset":  "Send recovery link"
+                 "send_reset":  "Send recovery link",
+                 "verify_email_title":  "Confirm your email",
+                 "verify_email_body":  "We sent a confirmation link to {{email}}. Check your inbox (and spam folder) and tap the link to activate your account.",
+                 "verify_email_resend":  "Resend email",
+                 "verify_email_resend_wait":  "Resend in {{seconds}}s",
+                 "verify_email_resent":  "Email resent!",
+                 "verify_email_already_confirmed":  "I confirmed it, sign in",
+                 "verify_email_wrong_email":  "Wrong email? Go back"
              },
     "consent":  {
                     "title":  "Terms \u0026 Privacy",

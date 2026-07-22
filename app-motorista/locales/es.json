@@ -12,7 +12,14 @@
                  "password_min":  "Mínimo 6 caracteres",
                  "forgot_password":  "¿Olvidaste tu contraseña?",
                  "reset_sent":  "¡Enlace enviado! Revisa tu correo.",
-                 "send_reset":  "Enviar enlace de recuperación"
+                 "send_reset":  "Enviar enlace de recuperación",
+                 "verify_email_title":  "Confirma tu correo",
+                 "verify_email_body":  "Enviamos un enlace de confirmación a {{email}}. Revisa tu bandeja de entrada (y spam) y toca el enlace para activar tu cuenta.",
+                 "verify_email_resend":  "Reenviar correo",
+                 "verify_email_resend_wait":  "Reenviar en {{seconds}}s",
+                 "verify_email_resent":  "¡Correo reenviado!",
+                 "verify_email_already_confirmed":  "Ya confirmé, entrar",
+                 "verify_email_wrong_email":  "¿Correo equivocado? Volver"
              },
     "consent":  {
                     "title":  "Términos y Privacidad",
