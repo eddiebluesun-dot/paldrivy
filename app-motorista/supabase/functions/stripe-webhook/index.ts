@@ -24,6 +24,20 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  // As of API version 2026-06-24.dahlia, current_period_start/current_period_end
+  // live on the subscription *item*, not the top-level Subscription object
+  // (a subscription can have multiple items, each with its own billing period).
+  // Falls back to the old top-level fields for older API versions.
+  function getPeriodBounds(sub: Stripe.Subscription): { start: number; end: number } {
+    const item = sub.items.data[0] as unknown as { current_period_start?: number; current_period_end?: number };
+    const start = item?.current_period_start ?? (sub as unknown as { current_period_start?: number }).current_period_start;
+    const end   = item?.current_period_end   ?? (sub as unknown as { current_period_end?: number }).current_period_end;
+    if (start == null || end == null) {
+      throw new Error(`Could not resolve current_period_start/end for subscription ${sub.id}`);
+    }
+    return { start, end };
+  }
+
   // Activates (or reactivates) a subscription from a completed+paid Checkout Session.
   // Shared by the synchronous path (card: checkout.session.completed with
   // payment_status "paid") and the async path (boleto: checkout.session.async_payment_succeeded,
@@ -46,8 +60,9 @@ Deno.serve(async (req) => {
     const planId = plans?.[0]?.id;
     if (!planId) { console.error("Premium plan not found in plans table"); return; }
 
-    const periodStart = new Date(sub.current_period_start * 1000).toISOString();
-    const periodEnd   = new Date(sub.current_period_end   * 1000).toISOString();
+    const { start, end } = getPeriodBounds(sub);
+    const periodStart = new Date(start * 1000).toISOString();
+    const periodEnd   = new Date(end   * 1000).toISOString();
 
     await supabase.from("subscriptions").upsert(
       {
@@ -115,9 +130,10 @@ Deno.serve(async (req) => {
         const userId = sub.metadata?.user_id;
         if (!userId) break;
 
+        const { end: renewedEnd } = getPeriodBounds(sub);
         await supabase.from("subscriptions").update({
           status:             "active",
-          current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+          current_period_end: new Date(renewedEnd * 1000).toISOString(),
         }).eq("stripe_subscription_id", sub.id);
 
         console.log(`🔄 Subscription renewed for user ${userId}`);
@@ -158,9 +174,10 @@ Deno.serve(async (req) => {
           sub.status === "past_due" ? "expired" :
           sub.status === "canceled" ? "cancelled" : "expired";
 
+        const { end: updatedEnd } = getPeriodBounds(sub);
         await supabase.from("subscriptions").update({
           status,
-          current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+          current_period_end: new Date(updatedEnd * 1000).toISOString(),
         }).eq("stripe_subscription_id", sub.id);
         break;
       }
