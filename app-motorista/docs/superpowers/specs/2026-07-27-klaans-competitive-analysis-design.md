@@ -1,6 +1,7 @@
 # Análise Competitiva Klaans vs PalDrivy — Design Spec
 
-**Data:** 2026-07-27
+**Data:** 2026-07-27  
+**Atualizado:** 2026-07-27 (correções + tutorial onboarding + idiomas FR/ZH)  
 **Contexto:** Análise de 42 screenshots do app Klaans (concorrente direto, R$29/mês vs PalDrivy ~R$1/mês). Objetivo: identificar gaps, priorizar features e definir melhorias visuais para dominar o segmento.
 
 ---
@@ -11,7 +12,7 @@
 |---|---|---|
 | Preço | R$29/mês (1 mês trial) | ~R$1/mês |
 | Plataformas | Android (Google Play billing) | Android + Web |
-| Idiomas | Português | PT / EN / ES |
+| Idiomas | Português | PT / EN / ES → + FR / ZH (próximas) |
 | Moedas | Real (BRL) | 55+ moedas |
 | Foco | Brasil | Internacional |
 | Comunidade social | ✅ Feed de motoristas | ❌ |
@@ -21,14 +22,19 @@
 | Exportar dados | ✅ CSV / PDF / JSON LGPD | ❌ |
 | Login biométrico | ✅ Toggle | ❌ |
 | Gestão de cartões | ✅ Crédito + vencimento | ❌ |
-| Alimentação (despesa) | ✅ Etapa no wizard | ❌ |
+| Alimentação (despesa) | ✅ Etapa no wizard | ✅ Já existe em Despesas |
 | Feedback in-app | ✅ Bug/Sugestão/Feature | ❌ |
 | Avaliação do dia | ✅ Bom/Aceitável/Ruim emoji | ❌ |
 | Diário de observações | ✅ 1000 chars/dia | ❌ |
 | Comunidade social | ✅ | ❌ |
 | Paleta visual | Verde neon puro | Navy #0B1221 + Gold #F59E0B ✅ |
 
+| Tutorial de configuração | ✅ Passo a passo interativo | ❌ (onboarding básico) |
+| Cores adaptadas por cultura | ❌ (verde fixo) | 🎯 Oportunidade (ZH: vermelho+ouro) |
+
 **Vantagem defensável do PalDrivy:** preço 30× menor, multi-idioma, multi-moeda, paleta mais premium. Qualquer feature nova que adicionarmos se torna 30× mais barata de usar.
+
+**Mercados adicionais imediatos:** Francês (🇫🇷 França, 🇨🇦 Québec, 🇨🇮 África francófona — ~300M falantes com apps de delivery explodindo) e Chinês (🇨🇳 mainland, 🇹🇼 Taiwan, diáspora — Didi/Meituan drivers, mercado bilionário). Esses dois idiomas sozinhos podem multiplicar o TAM por 5×.
 
 ---
 
@@ -310,28 +316,148 @@ O Klaans tem toggle claro/escuro. PalDrivy também deve ter, mas o **tema escuro
 
 ---
 
-## 5. Plano de Ataque — Sequência de Implementação
+## 5. Tutorial de Onboarding Interativo (Novo — Klaans tem, PalDrivy não tem)
 
-### Sprint 1 (maior impacto / menor esforço)
-1. **Mood tracker** — Avaliação do dia no wizard (etapa nova) + contador no Lançamentos
-2. **Meta Mensal visual** — Melhorar o card existente (goal.tsx já existe)
-3. **Alimentação** — Nova categoria de despesa avulsa no wizard
-4. **Diário de observações** — Campo de texto livre por dia
+### 5.1 O que o Klaans faz
 
-### Sprint 2 (médio esforço / alta conversão)
-5. **Wizard 10 etapas completo** — Refatorar a entrada como wizard step-by-step dinâmico
-6. **Dashboard "Impacto no dia a dia"** — Seção de equações (Custo/KM, KM Líquido)
-7. **Exportar dados** — CSV e PDF mensal
-8. **Login biométrico** — expo-local-authentication
+Ao primeiro login, o Klaans lança um tutorial passo a passo de configuração que guia o motorista por todo o app antes de usá-lo. Isso elimina o atrito de "não sei por onde começar" que faz usuários novos abandonar.
 
-### Sprint 3 (alto esforço / kill shot)
-9. **Comunidade** — Feed social MVP (perfil + compartilhar dia + feed + reações)
-10. **Cartões de crédito** — Gestão de faturas
-11. **Feedback in-app** — Tela de bug/sugestão integrada ao Resend
+### 5.2 O que o PalDrivy tem hoje
+
+Onboarding linear: consent → locale → vehicle → platforms → goal → app. Funcional mas sem orientação sobre **como usar** depois que o usuário entra. Não há feature discovery. Usuário cai no dashboard vazio sem entender o que fazer.
+
+### 5.3 Design do Tutorial PalDrivy
+
+**Abordagem: Spotlight Tour** (overlay escurecido + janela iluminada + tooltip) que roda automaticamente no primeiro acesso pós-onboarding. O motorista vê o app real com destaques explicativos — mais autêntico do que telas estáticas de onboarding.
+
+**Sequência (6 passos):**
+
+```
+Passo 1 — Boas-vindas
+  Tela cheia (não spotlight)
+  Ícone PalDrivy animado + "Pronto, [Nome]!"
+  "Veja como usar o app em 6 passos rápidos"
+  [Começar tour] ou [Pular]
+
+Passo 2 — Dashboard
+  Spotlight: card Meta Mensal
+  Tooltip: "Aqui você acompanha sua meta mensal em tempo real.
+            Atualize sempre que quiser no menu Mais > Metas."
+
+Passo 3 — Lançar o dia
+  Spotlight: botão central (+) da tab bar
+  Tooltip: "Toque aqui ao final de cada dia de trabalho para
+            registrar receitas, combustível e como foi o dia."
+
+Passo 4 — Jornadas
+  Spotlight: tab Jornadas (shifts)
+  Tooltip: "Ative uma jornada quando sair para trabalhar — ela
+            mede km e horas automaticamente para você."
+
+Passo 5 — Despesas do veículo
+  Spotlight: tab Despesas
+  Tooltip: "Registre manutenção, pneus e outros custos fixos.
+            O app calcula seu lucro real descontando tudo."
+
+Passo 6 — Pronto!
+  Tela cheia
+  "Você está pronto para controlar suas finanças!"
+  "Dica: use o botão + todo dia, mesmo que seja rápido."
+  [Ir para o Dashboard]
+```
+
+**Implementação:**
+- `app/tutorial/` — componente `SpotlightTour` com `Portal` + overlay
+- Controle via AsyncStorage `tutorial_completed` (não Supabase — funciona offline)
+- Pode ser reaberto em Configurações > Ajuda > "Ver tutorial novamente"
+- Suporte a todos os idiomas via i18n (incluindo FR e ZH)
+
+**Cores do spotlight por locale:**
+- PT/EN/ES: overlay navy com destaque ouro
+- ZH: overlay vermelho escuro `#1A0505` com destaque ouro `#FFD700` (ouro mais puro, culturalmente correto)
+- FR: igual PT/EN/ES (não há conotação cultural forte diferente)
 
 ---
 
-## 6. O Kill Shot Visual — Proposta de Redesign do Dashboard
+## 6. Expansão de Idiomas — FR e ZH
+
+### 6.1 Francês (FR)
+
+**Mercado:** França + Québec + África francófona (Senegal, Costa do Marfim, Camarões, etc.)
+- África francófona: Uber, Bolt, e apps locais (Heetch, Yango) crescendo 40%+/ano
+- Canadá: Uber + DoorDash + SkipTheDishes + Instacard
+
+**Plataformas a adicionar nos presets:** Bolt, Heetch, Yango, DoorDash, SkipTheDishes
+
+**Moeda principal:** EUR (França), CAD (Canadá), XOF/XAF (África francófona — já suportamos com multi-moeda)
+
+**Arquivo:** `src/i18n/fr.json` (criar do zero — estrutura idêntica ao `en.json`)
+
+### 6.2 Chinês Simplificado (ZH-CN)
+
+**Mercado:** DiDi (China), Meituan Waimai, Ele.me — mas mais relevante: **diáspora chinesa** usando Uber/Lyft na Austrália, EUA, Europa
+- DiDi ainda opera em Brasil, México, Australia, Chile, Colômbia — drivers brasileiros de origem chinesa
+- App Store China: requer conta developer chinesa separada → não bloqueia Google Play international
+
+**Plataformas preset para ZH:** DiDi, Meituan, Ele.me, Grab (para diáspora no Sudeste Asiático)
+
+**Considerações UI para ZH:**
+- Fontes: React Native renderiza caracteres CJK nativamente — sem mudança necessária
+- Número de caracteres por string: muito menor em ZH (frases mais curtas → mais espaço vazio → rebalancear padding)
+- Direção: LTR (igual PT/EN/ES — sem problema)
+
+**Arquivo:** `src/i18n/zh.json`
+
+### 6.3 Paleta Adaptada por Locale
+
+Não mudar a identidade global, mas adicionar **variáveis de tema por locale**:
+
+```ts
+// src/theme/localeThemes.ts
+export const localeTheme: Record<string, Partial<ThemeColors>> = {
+  'zh': {
+    accent: '#FFD700',         // ouro puro (culturalmente: prosperidade)
+    background: '#0D0808',     // preto com toque vermelho
+    accentDim: 'rgba(255,215,0,0.12)',
+  },
+  // fr, en, es, pt: tema padrão navy+gold (#F59E0B)
+};
+```
+
+Isso respeita psicologia cultural de cores sem fragmentar o design. A decisão de ativar por locale fica em `_layout.tsx` com `useLocale()`.
+
+---
+
+## 7. Plano de Ataque — Sequência de Implementação (REVISADO)
+
+### Sprint 1 — Quick wins com impacto alto
+
+> ⚠️ Alimentação já existe em Despesas — remover deste sprint.
+
+1. **Mood tracker** — Etapa "Como foi o dia?" no wizard + card "Avaliação do mês" em Lançamentos
+2. **Meta Mensal visual** — Redesign do card no Dashboard (goal.tsx → circular progress gold)
+3. **Diário de observações** — Campo por dia (1000 chars) na etapa pós-mood do wizard
+
+### Sprint 2 — Implementar tudo
+
+4. **Wizard 10 etapas completo** — Refatorar entrada como step-by-step dinâmico (plataformas do usuário)
+5. **Dashboard kill shot** — Tendência vs mês anterior + R$/hora + R$/km no lucro + barras de plataforma coloridas + glassmorphism cards
+6. **Dashboard "Impacto no dia a dia"** — Seção de equações visuais (Custo/KM, KM Líquido)
+7. **Exportar dados** — CSV e PDF mensal + JSON LGPD
+8. **Login biométrico** — expo-local-authentication com toggle em Configurações
+9. **Cartões de crédito** — Cadastro + alerta de vencimento de fatura
+
+### Sprint 3 — Kill shots
+
+10. **Tutorial de onboarding** — SpotlightTour de 6 passos (descrito na seção 5)
+11. **Comunidade** — Feed social MVP (perfil + compartilhar dia + feed + reações internacionais)
+12. **Feedback in-app** — Tela bug/sugestão/feature integrada ao Resend
+13. **Idiomas FR e ZH** — Arquivos i18n + presets de plataformas + tema ZH
+14. **Tema por locale** — localeTheme.ts aplicado via _layout.tsx
+
+---
+
+## 8. O Kill Shot Visual — Proposta de Redesign do Dashboard
 
 O Klaans mostra:
 ```
@@ -364,7 +490,7 @@ Onde o Klaans tem **números estáticos**, o PalDrivy tem **tendência vs mês a
 
 ---
 
-## 7. Resumo Executivo
+## 9. Resumo Executivo
 
 **O que o Klaans faz melhor:**
 - Wizard de entrada guiado (UX superior para novos usuários)
@@ -375,10 +501,12 @@ Onde o Klaans tem **números estáticos**, o PalDrivy tem **tendência vs mês a
 
 **O que o PalDrivy faz melhor:**
 - Preço (30× mais barato — vantagem defensável)
-- Multi-idioma e multi-moeda (mercado total 10× maior)
+- Multi-idioma e multi-moeda (PT/EN/ES → +FR/ZH = mercado total 20× maior)
 - Paleta visual mais premium (navy+gold vs verde genérico)
-- Stack mais moderno (Expo/React Native vs Klaans que aparenta ser mais antigo)
+- Stack mais moderno (Expo/React Native)
+- Plataformas dinâmicas no wizard (Klaans tem Uber+99 fixos)
+- Comunidade potencialmente internacional (Klaans é só Brasil)
 
-**Estratégia:** Não copiar o Klaans — **superá-lo em cada feature**. O wizard deve ser mais flexível (plataformas dinâmicas). A comunidade deve ser internacional. O dashboard deve ter insights preditivos. Ao mesmo tempo, manter o preço 30× menor como âncora de conversão.
+**Estratégia:** Não copiar o Klaans — **superá-lo em cada feature**. O wizard deve ser mais flexível. A comunidade deve ser global. O dashboard deve ter insights preditivos. O onboarding deve ser o melhor do segmento. E tudo isso por R$1/mês.
 
 **Frase de posicionamento:** *"O app de motorista mais completo do mundo, por menos de um café por mês."*
