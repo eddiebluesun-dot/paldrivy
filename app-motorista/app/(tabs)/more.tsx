@@ -25,6 +25,11 @@ import {
   scheduleDailyReminder, registerPushToken,
 } from '@/src/services/notifications';
 import { getUserPlatforms, saveUserPlatforms, PRESET_PLATFORMS } from '@/src/services/platforms';
+import { exportShiftsCSV, exportLGPDJson } from '@/src/services/export';
+import {
+  useBiometricAvailable,
+  getBiometricEnabled, setBiometricEnabled,
+} from '@/src/hooks/useBiometric';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -525,11 +530,16 @@ export default function MoreScreen() {
   const notifSavedTimer                               = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [platformsModalVisible, setPlatformsModalVisible] = useState(false);
   const [userPlatformNames, setUserPlatformNames]     = useState<string[]>([]);
+  const biometricAvailable                            = useBiometricAvailable();
+  const [biometricEnabled, setBiometricEnabledState] = useState(false);
+  const [exportingCSV, setExportingCSV]               = useState(false);
+  const [exportingJSON, setExportingJSON]             = useState(false);
 
   useEffect(() => {
     getNotificationsEnabled().then(setNotifEnabled);
     getDailyReminderTime().then(({ hour, minute }) => { setDailyHour(hour); setDailyMinute(minute); });
     getNotifWeekdays().then(setNotifWeekdays);
+    getBiometricEnabled().then(setBiometricEnabledState);
     return () => { if (notifSavedTimer.current) clearTimeout(notifSavedTimer.current); };
   }, []);
 
@@ -640,6 +650,27 @@ export default function MoreScreen() {
 
   function openPicker(field: string, title: string, items: { label: string; value: string }[], value: string, searchable?: boolean) {
     setPickerConfig({ field, title, items, value, searchable });
+  }
+
+  async function handleExportCSV() {
+    if (!userId) return;
+    setExportingCSV(true);
+    try { await exportShiftsCSV(userId, profile?.currency_code ?? 'BRL'); }
+    catch { /* share sheet cancelled or error — silent */ }
+    finally { setExportingCSV(false); }
+  }
+
+  async function handleExportJSON() {
+    if (!userId) return;
+    setExportingJSON(true);
+    try { await exportLGPDJson(userId); }
+    catch { }
+    finally { setExportingJSON(false); }
+  }
+
+  async function handleBiometricToggle(val: boolean) {
+    setBiometricEnabledState(val);
+    await setBiometricEnabled(val);
   }
 
   const initials = (name || email || '?').charAt(0).toUpperCase();
@@ -974,6 +1005,62 @@ export default function MoreScreen() {
             <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
             <Text style={s.successText}>{t('more.notifications_saved')}</Text>
           </View>
+        )}
+
+        {/* Export */}
+        <Text style={s.sectionHeader}>EXPORTAR DADOS</Text>
+        <View style={s.card}>
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={handleExportCSV} disabled={exportingCSV}>
+            <View style={s.rowIconLabel}>
+              <Ionicons name="document-outline" size={18} color={Colors.accent} style={s.rowIcon} />
+              <View>
+                <Text style={s.rowLabel}>Exportar CSV</Text>
+                <Text style={[s.rowValue, { fontSize: 12 }]}>Todos os turnos — compatível com Excel</Text>
+              </View>
+            </View>
+            {exportingCSV
+              ? <ActivityIndicator size="small" color={Colors.accent} />
+              : <Ionicons name="download-outline" size={18} color={Colors.textSecondary} />
+            }
+          </TouchableOpacity>
+          <View style={s.divider} />
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={handleExportJSON} disabled={exportingJSON}>
+            <View style={s.rowIconLabel}>
+              <Ionicons name="code-slash-outline" size={18} color={Colors.accent} style={s.rowIcon} />
+              <View>
+                <Text style={s.rowLabel}>Baixar meus dados (LGPD)</Text>
+                <Text style={[s.rowValue, { fontSize: 12 }]}>JSON completo — todos os seus dados</Text>
+              </View>
+            </View>
+            {exportingJSON
+              ? <ActivityIndicator size="small" color={Colors.accent} />
+              : <Ionicons name="shield-checkmark-outline" size={18} color={Colors.textSecondary} />
+            }
+          </TouchableOpacity>
+        </View>
+
+        {/* Biometria */}
+        {biometricAvailable && (
+          <>
+            <Text style={s.sectionHeader}>SEGURANÇA</Text>
+            <View style={s.card}>
+              <View style={s.row}>
+                <View style={s.rowIconLabel}>
+                  <Ionicons name="finger-print-outline" size={18} color={Colors.accent} style={s.rowIcon} />
+                  <View>
+                    <Text style={s.rowLabel}>Login Biométrico</Text>
+                    <Text style={[s.rowValue, { fontSize: 12 }]}>Desbloquear com impressão digital / Face ID</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={biometricEnabled}
+                  onValueChange={handleBiometricToggle}
+                  trackColor={{ false: Colors.border, true: Colors.accentDim }}
+                  thumbColor={biometricEnabled ? Colors.accent : Colors.textSecondary}
+                />
+              </View>
+            </View>
+          </>
         )}
 
         {/* Sign out */}

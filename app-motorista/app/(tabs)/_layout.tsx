@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/src/theme';
+import { BiometricGate } from '@/src/components/BiometricGate';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -17,6 +18,7 @@ export default function TabLayout() {
   const { t } = useTranslation();
 
   return (
+    <BiometricGate>
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -39,5 +41,6 @@ export default function TabLayout() {
       <Tabs.Screen name="more"     options={{ title: t('tabs.more') }} />
       <Tabs.Screen name="two"      options={{ href: null }} />
     </Tabs>
+    </BiometricGate>
   );
 }
