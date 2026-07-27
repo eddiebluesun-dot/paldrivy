@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Select } from '../../src/components/Select';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../src/lib/supabase';
 import { createVehicle } from '../../src/services/vehicles';
+import { getProfile } from '../../src/services/profile';
 import { decimalToCents } from '../../src/utils/currency';
 import { displayToMeters } from '../../src/utils/units';
 import { Colors, Radius, Spacing } from '../../src/theme';
@@ -24,6 +25,7 @@ export default function VehicleScreen() {
   const { t } = useTranslation();
   const router = useRouter();
 
+  const [isMotoboy, setIsMotoboy] = useState(false);
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
   const [year, setYear] = useState('2020');
@@ -37,6 +39,17 @@ export default function VehicleScreen() {
   const [odometer, setOdometer] = useState('0');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const profile = await getProfile(data.user.id);
+      if (profile?.worker_type === 'motoboy') {
+        setIsMotoboy(true);
+        setConsumption('30');
+      }
+    });
+  }, []);
 
   const handleSave = async () => {
     setError('');
@@ -68,7 +81,7 @@ export default function VehicleScreen() {
         is_taxi: isTaxi,
         taxi_license_monthly_cents: isTaxi ? decimalToCents(parseFloat(taxiLicense) || 0) : 0,
       });
-      router.push('/onboarding/goal');
+      router.push('/onboarding/platforms');
     } catch {
       setError(t('common.error'));
     } finally {
@@ -79,7 +92,9 @@ export default function VehicleScreen() {
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={s.title}>{t('onboarding.vehicle_title')}</Text>
+        <Text style={s.title}>
+          {isMotoboy ? t('onboarding.moto_title') : t('onboarding.vehicle_title')}
+        </Text>
 
         {error ? <Text style={s.error}>{error}</Text> : null}
 
@@ -90,7 +105,7 @@ export default function VehicleScreen() {
           onChangeText={setBrand}
           autoCapitalize="words"
           placeholderTextColor={Colors.textSecondary}
-          placeholder={t('onboarding.brand')}
+          placeholder={isMotoboy ? 'Honda, Yamaha, Shineray...' : 'Toyota, Volkswagen, Fiat...'}
           accessibilityLabel={t('onboarding.brand')}
         />
 
@@ -101,7 +116,7 @@ export default function VehicleScreen() {
           onChangeText={setModel}
           autoCapitalize="words"
           placeholderTextColor={Colors.textSecondary}
-          placeholder={t('onboarding.model')}
+          placeholder={isMotoboy ? 'Pop, Titan, Factor, Fazer...' : 'HB20, Argo, Gol, Onix...'}
           accessibilityLabel={t('onboarding.model')}
         />
 
@@ -270,7 +285,7 @@ const s = StyleSheet.create({
     borderRadius: Radius.input,
   },
   button: {
-    backgroundColor: Colors.brandBlue,
+    backgroundColor: Colors.accent,
     borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',

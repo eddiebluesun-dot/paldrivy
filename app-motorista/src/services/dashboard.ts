@@ -263,6 +263,13 @@ export interface MonthlyTotals {
   expenses_cents: number;
   fuel_cents: number;
   km_meters: number;
+  duration_seconds?: number;
+}
+
+export interface PlatformItem {
+  name: string;
+  gross_cents: number;
+  pct: number;
 }
 
 export interface ActiveGoal {
@@ -452,7 +459,7 @@ export async function getMonthReport(userId: string, year: number, month: number
   const monthEnd = new Date(year, month, 1);
 
   const [shiftsRes, expRes, fuelRes] = await Promise.all([
-    supabase.from('shifts').select('gross_cents, net_cents, odometer_start_meters, odometer_end_meters')
+    supabase.from('shifts').select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters, platforms')
       .eq('user_id', userId)
       .gte('started_at', monthStart.toISOString())
       .lt('started_at', monthEnd.toISOString())
@@ -469,10 +476,13 @@ export async function getMonthReport(userId: string, year: number, month: number
 
   const rows = (shiftsRes.data ?? []) as {
     gross_cents: number | null; net_cents: number | null;
+    duration_seconds: number | null; started_at: string; ended_at: string | null;
     odometer_start_meters: number | null; odometer_end_meters: number | null;
+    platforms: Array<{ platform_name: string; amount_cents: number }> | null;
   }[];
   const gross_cents = rows.reduce((s, r) => s + (r.gross_cents ?? 0), 0);
   const net_cents = rows.reduce((s, r) => s + (r.net_cents ?? 0), 0);
+  const duration_seconds = rows.reduce((s, r) => s + durationFromRow(r), 0);
   const km_meters = rows.reduce((s, r) =>
     r.odometer_start_meters != null && r.odometer_end_meters != null
       ? s + (r.odometer_end_meters - r.odometer_start_meters)
@@ -491,7 +501,58 @@ export async function getMonthReport(userId: string, year: number, month: number
     .map(([category, total_cents]) => ({ category, total_cents }))
     .sort((a, b) => b.total_cents - a.total_cents);
 
-  return { totals: { gross_cents, net_cents, expenses_cents, fuel_cents, km_meters }, expensesByCategory };
+  return { totals: { gross_cents, net_cents, expenses_cents, fuel_cents, km_meters, duration_seconds }, expensesByCategory };
+}
+
+export async function getPreviousMonthGross(userId: string): Promise<number> {
+  const now = new Date();
+  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevEnd   = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { data } = await supabase
+    .from('shifts')
+    .select('gross_cents')
+    .eq('user_id', userId)
+    .gte('started_at', prevStart.toISOString())
+    .lt('started_at', prevEnd.toISOString())
+    .not('ended_at', 'is', null);
+  return ((data ?? []) as { gross_cents: number | null }[]).reduce((s, r) => s + (r.gross_cents ?? 0), 0);
+}
+
+export async function getMonthPlatformBreakdown(userId: string): Promise<PlatformItem[]> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const { data } = await supabase
+    .from('shifts')
+    .select('platforms, gross_cents')
+    .eq('user_id', userId)
+    .gte('started_at', monthStart.toISOString())
+    .lt('started_at', monthEnd.toISOString())
+    .not('ended_at', 'is', null);
+
+  const rows = (data ?? []) as {
+    gross_cents: number | null;
+    platforms: Array<{ platform_name: string; amount_cents: number }> | null;
+  }[];
+
+  const map = new Map<string, number>();
+  let total = 0;
+  for (const row of rows) {
+    for (const p of row.platforms ?? []) {
+      if (p.amount_cents > 0) {
+        map.set(p.platform_name, (map.get(p.platform_name) ?? 0) + p.amount_cents);
+        total += p.amount_cents;
+      }
+    }
+    if (!row.platforms?.length && (row.gross_cents ?? 0) > 0) {
+      map.set('Outro', (map.get('Outro') ?? 0) + (row.gross_cents ?? 0));
+      total += row.gross_cents ?? 0;
+    }
+  }
+
+  return Array.from(map.entries())
+    .map(([name, gross_cents]) => ({ name, gross_cents, pct: total > 0 ? Math.round((gross_cents / total) * 100) : 0 }))
+    .sort((a, b) => b.gross_cents - a.gross_cents);
 }
 
 export interface MonthMoodStats {

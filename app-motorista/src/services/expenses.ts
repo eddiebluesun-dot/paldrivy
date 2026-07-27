@@ -1,13 +1,16 @@
 import { supabase } from '../lib/supabase';
 
+export type RecurringFrequency = 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+
 export interface Expense {
   id: string;
   user_id: string;
-  category: string;      // one of the expense.* values e.g. "expense.rent"
+  category: string;
   amount_cents: number;
   expense_date: string;  // YYYY-MM-DD
   description: string | null;
   recurring: boolean;
+  recurring_frequency: RecurringFrequency | null;
 }
 
 export async function getExpenses(
@@ -29,5 +32,18 @@ export async function addExpense(
   expense: Omit<Expense, 'id'>
 ): Promise<void> {
   const { error } = await supabase.from('expenses').insert(expense);
+  if (error) throw error;
+}
+
+export async function updateExpense(
+  id: string,
+  patch: Partial<Omit<Expense, 'id' | 'user_id'>>
+): Promise<void> {
+  const { error } = await supabase.from('expenses').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  const { error } = await supabase.from('expenses').delete().eq('id', id);
   if (error) throw error;
 }

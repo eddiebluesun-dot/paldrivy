@@ -17,8 +17,11 @@ import { decimalToCents, formatMoney } from '@/src/utils/currency';
 import { getActiveShift } from '@/src/services/shifts';
 import { getConsumptionTrend, type ConsumptionTrend } from '@/src/services/fuelConsumption';
 import {
-  getActiveGoal, getDayDetail, getMonthlyBuckets, getMonthlyTotals, getMonthMoodStats, getTodaySummary, getWeekBuckets, getWeekTotals, upsertMonthlyGoal,
-  type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket, type MonthlyTotals, type MonthMoodStats,
+  getActiveGoal, getDayDetail, getMonthlyBuckets, getMonthlyTotals, getMonthMoodStats,
+  getMonthPlatformBreakdown, getPreviousMonthGross,
+  getTodaySummary, getWeekBuckets, getWeekTotals, upsertMonthlyGoal,
+  type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket,
+  type MonthlyTotals, type MonthMoodStats, type PlatformItem,
 } from '@/src/services/dashboard';
 import {
   getInAppNotifications, deleteInAppNotification, clearInAppNotifications,
@@ -617,6 +620,214 @@ function MoodStatsCard({ stats }: { stats: MonthMoodStats }) {
   );
 }
 
+// ─── platform colors ──────────────────────────────────────────────────────────
+
+const PLATFORM_COLORS: Record<string, string> = {
+  'Uber':      '#000000',
+  'Uber Eats': '#000000',
+  '99':        '#FFD700',
+  '99Food':    '#FFD700',
+  'iFood':     '#FF2C2C',
+  'Lalamove':  '#FF6B00',
+  'InDriver':  '#4CAF50',
+  'Rappi':     '#FF441F',
+  'Ifood':     '#FF2C2C',
+  'Bolt':      '#34D058',
+  'Heetch':    '#8B5CF6',
+  'Outro':     '#6B7280',
+};
+
+function getPlatformColor(name: string): string {
+  for (const [key, color] of Object.entries(PLATFORM_COLORS)) {
+    if (name.toLowerCase().includes(key.toLowerCase())) return color;
+  }
+  return '#6B7280';
+}
+
+// ─── kill shot cards ──────────────────────────────────────────────────────────
+
+function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }: {
+  totals: MonthlyTotals; prevGross: number; currencyCode: string; locale: string; distanceUnit: string;
+}) {
+  const { t } = useTranslation();
+  const totalExpenses = totals.expenses_cents + totals.fuel_cents;
+  const profit        = totals.gross_cents - totalExpenses;
+  const hours         = (totals.duration_seconds ?? 0) / 3600;
+  const perHour       = hours > 0.5 ? Math.round(profit / hours) : null;
+  const trendPct      = prevGross > 0 ? Math.round(((totals.gross_cents - prevGross) / prevGross) * 100) : null;
+  const expPct        = totals.gross_cents > 0 ? Math.round((totalExpenses / totals.gross_cents) * 100) : 0;
+  const marginPct     = totals.gross_cents > 0 ? Math.round((profit / totals.gross_cents) * 100) : 0;
+  const profitColor   = marginPct >= 50 ? Colors.success : marginPct >= 25 ? Colors.accent : Colors.error;
+
+  const glass = { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.10)', borderWidth: 1 } as const;
+
+  const cards = [
+    {
+      title: 'Receita',
+      value: formatMoney(totals.gross_cents, currencyCode, locale),
+      sub: trendPct !== null
+        ? `${trendPct >= 0 ? '+' : ''}${trendPct}% vs mês ant.`
+        : undefined,
+      subColor: trendPct !== null && trendPct >= 0 ? Colors.success : Colors.error,
+      icon: 'trending-up' as const,
+      iconColor: Colors.accent,
+      accentBorder: Colors.accent,
+    },
+    {
+      title: 'Despesas',
+      value: formatMoney(totalExpenses, currencyCode, locale),
+      sub: `${expPct}% da receita`,
+      subColor: Colors.error,
+      icon: 'flame-outline' as const,
+      iconColor: Colors.error,
+      accentBorder: Colors.error,
+    },
+    {
+      title: 'Lucro',
+      value: formatMoney(profit, currencyCode, locale),
+      sub: `${marginPct}% margem`,
+      subColor: profitColor,
+      icon: 'wallet-outline' as const,
+      iconColor: profitColor,
+      accentBorder: profitColor,
+    },
+    {
+      title: 'R$/hora',
+      value: perHour !== null ? formatMoney(perHour, currencyCode, locale) : '—',
+      sub: perHour !== null ? `${hours.toFixed(1)}h trabalhadas` : 'sem dados',
+      subColor: Colors.textSecondary,
+      icon: 'time-outline' as const,
+      iconColor: Colors.brandBlue,
+      accentBorder: Colors.brandBlue,
+    },
+  ];
+
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.md }}>
+      {cards.map(c => (
+        <View key={c.title} style={[{
+          width: '48%', borderRadius: 14, padding: Spacing.md,
+          borderTopWidth: 2, borderTopColor: c.accentBorder,
+          ...Platform.select({
+            ios: { shadowColor: c.accentBorder, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8 },
+            android: { elevation: 3 },
+          }),
+        }, glass]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+            <Ionicons name={c.icon} size={12} color={c.iconColor} />
+            <Text style={{ color: Colors.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+              {c.title}
+            </Text>
+          </View>
+          <Text style={{ color: Colors.textPrimary, fontSize: 17, fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: -0.5 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+            {c.value}
+          </Text>
+          {c.sub && (
+            <Text style={{ color: c.subColor, fontSize: 10, fontWeight: '600', marginTop: 3 }} numberOfLines={1}>
+              {c.sub}
+            </Text>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── platform breakdown ───────────────────────────────────────────────────────
+
+function PlatformBreakdownCard({ platforms, currencyCode, locale }: {
+  platforms: PlatformItem[]; currencyCode: string; locale: string;
+}) {
+  if (platforms.length === 0) return null;
+  const topN = platforms.slice(0, 5);
+  return (
+    <View style={[styles.card, { gap: 10 }]}>
+      <Text style={styles.cardTitle}>RECEITA POR PLATAFORMA</Text>
+      {topN.map(p => {
+        const color = getPlatformColor(p.name);
+        const isLight = color === '#FFD700';
+        return (
+          <View key={p.name}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+                <Text style={{ color: Colors.textPrimary, fontSize: 13, fontWeight: '600' }}>{p.name}</Text>
+                <Text style={{ color: Colors.textSecondary, fontSize: 11 }}>{p.pct}%</Text>
+              </View>
+              <Text style={{ color: Colors.textPrimary, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+                {formatMoney(p.gross_cents, currencyCode, locale)}
+              </Text>
+            </View>
+            <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+              <View style={{
+                height: 6, width: `${Math.max(p.pct, 3)}%` as any,
+                borderRadius: 3, backgroundColor: color,
+                opacity: isLight ? 0.9 : 1,
+                ...Platform.select({
+                  ios: { shadowColor: color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 4 },
+                  android: { elevation: 2 },
+                }),
+              }} />
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── equação visual (custo/km) ────────────────────────────────────────────────
+
+function EquacaoCard({ totals, distanceUnit, currencyCode, locale }: {
+  totals: MonthlyTotals; distanceUnit: string; currencyCode: string; locale: string;
+}) {
+  const totalExpenses = totals.expenses_cents + totals.fuel_cents;
+  const distScale = distanceUnit === 'km' ? 1000 : 1609.344;
+  const distTotal = totals.km_meters / distScale;
+  if (distTotal < 1 || totalExpenses === 0) return null;
+
+  const costPerKm   = Math.round(totalExpenses / distTotal);
+  const grossPerKm  = Math.round(totals.gross_cents / distTotal);
+  const netPerKm    = grossPerKm - costPerKm;
+  const netColor    = netPerKm >= 0 ? Colors.success : Colors.error;
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>IMPACTO NO SEU DIA A DIA</Text>
+      {/* Equation: Receita/km  –  Custo/km  =  Lucro/km */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, justifyContent: 'center', marginTop: 4 }}>
+        {[
+          { label: `Receita/${distanceUnit}`, value: formatMoney(grossPerKm, currencyCode, locale), color: Colors.accent, bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.30)' },
+          { label: '—', value: undefined, color: Colors.textSecondary, bg: 'transparent', border: 'transparent' },
+          { label: `Custo/${distanceUnit}`, value: formatMoney(costPerKm, currencyCode, locale), color: Colors.error, bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.30)' },
+          { label: '=', value: undefined, color: Colors.textSecondary, bg: 'transparent', border: 'transparent' },
+          { label: `Líquido/${distanceUnit}`, value: formatMoney(netPerKm, currencyCode, locale), color: netColor, bg: netColor === Colors.success ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)', border: netColor === Colors.success ? 'rgba(16,185,129,0.30)' : 'rgba(239,68,68,0.30)' },
+        ].map((item, i) => (
+          item.value !== undefined
+            ? (
+              <View key={i} style={{ flex: 1, backgroundColor: item.bg, borderRadius: 12, borderWidth: 1.5, borderColor: item.border, padding: 8, alignItems: 'center', gap: 3 }}>
+                <Text style={{ color: item.color, fontSize: 13, fontWeight: '900', fontVariant: ['tabular-nums'] }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {item.value}
+                </Text>
+                <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3, textAlign: 'center' }}>
+                  {item.label}
+                </Text>
+              </View>
+            )
+            : (
+              <Text key={i} style={{ color: Colors.textSecondary, fontSize: 18, fontWeight: '300', marginHorizontal: 1 }}>
+                {item.label}
+              </Text>
+            )
+        ))}
+      </View>
+      <Text style={{ color: Colors.textSecondary, fontSize: 10, textAlign: 'center', marginTop: Spacing.sm, fontStyle: 'italic' }}>
+        Baseado em {distTotal.toFixed(0)} {distanceUnit} rodados este mês
+      </Text>
+    </View>
+  );
+}
+
 // ─── day detail modal ─────────────────────────────────────────────────────────
 
 function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, currencyCode, locale }: {
@@ -989,6 +1200,8 @@ export default function DashboardScreen() {
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [moodStats, setMoodStats] = useState<MonthMoodStats | null>(null);
+  const [prevMonthGross, setPrevMonthGross] = useState(0);
+  const [platformBreakdown, setPlatformBreakdown] = useState<PlatformItem[]>([]);
 
   function refreshNotifCount() {
     getInAppNotifications().then(ns => setNotifCount(ns.length)).catch(() => {});
@@ -1003,7 +1216,7 @@ export default function DashboardScreen() {
           .eq('id', profile.vehicle_id).maybeSingle().then(r => r.data, () => null)
       : supabase.from('vehicles').select('brand, model, year, fuel_type, avg_consumption_per_100')
           .eq('user_id', uid).order('created_at', { ascending: false }).limit(1).maybeSingle().then(r => r.data, () => null);
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood] = await Promise.all([
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, platforms] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -1016,6 +1229,8 @@ export default function DashboardScreen() {
       getMonthHistory(uid).catch(() => [] as MonthHistoryItem[]),
       getStreak(uid).catch(() => 0),
       getMonthMoodStats(uid).catch(() => null),
+      getPreviousMonthGross(uid).catch(() => 0),
+      getMonthPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
     ]);
     setSummary(todaySummary);
     setWeekBuckets(buckets);
@@ -1029,6 +1244,8 @@ export default function DashboardScreen() {
     setMonthHistory(history);
     setStreak(streakCount);
     setMoodStats(mood);
+    setPrevMonthGross(prevGross);
+    setPlatformBreakdown(platforms);
   }, [profile?.vehicle_id]);
 
   useEffect(() => {
@@ -1201,6 +1418,30 @@ export default function DashboardScreen() {
 
         <PremiumGate isPremium={isPremium} reason="dashboard_locked">
           <>
+            {/* Kill shot: 4 glassmorphism cards + platform breakdown + equação */}
+            {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
+              <>
+                <KillShotCards
+                  totals={monthlyTotals}
+                  prevGross={prevMonthGross}
+                  currencyCode={currencyCode}
+                  locale={locale}
+                  distanceUnit={distanceUnit}
+                />
+                <PlatformBreakdownCard
+                  platforms={platformBreakdown}
+                  currencyCode={currencyCode}
+                  locale={locale}
+                />
+                <EquacaoCard
+                  totals={monthlyTotals}
+                  distanceUnit={distanceUnit}
+                  currencyCode={currencyCode}
+                  locale={locale}
+                />
+              </>
+            )}
+
             {weekBuckets.length > 0 && (
               <WeekBarChart buckets={weekBuckets} weekTotals={weekTotals} currencyCode={currencyCode} locale={locale} language={i18n.language} distanceUnit={distanceUnit} onPress={setSelectedDay} />
             )}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors, Radius, Spacing } from '../theme';
 import { formatMoney } from '../utils/currency';
 import type { MonthHistoryItem } from '../services/cockpit';
@@ -14,9 +14,10 @@ interface MonthHistoryCardProps {
   items: MonthHistoryItem[];
   currencyCode: string;
   locale: string;
+  onMonthPress?: (item: MonthHistoryItem) => void;
 }
 
-export function MonthHistoryCard({ items, currencyCode, locale }: MonthHistoryCardProps) {
+export function MonthHistoryCard({ items, currencyCode, locale, onMonthPress }: MonthHistoryCardProps) {
   if (items.length === 0) return null;
 
   const now = new Date();
@@ -39,6 +40,11 @@ export function MonthHistoryCard({ items, currencyCode, locale }: MonthHistoryCa
           const netColor = net >= 0 ? Colors.success : Colors.error;
 
           return (
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => onMonthPress?.(item)}
+              disabled={!onMonthPress}
+            >
             <View style={[styles.monthCard, isCurrentMonth && styles.monthCardCurrent]}>
               {isCurrentMonth && (
                 <View style={styles.badgeCurrent}>
@@ -90,6 +96,7 @@ export function MonthHistoryCard({ items, currencyCode, locale }: MonthHistoryCa
                 </View>
               )}
             </View>
+            </TouchableOpacity>
           );
         }}
       />

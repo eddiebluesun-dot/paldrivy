@@ -1,12 +1,23 @@
 import '../src/lib/i18n';
+import i18n from '../src/lib/i18n';
 import { useFonts } from 'expo-font';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useAuth } from '../src/hooks/useAuth';
 import { getProfile } from '../src/services/profile';
+import { scheduleAllNotifications, addInAppNotification } from '../src/services/notifications';
+
+function localeToLang(locale: string): string {
+  if (locale.startsWith('pt'))    return 'pt';
+  if (locale.startsWith('es'))    return 'es';
+  if (locale.startsWith('en-GB')) return 'en-GB';
+  if (locale.startsWith('en'))    return 'en';
+  return 'en'; // unsupported stored locale → English UI
+}
 
 export {
   ErrorBoundary,
@@ -30,6 +41,16 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync();
   }, [fontsLoaded]);
+
+  // Store foreground notifications in local in-app inbox
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener(notification => {
+      const title = notification.request.content.title ?? '';
+      const body  = notification.request.content.body  ?? '';
+      addInAppNotification(title, body).catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded) return null;
 
@@ -61,6 +82,12 @@ function RootLayoutNav() {
     // Fetch profile fresh so we always see the latest onboarding_done state
     getProfile(session.user.id).then((profile) => {
       if (cancelled) return;
+      // Apply saved language preference
+      if (profile?.locale) {
+        const lang = localeToLang(profile.locale);
+        if (lang !== i18n.language) i18n.changeLanguage(lang);
+        scheduleAllNotifications(lang).catch(() => {});
+      }
       if (!profile || !profile.onboarding_done) {
         router.replace('/onboarding/locale');
       } else if (inAuth) {

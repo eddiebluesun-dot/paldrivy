@@ -11,3 +11,8 @@ export async function createVehicle(vehicle: Omit<Vehicle, 'id' | 'created_at'>)
   if (error) throw error;
   return data;
 }
+
+export async function updateVehicle(id: string, data: Partial<Omit<Vehicle, 'id' | 'created_at' | 'user_id'>>): Promise<void> {
+  const { error } = await supabase.from('vehicles').update(data).eq('id', id);
+  if (error) throw error;
+}

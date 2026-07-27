@@ -7,6 +7,14 @@ export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  async function refetch() {
+    const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      const p = await getProfile(data.user.id);
+      setProfile(p);
+    }
+  }
+
   useEffect(() => {
     supabase.auth.getUser()
       .then(({ data }) => {
@@ -22,5 +30,5 @@ export function useProfile() {
       .catch(() => setLoading(false));
   }, []);
 
-  return { profile, loading, setProfile };
+  return { profile, loading, setProfile, refetch };
 }

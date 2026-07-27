@@ -1,29 +1,18 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Path, Text as SvgText } from 'react-native-svg';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors, Radius, Spacing } from '../theme';
 import { formatMoney } from '../utils/currency';
 import { metersToDisplay } from '../utils/units';
 import { useTranslation } from 'react-i18next';
 
-function secondsToHHMM(s: number): string {
-  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
-}
-
-const GAUGE_R = 76;
-const GAUGE_CX = 100;
-const GAUGE_CY = 90;
-// Upper semicircle: large-arc=0, sweep=1 (clockwise on screen = upward from left to right)
-const TRACK_D = `M ${GAUGE_CX - GAUGE_R} ${GAUGE_CY} A ${GAUGE_R} ${GAUGE_R} 0 0 1 ${GAUGE_CX + GAUGE_R} ${GAUGE_CY}`;
-const HALF_CIRC = Math.PI * GAUGE_R; // ≈ 238.76
-
-interface MicroStat {
-  icon: 'car-outline' | 'time-outline' | 'navigate-outline' | 'receipt-outline';
-  label: string;
-  value: string;
-  valueColor?: string;
-}
+const DONUT_SIZE = 130;
+const CX = DONUT_SIZE / 2;
+const CY = DONUT_SIZE / 2;
+const R = 52;
+const CIRC = 2 * Math.PI * R;
+const OFFSET = CIRC * 0.25;
 
 interface CockpitCardProps {
   todayGrossCents: number;
@@ -36,6 +25,11 @@ interface CockpitCardProps {
   currencyCode: string;
   locale: string;
   onEditGoal: () => void;
+  dateLabel?: string;
+  onResetToday?: () => void;
+  odometerStartMeters?: number | null;
+  odometerEndMeters?: number | null;
+  activeDaysThisMonth?: number;
 }
 
 export function CockpitCard({
@@ -49,131 +43,149 @@ export function CockpitCard({
   currencyCode,
   locale,
   onEditGoal,
+  dateLabel,
+  onResetToday,
+  odometerStartMeters,
+  odometerEndMeters,
+  activeDaysThisMonth = 0,
 }: CockpitCardProps) {
   const { t } = useTranslation();
 
   const hasGoal = dailyGoalCents > 0;
   const pct = hasGoal ? Math.min(todayGrossCents / dailyGoalCents, 1) : 0;
   const metGoal = todayGrossCents >= dailyGoalCents && hasGoal;
+  const aboveGoalCents = todayGrossCents - dailyGoalCents;
   const remainCents = Math.max(dailyGoalCents - todayGrossCents, 0);
 
-  const dashFill = HALF_CIRC * pct;
-  const dashEmpty = HALF_CIRC * (1 - pct) + 10; // +10 so end doesn't bleed
+  const dashFill = Math.max(CIRC * pct - 2, 0);
+  const dashEmpty = CIRC * (1 - pct) + 10;
 
-  const microStats: MicroStat[] = [
-    { icon: 'car-outline', label: t('dashboard.day_shifts'), value: String(rides) },
-    { icon: 'time-outline', label: t('dashboard.hours_worked'), value: secondsToHHMM(durationSeconds) },
-    {
-      icon: 'navigate-outline',
-      label: distanceUnit === 'km' ? t('dashboard.km') : 'Mi',
-      value: metersToDisplay(distanceMeters, distanceUnit).toFixed(1),
-    },
-    {
-      icon: 'receipt-outline',
-      label: t('dashboard.expenses_label'),
-      value: formatMoney(expensesTodayCents, currencyCode, locale),
-      valueColor: expensesTodayCents > 0 ? Colors.error : undefined,
-    },
-  ];
+  const arcColor =
+    metGoal        ? Colors.success :
+    !hasGoal || pct <= 0 ? 'rgba(255,255,255,0.12)' :
+    pct < 0.35     ? Colors.error :
+    pct < 0.70     ? '#F97316' :
+                     Colors.accent;
 
   return (
     <View style={styles.card}>
-      {/* Header row */}
+      {/* Header */}
       <View style={styles.headerRow}>
-        <Text style={styles.sectionLabel}>{t('dashboard.today')}</Text>
+        <TouchableOpacity
+          onPress={onResetToday}
+          disabled={!onResetToday}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={[styles.sectionLabel, !!dateLabel && { color: Colors.accent }]}>
+            {dateLabel ?? t('dashboard.today')}
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={onEditGoal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="pencil-outline" size={14} color={Colors.textSecondary} />
+          {activeDaysThisMonth > 0 ? (
+            <View style={styles.activeDaysChip}>
+              <Ionicons name="diamond-outline" size={8} color={Colors.accent} />
+              <Text style={styles.activeDaysText}>{activeDaysThisMonth} {t('dashboard.active_days_month')}</Text>
+              <Ionicons name="diamond-outline" size={8} color={Colors.accent} />
+            </View>
+          ) : (
+            <Ionicons name="pencil-outline" size={14} color={Colors.textSecondary} />
+          )}
         </TouchableOpacity>
       </View>
 
-      {/* SVG Gauge */}
-      <View style={styles.gaugeWrap}>
-        <Svg width={200} height={130} viewBox="0 0 200 130">
-          {/* Track */}
-          <Path
-            d={TRACK_D}
-            fill="none"
-            stroke="rgba(255,255,255,0.10)"
-            strokeWidth={12}
-            strokeLinecap="round"
-          />
+      {/* 3-column body */}
+      <View style={styles.bodyRow}>
 
-          {/* Fill arc — solid colors for cross-platform compatibility */}
-          {pct > 0 && (
-            <Path
-              d={TRACK_D}
-              fill="none"
-              stroke={metGoal ? Colors.success : pct < 0.5 ? Colors.error : Colors.accent}
-              strokeWidth={12}
-              strokeLinecap="round"
-              strokeDasharray={`${dashFill} ${dashEmpty}`}
-            />
+        {/* LEFT — donut arc only, no text inside */}
+        <View style={styles.donutCol}>
+          <Svg width={DONUT_SIZE} height={DONUT_SIZE} viewBox={`0 0 ${DONUT_SIZE} ${DONUT_SIZE}`}>
+            {/* Track */}
+            <Circle cx={CX} cy={CY} r={R} fill="none"
+              stroke="rgba(255,255,255,0.07)" strokeWidth={10} />
+
+            {pct > 0 && (
+              <>
+                {/* Outer glow */}
+                <Circle cx={CX} cy={CY} r={R} fill="none" stroke={arcColor}
+                  strokeWidth={22} opacity={0.07} strokeLinecap="round"
+                  strokeDasharray={`${dashFill} ${dashEmpty}`} strokeDashoffset={OFFSET} />
+                {/* Mid glow */}
+                <Circle cx={CX} cy={CY} r={R} fill="none" stroke={arcColor}
+                  strokeWidth={14} opacity={0.15} strokeLinecap="round"
+                  strokeDasharray={`${dashFill} ${dashEmpty}`} strokeDashoffset={OFFSET} />
+                {/* Main arc */}
+                <Circle cx={CX} cy={CY} r={R} fill="none" stroke={arcColor}
+                  strokeWidth={9} strokeLinecap="round"
+                  strokeDasharray={`${dashFill} ${dashEmpty}`} strokeDashoffset={OFFSET} />
+              </>
+            )}
+          </Svg>
+
+          {/* % badge overlaid at center */}
+          <View style={styles.donutCenter} pointerEvents="none">
+            <Text style={[styles.donutPct, { color: arcColor }]}>
+              {hasGoal ? `${Math.round(pct * 100)}%` : '—'}
+            </Text>
+          </View>
+        </View>
+
+        {/* CENTER — earnings text */}
+        <View style={styles.centerCol}>
+          {metGoal ? (
+            <Text style={styles.metaLabel}>Meta! ✓</Text>
+          ) : hasGoal ? (
+            <Text style={styles.metaLabel}>{t('dashboard.cockpit_daily_goal', {
+              goal: formatMoney(dailyGoalCents, currencyCode, locale),
+              remaining: formatMoney(remainCents, currencyCode, locale),
+            })}</Text>
+          ) : (
+            <Text style={styles.metaLabel}>{t('dashboard.cockpit_no_goal')}</Text>
           )}
 
-          {/* Percentage label */}
-          <SvgText
-            x={GAUGE_CX} y={GAUGE_CY - 10}
-            textAnchor="middle" fontSize={11}
-            fill={Colors.textSecondary} fontWeight="600"
-          >
-            {metGoal ? '✅ Meta!' : hasGoal ? `${Math.round(pct * 100)}%` : 'sem meta'}
-          </SvgText>
-
-          {/* Main value */}
-          <SvgText
-            x={GAUGE_CX} y={GAUGE_CY + 14}
-            textAnchor="middle" fontSize={21}
-            fill={metGoal ? Colors.success : Colors.textPrimary} fontWeight="800"
-          >
+          <Text style={[styles.earningsValue, metGoal && { color: Colors.success }]}
+            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
             {formatMoney(todayGrossCents, currencyCode, locale)}
-          </SvgText>
+          </Text>
 
-          {/* Sub-label */}
-          <SvgText
-            x={GAUGE_CX} y={GAUGE_CY + 30}
-            textAnchor="middle" fontSize={9}
-            fill={Colors.textSecondary}
-          >
-            ganhos hoje
-          </SvgText>
-        </Svg>
-      </View>
+          <Text style={styles.earningsLabel}>{t('dashboard.cockpit_earnings_today')}</Text>
 
-      {/* Goal label */}
-      {hasGoal && (
-        <View style={styles.goalRow}>
-          {metGoal ? (
-            <Text style={[styles.goalLabel, { color: Colors.success }]}>
-              +{formatMoney(todayGrossCents - dailyGoalCents, currencyCode, locale)} acima da meta ✓
-            </Text>
-          ) : (
-            <Text style={styles.goalLabel}>
-              Meta diária · {formatMoney(dailyGoalCents, currencyCode, locale)} · Faltam {formatMoney(remainCents, currencyCode, locale)}
-            </Text>
+          {metGoal && aboveGoalCents > 0 && (
+            <View style={styles.aboveGoalRow}>
+              <Text style={styles.aboveGoalText}>
+                +{formatMoney(aboveGoalCents, currencyCode, locale)} {t('dashboard.cockpit_above_goal_short')} ✓
+              </Text>
+              <Ionicons name="trending-up" size={11} color={Colors.success} />
+            </View>
+          )}
+
+          {(odometerStartMeters != null || odometerEndMeters != null) && (
+            <View style={styles.odomRow}>
+              <Ionicons name="speedometer-outline" size={10} color={Colors.textSecondary} />
+              <Text style={styles.odomText}>
+                {odometerStartMeters != null ? `${(odometerStartMeters / 1000).toFixed(0)}` : '?'}
+                {' → '}
+                {odometerEndMeters != null ? `${(odometerEndMeters / 1000).toFixed(0)} km` : '?'}
+              </Text>
+            </View>
           )}
         </View>
-      )}
 
-      {/* 4 micro-stats */}
-      <View style={styles.statsRow}>
-        {microStats.map(s => (
-          <View key={s.label} style={styles.stat}>
-            <Ionicons name={s.icon} size={14} color={Colors.textSecondary} />
-            <Text style={[styles.statValue, s.valueColor ? { color: s.valueColor } : {}]}>
-              {s.value}
+        {/* RIGHT — expenses card */}
+        <View style={styles.expensesCol}>
+          <View style={styles.expensesCard}>
+            <Ionicons name="receipt-outline" size={18} color={Colors.error} style={{ marginBottom: 6 }} />
+            <Text style={styles.expensesValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
+              {formatMoney(expensesTodayCents, currencyCode, locale)}
             </Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
+            <Text style={styles.expensesLabel}>DESPESAS</Text>
           </View>
-        ))}
+        </View>
+
       </View>
     </View>
   );
 }
-
-const cardShadow = {
-  shadowColor: '#94A3B8', shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.10, shadowRadius: 8, elevation: 2,
-} as const;
 
 const styles = StyleSheet.create({
   card: {
@@ -181,45 +193,144 @@ const styles = StyleSheet.create({
     borderRadius: Radius.card,
     padding: Spacing.md,
     marginBottom: Spacing.md,
-    ...cardShadow,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    ...Platform.select({
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
+      android: { elevation: 5 },
+    }),
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.xs,
+    marginBottom: 8,
   },
   sectionLabel: {
     color: Colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
   },
-  gaugeWrap: { alignItems: 'center', marginVertical: Spacing.xs },
-  goalRow: { alignItems: 'center', marginBottom: Spacing.sm },
-  goalLabel: { color: Colors.textSecondary, fontSize: 12, textAlign: 'center' },
-  statsRow: {
+  activeDaysChip: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Spacing.md,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.accentDim,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.25)',
+  },
+  activeDaysText: {
+    color: Colors.accent,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  bodyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  donutCol: {
+    width: DONUT_SIZE,
+    height: DONUT_SIZE,
+    position: 'relative',
+  },
+  donutCenter: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutPct: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  centerCol: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingLeft: 4,
+  },
+  metaLabel: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  earningsValue: {
+    color: Colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
+    marginBottom: 2,
+  },
+  earningsLabel: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  aboveGoalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
-  stat: { flex: 1, alignItems: 'center', gap: 3 },
-  statValue: {
-    color: Colors.textPrimary,
-    fontSize: 12,
+  aboveGoalText: {
+    color: Colors.success,
+    fontSize: 11,
     fontWeight: '700',
+  },
+  odomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  odomText: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '500',
+  },
+  expensesCol: {
+    width: 90,
+    alignItems: 'stretch',
+  },
+  expensesCard: {
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(239,68,68,0.30)',
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 110,
+    ...Platform.select({
+      ios: { shadowColor: Colors.error, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.25, shadowRadius: 8 },
+      android: { elevation: 3 },
+    }),
+  },
+  expensesValue: {
+    color: Colors.error,
+    fontSize: 15,
+    fontWeight: '800',
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
   },
-  statLabel: {
-    color: Colors.textSecondary,
+  expensesLabel: {
+    color: Colors.error,
     fontSize: 9,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    textAlign: 'center',
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 3,
+    opacity: 0.75,
   },
 });

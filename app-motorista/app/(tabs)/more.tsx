@@ -30,6 +30,10 @@ import {
   useBiometricAvailable,
   getBiometricEnabled, setBiometricEnabled,
 } from '@/src/hooks/useBiometric';
+import {
+  getCreditCards, createCreditCard, updateCreditCard, deleteCreditCard,
+  nextOccurrence, type CreditCard, type CreditCardInput,
+} from '@/src/services/creditCards';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,13 +100,15 @@ const CURRENCIES = [
   { code: 'MAD', label: 'MAD — Moroccan Dirham (MAD)' },
 ];
 
-type LangCode = 'pt' | 'en' | 'en-GB' | 'es';
+type LangCode = 'pt' | 'en' | 'en-GB' | 'es' | 'fr' | 'zh';
 
 const LANG_ITEMS = [
   { label: 'Português (BR)', value: 'pt' },
   { label: 'English (US)',   value: 'en' },
   { label: 'English (UK)',   value: 'en-GB' },
   { label: 'Español',        value: 'es' },
+  { label: 'Français',       value: 'fr' },
+  { label: '中文 (简体)',      value: 'zh' },
 ];
 
 
@@ -498,6 +504,280 @@ function PlatformsModal({ visible, userId, onSaved, onClose }: {
   );
 }
 
+// ─── Cartões Modal ────────────────────────────────────────────────────────────
+
+function CartaoForm({ card, userId, onSaved, onCancel }: {
+  card: CreditCard | null; userId: string; onSaved: () => void; onCancel: () => void;
+}) {
+  const [name, setName]             = useState(card?.name ?? '');
+  const [lastFour, setLastFour]     = useState(card?.last_four ?? '');
+  const [limitStr, setLimitStr]     = useState(card && card.limit_cents > 0 ? (card.limit_cents / 100).toFixed(2) : '');
+  const [closingDay, setClosingDay] = useState(card ? String(card.closing_day) : '');
+  const [dueDay, setDueDay]         = useState(card ? String(card.due_day) : '');
+  const [saving, setSaving]         = useState(false);
+  const [error, setError]           = useState('');
+
+  async function handleSave() {
+    if (!name.trim()) { setError('Nome do cartão é obrigatório'); return; }
+    const limit   = Math.round(parseFloat(limitStr.replace(',', '.') || '0') * 100);
+    const closing = Math.min(31, Math.max(1, parseInt(closingDay) || 1));
+    const due     = Math.min(31, Math.max(1, parseInt(dueDay) || 10));
+    setSaving(true); setError('');
+    try {
+      const input: CreditCardInput = {
+        name: name.trim(),
+        last_four: lastFour.trim() || null,
+        limit_cents: limit,
+        closing_day: closing,
+        due_day: due,
+      };
+      if (card) await updateCreditCard(card.id, input);
+      else      await createCreditCard(userId, input);
+      onSaved();
+    } catch { setError('Erro ao salvar cartão'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <>
+      {error ? <View style={s.errorBanner}><Text style={s.errorBannerText}>{error}</Text></View> : null}
+      <Text style={s.fieldLabel}>NOME DO CARTÃO *</Text>
+      <TextInput style={s.fieldInput} value={name} onChangeText={setName}
+        placeholder="Ex: Nubank, Inter, Itaú" placeholderTextColor={Colors.textSecondary} autoCapitalize="words" />
+      <Text style={s.fieldLabel}>4 ÚLTIMOS DÍGITOS</Text>
+      <TextInput style={s.fieldInput} value={lastFour} onChangeText={setLastFour}
+        placeholder="1234" placeholderTextColor={Colors.textSecondary} keyboardType="numeric" maxLength={4} />
+      <Text style={s.fieldLabel}>LIMITE (R$)</Text>
+      <TextInput style={s.fieldInput} value={limitStr} onChangeText={setLimitStr}
+        placeholder="0,00" placeholderTextColor={Colors.textSecondary} keyboardType="decimal-pad" />
+      <Text style={s.fieldLabel}>DIA DO FECHAMENTO</Text>
+      <TextInput style={s.fieldInput} value={closingDay} onChangeText={setClosingDay}
+        placeholder="Ex: 25" placeholderTextColor={Colors.textSecondary} keyboardType="numeric" maxLength={2} />
+      <Text style={s.fieldLabel}>DIA DO VENCIMENTO</Text>
+      <TextInput style={s.fieldInput} value={dueDay} onChangeText={setDueDay}
+        placeholder="Ex: 10" placeholderTextColor={Colors.textSecondary} keyboardType="numeric" maxLength={2} />
+      <TouchableOpacity style={[s.saveBtn, saving && s.btnDisabled]} onPress={handleSave} disabled={saving}>
+        {saving ? <ActivityIndicator color={Colors.onAccent} /> : <Text style={s.saveBtnText}>Salvar cartão</Text>}
+      </TouchableOpacity>
+      <TouchableOpacity style={s.cancelBtn} onPress={onCancel}>
+        <Text style={s.cancelBtnText}>Cancelar</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
+function CartaoItem({ card, onEdit, onDelete }: { card: CreditCard; onEdit: () => void; onDelete: () => void }) {
+  const nextClose = nextOccurrence(card.closing_day);
+  const nextDue   = nextOccurrence(card.due_day);
+  const fmt = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+  return (
+    <View style={{ backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, marginBottom: Spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+        <Ionicons name="card-outline" size={18} color={Colors.accent} style={{ marginRight: 8 }} />
+        <Text style={{ color: Colors.textPrimary, fontSize: 15, fontWeight: '700', flex: 1 }}>
+          {card.name}{card.last_four ? ` •••• ${card.last_four}` : ''}
+        </Text>
+        <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginRight: 8 }}>
+          <Ionicons name="pencil-outline" size={16} color={Colors.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="trash-outline" size={16} color={Colors.error} />
+        </TouchableOpacity>
+      </View>
+      <View style={{ flexDirection: 'row', gap: Spacing.md }}>
+        {card.limit_cents > 0 && (
+          <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>
+            Limite: R$ {(card.limit_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </Text>
+        )}
+        <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>Fecha: {fmt(nextClose)}</Text>
+        <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>Vence: {fmt(nextDue)}</Text>
+      </View>
+    </View>
+  );
+}
+
+function CartõesModal({ visible, userId, onClose }: {
+  visible: boolean; userId: string | null; onClose: () => void;
+}) {
+  const [cards, setCards]       = useState<CreditCard[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editCard, setEditCard] = useState<CreditCard | null>(null);
+
+  useEffect(() => {
+    if (visible && userId) loadCards();
+    if (!visible) { setShowForm(false); setEditCard(null); }
+  }, [visible, userId]);
+
+  async function loadCards() {
+    if (!userId) return;
+    setLoading(true);
+    try { setCards(await getCreditCards(userId)); }
+    catch { }
+    finally { setLoading(false); }
+  }
+
+  async function handleDelete(id: string) {
+    try { await deleteCreditCard(id); await loadCards(); }
+    catch { }
+  }
+
+  function openEdit(card: CreditCard) { setEditCard(card); setShowForm(true); }
+  function openAdd() { setEditCard(null); setShowForm(true); }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={s.modalFlex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView style={s.modalScroll} contentContainerStyle={s.modalContent} keyboardShouldPersistTaps="handled">
+          <Text style={s.modalTitle}>{showForm ? (editCard ? 'Editar cartão' : 'Novo cartão') : 'Meus Cartões'}</Text>
+
+          {!showForm ? (
+            <>
+              {loading
+                ? <ActivityIndicator color={Colors.accent} style={{ marginVertical: Spacing.lg }} />
+                : cards.length === 0
+                  ? <Text style={{ color: Colors.textSecondary, textAlign: 'center', marginVertical: Spacing.lg }}>
+                      Nenhum cartão cadastrado
+                    </Text>
+                  : cards.map(c => (
+                      <CartaoItem
+                        key={c.id}
+                        card={c}
+                        onEdit={() => openEdit(c)}
+                        onDelete={() => handleDelete(c.id)}
+                      />
+                    ))
+              }
+              <TouchableOpacity style={s.saveBtn} onPress={openAdd}>
+                <Text style={s.saveBtnText}>+ Adicionar cartão</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.cancelBtn} onPress={onClose}>
+                <Text style={s.cancelBtnText}>Fechar</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            userId ? (
+              <CartaoForm
+                card={editCard}
+                userId={userId}
+                onSaved={() => { setShowForm(false); loadCards(); }}
+                onCancel={() => setShowForm(false)}
+              />
+            ) : null
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── Feedback Modal ───────────────────────────────────────────────────────────
+
+type FeedbackType = 'bug' | 'suggestion' | 'feature';
+
+const FEEDBACK_TABS: { type: FeedbackType; label: string; icon: 'bug-outline' | 'bulb-outline' | 'rocket-outline' }[] = [
+  { type: 'bug',        label: 'Bug',       icon: 'bug-outline' },
+  { type: 'suggestion', label: 'Sugestão',  icon: 'bulb-outline' },
+  { type: 'feature',    label: 'Feature',   icon: 'rocket-outline' },
+];
+
+function FeedbackModal({ visible, userId, onClose }: {
+  visible: boolean; userId: string | null; onClose: () => void;
+}) {
+  const [type, setType]     = useState<FeedbackType>('bug');
+  const [message, setMsg]   = useState('');
+  const [sending, setSend]  = useState(false);
+  const [done, setDone]     = useState(false);
+  const [error, setError]   = useState('');
+
+  function reset() { setMsg(''); setDone(false); setError(''); setType('bug'); }
+  function handleClose() { reset(); onClose(); }
+
+  async function handleSend() {
+    if (!message.trim() || !userId) return;
+    setSend(true); setError('');
+    try {
+      const { supabase: sb } = await import('@/src/lib/supabase');
+      const { error: err } = await sb.from('app_feedback').insert({ user_id: userId, type, message: message.trim() });
+      if (err) throw err;
+      setDone(true);
+      setTimeout(handleClose, 1800);
+    } catch { setError('Erro ao enviar. Tente novamente.'); }
+    finally { setSend(false); }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
+      <KeyboardAvoidingView style={s.modalFlex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView style={s.modalScroll} contentContainerStyle={s.modalContent} keyboardShouldPersistTaps="handled">
+          <Text style={s.modalTitle}>Enviar Feedback</Text>
+
+          {/* Tabs */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: Spacing.lg }}>
+            {FEEDBACK_TABS.map(tab => (
+              <TouchableOpacity
+                key={tab.type}
+                style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  paddingVertical: 10, borderRadius: 20, borderWidth: 1.5,
+                  borderColor: type === tab.type ? Colors.accent : Colors.border,
+                  backgroundColor: type === tab.type ? Colors.accentDim : 'transparent' }]}
+                onPress={() => setType(tab.type)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={tab.icon} size={14} color={type === tab.type ? Colors.accent : Colors.textSecondary} />
+                <Text style={{ color: type === tab.type ? Colors.accent : Colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {done ? (
+            <View style={[s.successBanner, { justifyContent: 'center', paddingVertical: Spacing.lg }]}>
+              <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
+              <Text style={[s.successText, { fontSize: 16, fontWeight: '700' }]}>Obrigado pelo feedback!</Text>
+            </View>
+          ) : (
+            <>
+              {error ? <View style={s.errorBanner}><Text style={s.errorBannerText}>{error}</Text></View> : null}
+              <Text style={s.fieldLabel}>
+                {type === 'bug' ? 'Descreva o bug' : type === 'suggestion' ? 'Sua sugestão' : 'Qual feature você quer?'}
+              </Text>
+              <TextInput
+                style={[s.fieldInput, { height: 120, textAlignVertical: 'top', paddingTop: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, borderBottomWidth: 1, paddingHorizontal: Spacing.sm }]}
+                value={message}
+                onChangeText={setMsg}
+                placeholder="Descreva com detalhes..."
+                placeholderTextColor={Colors.textSecondary}
+                multiline
+                maxLength={1000}
+              />
+              <Text style={{ color: Colors.textSecondary, fontSize: 11, textAlign: 'right', marginBottom: Spacing.md }}>
+                {message.length}/1000
+              </Text>
+              <TouchableOpacity
+                style={[s.saveBtn, (!message.trim() || sending) && s.btnDisabled]}
+                onPress={handleSend}
+                disabled={!message.trim() || sending}
+              >
+                {sending
+                  ? <ActivityIndicator color={Colors.onAccent} />
+                  : <Text style={s.saveBtnText}>Enviar</Text>
+                }
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity style={s.cancelBtn} onPress={handleClose}>
+            <Text style={s.cancelBtnText}>Fechar</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function MoreScreen() {
@@ -530,10 +810,12 @@ export default function MoreScreen() {
   const notifSavedTimer                               = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [platformsModalVisible, setPlatformsModalVisible] = useState(false);
   const [userPlatformNames, setUserPlatformNames]     = useState<string[]>([]);
-  const biometricAvailable                            = useBiometricAvailable();
-  const [biometricEnabled, setBiometricEnabledState] = useState(false);
+  const biometricAvailable                              = useBiometricAvailable();
+  const [biometricEnabled, setBiometricEnabledState]  = useState(false);
   const [exportingCSV, setExportingCSV]               = useState(false);
   const [exportingJSON, setExportingJSON]             = useState(false);
+  const [cartoesModalVisible, setCartoesModalVisible]   = useState(false);
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
 
   useEffect(() => {
     getNotificationsEnabled().then(setNotifEnabled);
@@ -626,8 +908,8 @@ export default function MoreScreen() {
     setIsSavingSetting(true);
     try {
       if (field === 'lang') {
-        const localeMap: Record<string, string> = { pt: 'pt-BR', en: 'en-US', 'en-GB': 'en-GB', es: 'es-419' };
-        const countryMap: Record<string, string> = { pt: 'BR', en: 'US', 'en-GB': 'GB', es: 'MX' };
+        const localeMap: Record<string, string> = { pt: 'pt-BR', en: 'en-US', 'en-GB': 'en-GB', es: 'es-419', fr: 'fr-FR', zh: 'zh-CN' };
+        const countryMap: Record<string, string> = { pt: 'BR', en: 'US', 'en-GB': 'GB', es: 'MX', fr: 'FR', zh: 'CN' };
         const { error } = await supabase.from('profiles')
           .update({ locale: localeMap[value], country: countryMap[value] })
           .eq('id', data.user.id);
@@ -680,6 +962,8 @@ export default function MoreScreen() {
     if (l === 'en-GB') return 'en-GB';
     if (l.startsWith('en')) return 'en';
     if (l.startsWith('es')) return 'es';
+    if (l.startsWith('fr')) return 'fr';
+    if (l.startsWith('zh')) return 'zh';
     return 'pt';
   };
 
@@ -1007,6 +1291,21 @@ export default function MoreScreen() {
           </View>
         )}
 
+        {/* Cartões */}
+        <Text style={s.sectionHeader}>CARTÕES DE CRÉDITO</Text>
+        <View style={s.card}>
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => setCartoesModalVisible(true)}>
+            <View style={s.rowIconLabel}>
+              <Ionicons name="card-outline" size={18} color={Colors.accent} style={s.rowIcon} />
+              <View>
+                <Text style={s.rowLabel}>Meus cartões</Text>
+                <Text style={[s.rowValue, { fontSize: 12 }]}>Gerencie limites, fechamento e vencimento</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Export */}
         <Text style={s.sectionHeader}>EXPORTAR DADOS</Text>
         <View style={s.card}>
@@ -1063,6 +1362,21 @@ export default function MoreScreen() {
           </>
         )}
 
+        {/* Feedback */}
+        <Text style={s.sectionHeader}>FEEDBACK</Text>
+        <View style={s.card}>
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => setFeedbackModalVisible(true)}>
+            <View style={s.rowIconLabel}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.accent} style={s.rowIcon} />
+              <View>
+                <Text style={s.rowLabel}>Enviar feedback</Text>
+                <Text style={[s.rowValue, { fontSize: 12 }]}>Bug, sugestão ou nova feature</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Sign out */}
         <TouchableOpacity style={s.signOutBtn} onPress={() => authSignOut().catch(console.warn)} activeOpacity={0.8}>
           <Ionicons name="log-out-outline" size={18} color={Colors.error} style={{ marginRight: 6 }} />
@@ -1071,6 +1385,18 @@ export default function MoreScreen() {
       </ScrollView>
 
       <PasswordModal visible={pwModalVisible} onClose={() => setPwModalVisible(false)} />
+
+      <CartõesModal
+        visible={cartoesModalVisible}
+        userId={userId}
+        onClose={() => setCartoesModalVisible(false)}
+      />
+
+      <FeedbackModal
+        visible={feedbackModalVisible}
+        userId={userId}
+        onClose={() => setFeedbackModalVisible(false)}
+      />
 
       <PlatformsModal
         visible={platformsModalVisible}

@@ -166,7 +166,7 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
   },
   button: {
-    backgroundColor: Colors.brandBlue,
+    backgroundColor: Colors.accent,
     borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',

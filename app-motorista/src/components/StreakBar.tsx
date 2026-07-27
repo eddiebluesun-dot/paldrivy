@@ -14,7 +14,7 @@ export function StreakBar({ streak }: StreakBarProps) {
       <Text style={styles.text}>
         <Text style={styles.count}>{streak}</Text>
         {' '}
-        {streak === 1 ? 'dia registrando dados' : 'dias registrando dados'}
+        {streak === 1 ? 'dia ativo este mês' : 'dias ativos este mês'}
       </Text>
     </View>
   );

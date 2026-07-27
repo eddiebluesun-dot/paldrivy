@@ -2,7 +2,7 @@
   "expo": {
     "name": "PalDrivy",
     "slug": "paldrivy",
-    "version": "1.9.0",
+    "version": "2.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "paldrivy",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.paldrivy.app",
-      "versionCode": 12,
+      "versionCode": 14,
       "adaptiveIcon": {
         "backgroundColor": "#0B1221",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

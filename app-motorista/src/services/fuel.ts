@@ -37,3 +37,16 @@ export async function addFuelEntry(
   const { error } = await supabase.from('fuel_entries').insert(entry);
   if (error) throw error;
 }
+
+export async function updateFuelEntry(
+  id: string,
+  patch: Partial<Omit<FuelEntry, 'id' | 'user_id'>>
+): Promise<void> {
+  const { error } = await supabase.from('fuel_entries').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteFuelEntry(id: string): Promise<void> {
+  const { error } = await supabase.from('fuel_entries').delete().eq('id', id);
+  if (error) throw error;
+}

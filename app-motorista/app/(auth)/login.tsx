@@ -59,7 +59,7 @@ export default function LoginScreen() {
           <View style={styles.hero}>
             <Image source={require('../../assets/images/icon.png')} style={styles.logoImg} resizeMode="contain" />
             <Text style={styles.wordmark}>PalDrivy</Text>
-            <Text style={styles.tagline}>Controle financeiro para motoristas</Text>
+            <Text style={styles.tagline}>{t('app_tagline')}</Text>
           </View>
 
           {/* Banners */}

@@ -1,0 +1,28 @@
+{
+  "onboarding": {
+    "fuel_gasoline": "Petrol",
+    "vol_liters": "Litres",
+    "worker_type_prompt": "What do you do?",
+    "worker_type_driver": "Driver (Uber, Bolt, taxi)",
+    "worker_type_motoboy": "Delivery rider (Deliveroo, Just Eat, Stuart)"
+  },
+  "fuel": {
+    "price_per_liter": "Price per litre",
+    "vol_liters": "Litres"
+  },
+  "expense_category": {
+    "taxes": "Taxes (National Insurance, self-assessment)",
+    "health_insurance": "Health insurance (private)"
+  },
+  "more": {
+    "notifications": "Notifications",
+    "notifications_enabled": "Enable notifications",
+    "daily_reminder": "Daily reminder",
+    "daily_time": "at {{hour}}:{{minute}}",
+    "weekly_summary": "Weekly recap (Sundays)",
+    "monthly_summary": "Monthly summary (1st of month)",
+    "goal_notification": "Goal reached alert",
+    "notifications_permission": "Allow notifications to enable reminders.",
+    "notifications_saved": "Notifications updated!"
+  }
+}

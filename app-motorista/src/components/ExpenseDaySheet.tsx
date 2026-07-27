@@ -27,6 +27,12 @@ interface DayExpense {
   amount_cents: number;
   description: string | null;
 }
+interface DayFuel {
+  id: string;
+  filled_at: string;
+  total_cost_cents: number;
+  fuel_type: string | null;
+}
 
 const CATEGORY_ICONS: Record<string, 'car-outline' | 'shield-outline' | 'wifi-outline' | 'location-outline' | 'water-outline' | 'restaurant-outline' | 'medical-outline' | 'ellipsis-horizontal-outline' | 'home-outline' | 'build-outline' | 'cart-outline' | 'receipt-outline'> = {
   fuel:           'water-outline',
@@ -81,6 +87,7 @@ export function ExpenseDaySheet({
   const { t } = useTranslation();
   const [shifts, setShifts] = useState<DayShift[]>([]);
   const [expenses, setExpenses] = useState<DayExpense[]>([]);
+  const [fuels, setFuels] = useState<DayFuel[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -110,14 +117,30 @@ export function ExpenseDaySheet({
         .gte('expense_date', dateStr)
         .lt('expense_date', nextDateStr)
         .order('amount_cents', { ascending: false }),
-    ]).then(([shiftsRes, expRes]) => {
+      supabase
+        .from('fuel_entries')
+        .select('id, filled_at, total_cost_cents, fuel_type')
+        .eq('user_id', userId)
+        .gte('filled_at', dayStart.toISOString())
+        .lt('filled_at', dayEnd.toISOString())
+        .order('filled_at'),
+    ]).then(([shiftsRes, expRes, fuelRes]) => {
       setShifts((shiftsRes.data ?? []) as DayShift[]);
       setExpenses((expRes.data ?? []) as DayExpense[]);
+      setFuels((fuelRes.data ?? []) as DayFuel[]);
     }).finally(() => setLoading(false));
   }, [visible, userId, day, month, year]);
 
+  const fuelAsExpenses: DayExpense[] = fuels.map(f => ({
+    id: f.id,
+    category: 'fuel',
+    amount_cents: f.total_cost_cents,
+    description: f.fuel_type ?? null,
+  }));
+  const allExpenses = [...expenses, ...fuelAsExpenses].sort((a, b) => b.amount_cents - a.amount_cents);
+
   const totalIncome   = shifts.reduce((s, r) => s + (r.gross_cents ?? 0), 0);
-  const totalExpenses = expenses.reduce((s, r) => s + r.amount_cents, 0);
+  const totalExpenses = allExpenses.reduce((s, r) => s + r.amount_cents, 0);
   const saldo         = totalIncome - totalExpenses;
 
   const dateLabel = new Date(year, month - 1, day).toLocaleDateString(locale, {
@@ -195,10 +218,10 @@ export function ExpenseDaySheet({
             )}
 
             {/* Expenses section */}
-            {expenses.length > 0 && (
+            {allExpenses.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>DESPESAS</Text>
-                {expenses.map(exp => {
+                {allExpenses.map(exp => {
                   const iconName = CATEGORY_ICONS[exp.category] ?? 'ellipsis-horizontal-outline';
                   return (
                     <View key={exp.id} style={styles.row}>
@@ -228,7 +251,7 @@ export function ExpenseDaySheet({
               </View>
             )}
 
-            {shifts.length === 0 && expenses.length === 0 && (
+            {shifts.length === 0 && allExpenses.length === 0 && (
               <Text style={styles.emptyText}>Nenhum registro neste dia.</Text>
             )}
           </ScrollView>

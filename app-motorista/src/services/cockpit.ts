@@ -15,6 +15,7 @@ export interface MonthHistoryItem {
   fuel_cents: number;
   rides: number;
   km_meters: number;
+  liters_ml: number;
 }
 
 export interface HeatmapDay {
@@ -34,7 +35,7 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
   const [shiftsRes, expRes, fuelRes] = await Promise.all([
     supabase
       .from('shifts')
-      .select('started_at, gross_cents, odometer_start_meters, odometer_end_meters')
+      .select('started_at, gross_cents, rides_count, odometer_start_meters, odometer_end_meters')
       .eq('user_id', userId)
       .gte('started_at', cutoffIso)
       .not('ended_at', 'is', null),
@@ -45,7 +46,7 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
       .gte('expense_date', cutoffStr),
     supabase
       .from('fuel_entries')
-      .select('filled_at, total_cost_cents')
+      .select('filled_at, total_cost_cents, volume_ml')
       .eq('user_id', userId)
       .gte('filled_at', cutoffIso),
   ]);
@@ -56,12 +57,12 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
     const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
     buckets.set(key, {
       year: d.getFullYear(), month: d.getMonth() + 1,
-      gross_cents: 0, expenses_cents: 0, fuel_cents: 0, rides: 0, km_meters: 0,
+      gross_cents: 0, expenses_cents: 0, fuel_cents: 0, rides: 0, km_meters: 0, liters_ml: 0,
     });
   }
 
   for (const row of (shiftsRes.data ?? []) as Array<{
-    started_at: string; gross_cents: number | null;
+    started_at: string; gross_cents: number | null; rides_count: number | null;
     odometer_start_meters: number | null; odometer_end_meters: number | null;
   }>) {
     const d = new Date(row.started_at);
@@ -69,7 +70,7 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
     const b = buckets.get(key);
     if (!b) continue;
     b.gross_cents += row.gross_cents ?? 0;
-    b.rides++;
+    b.rides += row.rides_count ?? 1;
     if (row.odometer_start_meters != null && row.odometer_end_meters != null) {
       b.km_meters += row.odometer_end_meters - row.odometer_start_meters;
     }
@@ -80,11 +81,14 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
     const b = buckets.get(key);
     if (b) b.expenses_cents += row.amount_cents;
   }
-  for (const row of (fuelRes.data ?? []) as Array<{ filled_at: string; total_cost_cents: number }>) {
+  for (const row of (fuelRes.data ?? []) as Array<{ filled_at: string; total_cost_cents: number; volume_ml: number | null }>) {
     const d = new Date(row.filled_at);
     const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
     const b = buckets.get(key);
-    if (b) b.fuel_cents += row.total_cost_cents;
+    if (b) {
+      b.fuel_cents += row.total_cost_cents;
+      b.liters_ml += row.volume_ml ?? 0;
+    }
   }
 
   return Array.from(buckets.values()).reverse(); // newest first
@@ -151,31 +155,37 @@ export async function getCalendarHeatmap(
 
 export async function getStreak(userId: string): Promise<number> {
   const now = new Date();
-  const cutoff = new Date(now);
-  cutoff.setDate(now.getDate() - 60);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  const localDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const monthStartStr = localDate(monthStart);
+  const monthEndStr = localDate(monthEnd);
 
   const [shiftsRes, expRes] = await Promise.all([
     supabase
       .from('shifts')
       .select('started_at')
       .eq('user_id', userId)
-      .gte('started_at', cutoff.toISOString())
+      .gte('started_at', monthStart.toISOString())
+      .lt('started_at', monthEnd.toISOString())
       .not('ended_at', 'is', null),
     supabase
       .from('expenses')
       .select('expense_date')
       .eq('user_id', userId)
-      .gte('expense_date', cutoff.toISOString().slice(0, 10)),
+      .gte('expense_date', monthStartStr)
+      .lt('expense_date', monthEndStr),
   ]);
 
   const activeDates = new Set<string>();
   for (const row of (shiftsRes.data ?? []) as Array<{ started_at: string }>) {
-    activeDates.add(new Date(row.started_at).toISOString().slice(0, 10));
+    activeDates.add(localDate(new Date(row.started_at)));
   }
   for (const row of (expRes.data ?? []) as Array<{ expense_date: string }>) {
     activeDates.add(row.expense_date);
   }
 
-  const todayStr = now.toISOString().slice(0, 10);
-  return streakFromDates(Array.from(activeDates), todayStr);
+  return activeDates.size; // total unique days with activity this month
 }
