@@ -116,6 +116,8 @@ export async function endShift(shiftId: string, payload: EndShiftData, startedAt
     rides_count: payload.rides_count,
     gross_cents: grossCents,
     net_cents: netCents,
+    mood_rating: payload.mood_rating ?? null,
+    notes: payload.notes?.trim() || null,
   };
   if (durationSeconds !== null) updateData.duration_seconds = durationSeconds;
   const { error } = await supabase.from('shifts').update(updateData).eq('id', shiftId);
@@ -140,6 +142,8 @@ export async function updateShift(
     rides_count: payload.rides_count,
     gross_cents: grossCents,
     net_cents: netCents,
+    mood_rating: payload.mood_rating ?? null,
+    notes: payload.notes?.trim() || null,
   };
   if (startedAt) updateData.started_at = startedAt;
   if (endedAt)   updateData.ended_at   = endedAt;
@@ -151,6 +155,47 @@ export async function updateShift(
   }
   const { error } = await supabase.from('shifts').update(updateData).eq('id', shiftId);
   if (error) throw error;
+}
+
+export async function createManualShift(
+  userId: string,
+  vehicleId: string | null,
+  startedAt: string,
+  endedAt: string,
+  payload: EndShiftData,
+  isPremium: boolean,
+): Promise<string> {
+  if (!isPremium) {
+    const count = await getShiftsCountThisMonth(userId);
+    if (hasReachedShiftLimit(count)) throw new FreeLimitError('shifts');
+  }
+  const { grossCents, netCents } = calcGrossNet(payload);
+  const durationSeconds = Math.max(
+    Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000),
+    0,
+  );
+  const { data, error } = await supabase.from('shifts').insert({
+    user_id: userId,
+    vehicle_id: vehicleId,
+    started_at: startedAt,
+    ended_at: endedAt,
+    duration_seconds: durationSeconds,
+    odometer_start_meters: payload.odometer_start_meters,
+    odometer_end_meters: payload.odometer_end_meters,
+    platforms: payload.platforms,
+    tolls_cents: payload.tolls_cents,
+    parking_cents: payload.parking_cents,
+    food_cents: payload.food_cents,
+    tips_cents: payload.tips_cents,
+    bonuses_cents: payload.bonuses_cents,
+    rides_count: payload.rides_count,
+    gross_cents: grossCents,
+    net_cents: netCents,
+    mood_rating: payload.mood_rating ?? null,
+    notes: payload.notes?.trim() || null,
+  }).select('id').single();
+  if (error) throw error;
+  return (data as { id: string }).id;
 }
 
 export async function deleteShift(shiftId: string): Promise<void> {

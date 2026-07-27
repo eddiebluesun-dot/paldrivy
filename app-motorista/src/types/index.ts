@@ -3,12 +3,18 @@ export type VolumeUnit = 'liters' | 'gallons';
 export type FuelType = 'gasoline' | 'ethanol' | 'diesel' | 'gnv' | 'electric' | 'hybrid';
 export type OwnershipType = 'own' | 'rent' | 'financed';
 export type PlatformType = 'rideshare' | 'taxi_app' | 'taxi_conventional' | 'delivery';
+export type WorkerType = 'driver' | 'motoboy';
+export type RecurringFrequency = 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+
+export type GoalType = 'bruto' | 'liquido';
 
 export interface Profile {
   id: string;
   name: string;
+  phone?: string | null;
   country: string;
-  city?: string;
+  city?: string | null;
+  state?: string | null;
   currency_code: string;
   distance_unit: DistanceUnit;
   volume_unit: VolumeUnit;
@@ -16,6 +22,10 @@ export interface Profile {
   locale: string;
   onboarding_done: boolean;
   vehicle_id?: string | null;
+  worker_type?: WorkerType;
+  goal_type?: GoalType;
+  role?: string;
+  push_token?: string | null;
   created_at: string;
 }
 
@@ -58,7 +68,10 @@ export interface ShiftPlatform {
   amount_cents: number;
 }
 
+export type MoodRating = 'good' | 'ok' | 'bad';
+
 export interface EndShiftData {
+  odometer_start_meters?: number | null;
   odometer_end_meters: number | null;
   platforms: ShiftPlatform[];
   tolls_cents: number;
@@ -67,6 +80,13 @@ export interface EndShiftData {
   tips_cents: number;
   bonuses_cents: number;
   rides_count: number | null;
+  mood_rating?: MoodRating | null;
+  notes?: string | null;
+}
+
+export interface ShiftPause {
+  started_at: string;
+  ended_at: string | null;
 }
 
 export interface Shift {
@@ -87,8 +107,10 @@ export interface Shift {
   net_cents?: number | null;
   duration_seconds?: number | null;
   rides_count?: number | null;
+  pauses?: ShiftPause[];
   region?: string;
-  notes?: string;
+  mood_rating?: MoodRating | null;
+  notes?: string | null;
   calc?: ShiftCalc;
   created_at: string;
 }
@@ -117,6 +139,7 @@ export interface Expense {
   amount_cents: number;
   description?: string;
   recurring: boolean;
+  recurring_frequency?: RecurringFrequency | null;
 }
 
 export interface Goal {

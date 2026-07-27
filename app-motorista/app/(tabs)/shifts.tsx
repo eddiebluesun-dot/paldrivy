@@ -37,7 +37,8 @@ import type { ShiftPause } from '@/src/types';
 import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
 import { UpgradeModal } from '@/src/components/UpgradeModal';
-import type { EndShiftData, Shift, ShiftPlatform } from '@/src/types';
+import type { EndShiftData, MoodRating, Shift, ShiftPlatform } from '@/src/types';
+import { ShiftWizard } from '@/src/components/ShiftWizard';
 
 function platformConfirm(title: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -143,6 +144,8 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
   const [tips, setTips] = useState('');
   const [bonuses, setBonuses] = useState('');
   const [ridesCount, setRidesCount] = useState('');
+  const [mood, setMood] = useState<MoodRating | null>(null);
+  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editStartedAt, setEditStartedAt] = useState('');
@@ -190,6 +193,8 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       setTips(existingShift.tips_cents ? (existingShift.tips_cents / 100).toFixed(2) : '');
       setBonuses(existingShift.bonuses_cents ? (existingShift.bonuses_cents / 100).toFixed(2) : '');
       setRidesCount(existingShift.rides_count?.toString() ?? '');
+      setMood(existingShift.mood_rating ?? null);
+      setNotes(existingShift.notes ?? '');
       setEditStartedAt(isoToDisplay(existingShift.started_at));
       setEditEndedAt(isoToDisplay(existingShift.ended_at));
     } else {
@@ -198,6 +203,8 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       setTips('');
       setBonuses('');
       setRidesCount('');
+      setMood(null);
+      setNotes('');
       setEditStartedAt('');
       setEditEndedAt('');
     }
@@ -240,6 +247,8 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
         tips_cents: decimalToCents(parse(tips)),
         bonuses_cents: decimalToCents(parse(bonuses)),
         rides_count: ridesCount.trim() ? parseInt(ridesCount, 10) : null,
+        mood_rating: mood,
+        notes: notes.trim() || null,
       };
       if (mode === 'end') {
         await endShift(shiftId, payload, startedAt, pauses ?? []);
@@ -336,6 +345,35 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
             <Text style={styles.costLabel}>{t('shift.bonuses')}</Text>
             <TextInput style={[styles.input, styles.costInput]} keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={Colors.textSecondary} value={bonuses} onChangeText={setBonuses} />
           </View>
+
+          <Text style={styles.fieldLabel}>{t('shift.mood_label')}</Text>
+          <View style={styles.moodRow}>
+            {([
+              { key: 'good' as MoodRating, label: t('shift.mood_good') },
+              { key: 'ok' as MoodRating, label: t('shift.mood_ok') },
+              { key: 'bad' as MoodRating, label: t('shift.mood_bad') },
+            ]).map(({ key, label }) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.moodCard, mood === key && styles.moodCardSelected]}
+                onPress={() => setMood(prev => prev === key ? null : key)}
+              >
+                <Text style={[styles.moodCardText, mood === key && styles.moodCardTextSelected]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.fieldLabel}>{t('shift.notes_label')}</Text>
+          <TextInput
+            style={[styles.input, styles.notesInput]}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder={t('shift.notes_placeholder')}
+            placeholderTextColor={Colors.textSecondary}
+            multiline
+            numberOfLines={3}
+            maxLength={1000}
+          />
 
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
@@ -439,6 +477,7 @@ export default function ShiftsScreen() {
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [endModalVisible, setEndModalVisible] = useState(false);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [wizardVisible, setWizardVisible] = useState(false);
   const [screenError, setScreenError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -552,6 +591,11 @@ export default function ShiftsScreen() {
     } catch {
       setScreenError(t('common.error'));
     }
+  }
+
+  async function handleWizardSaved() {
+    setWizardVisible(false);
+    await refresh();
   }
 
   if (loading) {
@@ -675,6 +719,21 @@ export default function ShiftsScreen() {
           onSaved={handleEditSaved}
         />
       )}
+
+      {/* FAB — lançamento manual via wizard */}
+      <TouchableOpacity style={styles.fab} onPress={() => setWizardVisible(true)}>
+        <Ionicons name="flash" size={24} color={Colors.onAccent} />
+      </TouchableOpacity>
+
+      <ShiftWizard
+        visible={wizardVisible}
+        distanceUnit={profile?.distance_unit ?? 'km'}
+        vehicleId={profile?.vehicle_id ?? null}
+        isPremium={isPremium}
+        onClose={() => setWizardVisible(false)}
+        onSaved={handleWizardSaved}
+        onUpgradeNeeded={() => setUpgradeModalVisible(true)}
+      />
     </SafeAreaView>
   );
 }
@@ -684,8 +743,18 @@ export default function ShiftsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   scroll: { flex: 1 },
-  content: { padding: Spacing.md, paddingBottom: Spacing.xxl },
+  content: { padding: Spacing.md, paddingBottom: 100 },
   center: { flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
+  fab: {
+    position: 'absolute', bottom: 24, right: 20,
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: Colors.accent,
+    alignItems: 'center', justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 12 },
+      android: { elevation: 8 },
+    }),
+  },
 
   screenTitle: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: Spacing.lg, letterSpacing: -0.5 },
 
@@ -793,6 +862,16 @@ const styles = StyleSheet.create({
   costRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs, gap: Spacing.sm },
   costLabel: { color: Colors.textSecondary, fontSize: 14, flex: 1 },
   costInput: { width: 110, marginBottom: 0 },
+  moodRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+  moodCard: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14,
+    borderRadius: Radius.input, borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  moodCardSelected: { borderColor: Colors.accent, backgroundColor: 'rgba(245,158,11,0.12)' },
+  moodCardText: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  moodCardTextSelected: { color: Colors.accent, fontWeight: '800' },
+  notesInput: { minHeight: 80, textAlignVertical: 'top', paddingTop: Spacing.sm },
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: Colors.accent, borderRadius: Radius.button,

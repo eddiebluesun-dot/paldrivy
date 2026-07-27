@@ -1,5 +1,6 @@
 ﻿{
     "app_name":  "PalDrivy",
+    "app_tagline":  "Controle financeiro para motoristas",
     "auth":  {
                  "login":  "Entrar",
                  "register":  "Criar conta",
@@ -171,7 +172,12 @@
                       "active_days_month":  "dias ativos este mês",
                       "donut_goal":  "Meta",
                       "donut_done":  "Cumprido",
-                      "donut_remaining":  "Faltante"
+                      "donut_remaining":  "Faltante",
+                      "mood_title":  "AVALIAÇÃO DO MÊS",
+                      "mood_good":  "Excelente",
+                      "mood_ok":  "Normal",
+                      "mood_bad":  "Ruim",
+                      "days_left_month":  "{{n}} dias restantes"
                   },
     "shift":  {
                   "start":  "Iniciar turno",
@@ -211,7 +217,13 @@
                   "time_format_hint":  "DD/MM/AAAA HH:mm",
                   "validation_odometer_required":  "Informe o km final do odômetro",
                   "validation_platform_required":  "Informe ao menos uma plataforma com valor",
-                  "validation_rides_required":  "Informe a quantidade de corridas"
+                  "validation_rides_required":  "Informe a quantidade de corridas",
+                  "mood_label":  "Como foi o seu dia?",
+                  "mood_good":  "Excelente 🤑",
+                  "mood_ok":  "Normal 😐",
+                  "mood_bad":  "Ruim 😫",
+                  "notes_label":  "Observações do dia",
+                  "notes_placeholder":  "Ex: chuva forte à tarde, demanda baixa no centro..."
               },
     "fuel":  {
                  "title":  "Abastecimentos",

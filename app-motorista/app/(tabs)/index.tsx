@@ -17,8 +17,8 @@ import { decimalToCents, formatMoney } from '@/src/utils/currency';
 import { getActiveShift } from '@/src/services/shifts';
 import { getConsumptionTrend, type ConsumptionTrend } from '@/src/services/fuelConsumption';
 import {
-  getActiveGoal, getDayDetail, getMonthlyBuckets, getMonthlyTotals, getTodaySummary, getWeekBuckets, getWeekTotals, upsertMonthlyGoal,
-  type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket, type MonthlyTotals,
+  getActiveGoal, getDayDetail, getMonthlyBuckets, getMonthlyTotals, getMonthMoodStats, getTodaySummary, getWeekBuckets, getWeekTotals, upsertMonthlyGoal,
+  type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket, type MonthlyTotals, type MonthMoodStats,
 } from '@/src/services/dashboard';
 import {
   getInAppNotifications, deleteInAppNotification, clearInAppNotifications,
@@ -472,20 +472,20 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
             )}
             {hasGoal && pct > 0 && (
               <>
-                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.success}
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.accent}
                   strokeWidth={22} opacity={0.07} strokeLinecap="butt"
                   strokeDasharray={`${achievedDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25} />
-                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.success}
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.accent}
                   strokeWidth={14} opacity={0.15} strokeLinecap="butt"
                   strokeDasharray={`${achievedDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25} />
-                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.success}
+                <Circle cx={D_CX} cy={D_CY} r={D_R} fill="none" stroke={Colors.accent}
                   strokeWidth={9} strokeLinecap="butt"
                   strokeDasharray={`${achievedDash} ${D_CIRC}`} strokeDashoffset={D_CIRC * 0.25} />
               </>
             )}
           </Svg>
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
-            <Text style={{ color: hasGoal ? (pct >= 1 ? Colors.success : Colors.textPrimary) : Colors.textSecondary, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+            <Text style={{ color: hasGoal ? (pct >= 1 ? Colors.accent : Colors.textPrimary) : Colors.textSecondary, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
               {hasGoal ? `${Math.round(pct * 100)}%` : '—'}
             </Text>
             <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>
@@ -585,6 +585,34 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
           )}
         </View>
       )}
+    </View>
+  );
+}
+
+// ─── mood stats card ──────────────────────────────────────────────────────────
+
+function MoodStatsCard({ stats }: { stats: MonthMoodStats }) {
+  const { t } = useTranslation();
+  const total = stats.good + stats.ok + stats.bad;
+  if (total === 0) return null;
+  return (
+    <View style={styles.card}>
+      <Text style={[styles.cardTitle, { letterSpacing: 1.5, textTransform: 'uppercase', fontSize: 11 }]}>
+        {t('dashboard.mood_title')}
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        {([
+          { count: stats.good, emoji: '🤑', label: t('dashboard.mood_good'), color: Colors.accent },
+          { count: stats.ok,   emoji: '😐', label: t('dashboard.mood_ok'),   color: Colors.textSecondary },
+          { count: stats.bad,  emoji: '😫', label: t('dashboard.mood_bad'),  color: Colors.error },
+        ]).map(({ count, emoji, label, color }) => (
+          <View key={label} style={{ flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: 12, paddingVertical: 12, alignItems: 'center', gap: 4 }}>
+            <Text style={{ fontSize: 22 }}>{emoji}</Text>
+            <Text style={{ color, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{count}</Text>
+            <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -960,6 +988,7 @@ export default function DashboardScreen() {
   const [selectedMonthDay, setSelectedMonthDay] = useState<number | null>(null);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [moodStats, setMoodStats] = useState<MonthMoodStats | null>(null);
 
   function refreshNotifCount() {
     getInAppNotifications().then(ns => setNotifCount(ns.length)).catch(() => {});
@@ -974,7 +1003,7 @@ export default function DashboardScreen() {
           .eq('id', profile.vehicle_id).maybeSingle().then(r => r.data, () => null)
       : supabase.from('vehicles').select('brand, model, year, fuel_type, avg_consumption_per_100')
           .eq('user_id', uid).order('created_at', { ascending: false }).limit(1).maybeSingle().then(r => r.data, () => null);
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount] = await Promise.all([
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -986,6 +1015,7 @@ export default function DashboardScreen() {
       getWeekTotals(uid).catch(() => null),
       getMonthHistory(uid).catch(() => [] as MonthHistoryItem[]),
       getStreak(uid).catch(() => 0),
+      getMonthMoodStats(uid).catch(() => null),
     ]);
     setSummary(todaySummary);
     setWeekBuckets(buckets);
@@ -998,6 +1028,7 @@ export default function DashboardScreen() {
     setWeekTotals(wTotals);
     setMonthHistory(history);
     setStreak(streakCount);
+    setMoodStats(mood);
   }, [profile?.vehicle_id]);
 
   useEffect(() => {
@@ -1188,6 +1219,8 @@ export default function DashboardScreen() {
                 consumptionTrend={consumptionTrend}
               />
             )}
+
+            {moodStats !== null && <MoodStatsCard stats={moodStats} />}
 
             <MonthHistoryCard items={monthHistory} currencyCode={currencyCode} locale={locale} onMonthPress={setMonthDetailItem} />
           </>

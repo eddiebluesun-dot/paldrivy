@@ -1,5 +1,6 @@
 {
     "app_name":  "PalDrivy",
+    "app_tagline":  "Control financiero para conductores",
     "auth":  {
                  "login":  "Iniciar sesión",
                  "register":  "Crear cuenta",
@@ -171,7 +172,12 @@
                       "active_days_month":  "días activos este mes",
                       "donut_goal":  "Meta",
                       "donut_done":  "Logrado",
-                      "donut_remaining":  "Faltante"
+                      "donut_remaining":  "Faltante",
+                      "mood_title":  "VALORACIÓN DEL MES",
+                      "mood_good":  "Excelente",
+                      "mood_ok":  "Normal",
+                      "mood_bad":  "Malo",
+                      "days_left_month":  "{{n}} días restantes"
                   },
     "shift":  {
                   "start":  "Iniciar turno",
@@ -211,7 +217,13 @@
                   "time_format_hint":  "DD/MM/AAAA HH:mm",
                   "validation_odometer_required":  "Ingresa el km final del odómetro",
                   "validation_platform_required":  "Agrega al menos una plataforma con ganancias",
-                  "validation_rides_required":  "Ingresa la cantidad de viajes realizados"
+                  "validation_rides_required":  "Ingresa la cantidad de viajes realizados",
+                  "mood_label":  "¿Cómo estuvo tu día?",
+                  "mood_good":  "Excelente 🤑",
+                  "mood_ok":  "Normal 😐",
+                  "mood_bad":  "Malo 😫",
+                  "notes_label":  "Observaciones del día",
+                  "notes_placeholder":  "Ej: lluvia intensa por la tarde, poca demanda en el centro..."
               },
     "fuel":  {
                  "title":  "Combustible",
