@@ -108,23 +108,35 @@ Deno.serve(async (req) => {
         .eq("id", user.id);
     }
 
-    // Card only. Boleto was removed: it lets a subscriber generate a payment
-    // slip and get Premium access before ever settling it (settlement takes
-    // 1-3 business days and may never happen), which is an abuse vector.
-    const paymentMethodTypes: Stripe.Checkout.SessionCreateParams.PaymentMethodType[] = ["card"];
+    // Card everywhere; Pix additionally for BR.
+    const paymentMethodTypes: Stripe.Checkout.SessionCreateParams.PaymentMethodType[] =
+      country === "BR" ? ["card", "pix"] : ["card"];
 
+    // One-time payment for the full year, not a Stripe auto-renewing
+    // Subscription: PalDrivy Premium is paid in full up front and renews
+    // manually every 12 months (the app already reminds users to renew via
+    // check-subscription-expiry), so there's no need for Stripe to keep
+    // charging automatically — which also means no Pix Automático mandate,
+    // and boleto/Pix can't leave a subscriber with a dangling auto-charge.
+    // mode: "payment" requires a one-time price, so the line item is built
+    // from price_data using the same amount/currency/product as the
+    // (recurring) Price object we looked up, instead of referencing it directly.
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      mode: "subscription",
-      line_items: [{ price: price.id, quantity: 1 }],
+      mode: "payment",
+      line_items: [{
+        price_data: {
+          currency: price.currency,
+          unit_amount: price.unit_amount ?? 0,
+          product: price.product as string,
+        },
+        quantity: 1,
+      }],
       payment_method_types: paymentMethodTypes,
       success_url: `https://app.paldrivy.com/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `https://app.paldrivy.com`,
       allow_promotion_codes: true,
       metadata: { user_id: user.id, country, price_lookup_key: lookupKey },
-      subscription_data: {
-        metadata: { user_id: user.id },
-      },
     });
 
     return json({ url: session.url, session_id: session.id });
