@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Colors, Radius, Spacing } from '../theme';
 import { formatMoney } from '../utils/currency';
 import type { MonthHistoryItem } from '../services/cockpit';
@@ -29,9 +29,10 @@ export function MonthHistoryCard({ items, currencyCode, locale, onMonthPress }: 
       <FlatList
         data={items}
         keyExtractor={item => `${item.year}-${item.month}`}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: Spacing.sm, paddingRight: Spacing.sm }}
+        numColumns={3}
+        scrollEnabled={false}
+        columnWrapperStyle={styles.row}
+        contentContainerStyle={{ gap: Spacing.sm }}
         renderItem={({ item }) => {
           const net = netForItem(item);
           const isCurrentMonth =
@@ -125,8 +126,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: Spacing.sm,
   },
+  row: {
+    gap: Spacing.sm,
+  },
   monthCard: {
-    width: 130,
+    flex: 1,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.card,
     padding: Spacing.sm + 2,
@@ -137,6 +141,11 @@ const styles = StyleSheet.create({
   monthCardCurrent: {
     borderColor: Colors.accent,
     borderWidth: 1.5,
+    backgroundColor: Colors.accentGlow,
+    ...Platform.select({
+      ios: { shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
   },
   badgeCurrent: {
     position: 'absolute', top: 6, right: 6,
