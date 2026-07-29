@@ -38,7 +38,6 @@ import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
 import { UpgradeModal } from '@/src/components/UpgradeModal';
 import type { EndShiftData, MoodRating, Shift, ShiftPlatform } from '@/src/types';
-import { ShiftWizard } from '@/src/components/ShiftWizard';
 
 function platformConfirm(title: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -477,7 +476,6 @@ export default function ShiftsScreen() {
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [endModalVisible, setEndModalVisible] = useState(false);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
-  const [wizardVisible, setWizardVisible] = useState(false);
   const [screenError, setScreenError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -591,11 +589,6 @@ export default function ShiftsScreen() {
     } catch {
       setScreenError(t('common.error'));
     }
-  }
-
-  async function handleWizardSaved() {
-    setWizardVisible(false);
-    await refresh();
   }
 
   if (loading) {
@@ -720,20 +713,6 @@ export default function ShiftsScreen() {
         />
       )}
 
-      {/* FAB — lançamento manual via wizard */}
-      <TouchableOpacity style={styles.fab} onPress={() => setWizardVisible(true)}>
-        <Ionicons name="flash" size={24} color={Colors.onAccent} />
-      </TouchableOpacity>
-
-      <ShiftWizard
-        visible={wizardVisible}
-        distanceUnit={profile?.distance_unit ?? 'km'}
-        vehicleId={profile?.vehicle_id ?? null}
-        isPremium={isPremium}
-        onClose={() => setWizardVisible(false)}
-        onSaved={handleWizardSaved}
-        onUpgradeNeeded={() => setUpgradeModalVisible(true)}
-      />
     </SafeAreaView>
   );
 }
@@ -745,16 +724,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: Spacing.md, paddingBottom: 100 },
   center: { flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
-  fab: {
-    position: 'absolute', bottom: 24, right: 20,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.accent,
-    alignItems: 'center', justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 12 },
-      android: { elevation: 8 },
-    }),
-  },
 
   screenTitle: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: Spacing.lg, letterSpacing: -0.5 },
 
