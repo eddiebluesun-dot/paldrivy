@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, ScrollView,
   StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -787,7 +787,7 @@ export default function MoreScreen() {
 
   const [email, setEmail]           = useState<string | null>(null);
   const [userId, setUserId]         = useState<string | null>(null);
-  const { isPremium, periodEnd: premiumEnd } = usePremiumStatus(userId);
+  const { isPremium, isTrial, periodEnd: premiumEnd } = usePremiumStatus(userId);
   const [name, setName]             = useState('');
   const [phone, setPhone]           = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -883,6 +883,10 @@ export default function MoreScreen() {
       await WebBrowser.openBrowserAsync(url);
     } catch (e: any) {
       console.error('checkout error:', e.message);
+      Alert.alert(
+        'Não foi possível abrir o checkout',
+        e.message || 'Tente novamente em alguns instantes. Se o problema continuar, fale com o suporte.'
+      );
     } finally {
       setCheckoutLoading(false);
     }
@@ -1061,7 +1065,7 @@ export default function MoreScreen() {
         {/* Premium */}
         <Text style={s.sectionHeader}>ASSINATURA</Text>
         <View style={[s.card, s.premiumCard]}>
-          {isPremium ? (
+          {isPremium && !isTrial ? (
             <View style={s.premiumActive}>
               <Ionicons name="star" size={22} color="#F59E0B" />
               <View style={{ flex: 1, marginLeft: Spacing.sm }}>
@@ -1076,10 +1080,16 @@ export default function MoreScreen() {
           ) : (
             <>
               <View style={s.premiumHeader}>
-                <Ionicons name="star-outline" size={22} color="#F59E0B" />
+                <Ionicons name={isTrial ? 'star' : 'star-outline'} size={22} color="#F59E0B" />
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                  <Text style={s.premiumTitle}>Assine o Premium</Text>
-                  <Text style={s.premiumSub}>Relatórios completos, sem limites</Text>
+                  <Text style={s.premiumTitle}>
+                    {isTrial ? 'Período de teste Premium' : 'Assine o Premium'}
+                  </Text>
+                  <Text style={s.premiumSub}>
+                    {isTrial && premiumEnd
+                      ? `Válido até ${new Date(premiumEnd).toLocaleDateString('pt-BR')} — assine para não perder o acesso`
+                      : 'Relatórios completos, sem limites'}
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity
