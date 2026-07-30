@@ -6,7 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { getCommunityProfile, isFollowing, followUser, unfollowUser, isBlocked, blockUser, unblockUser, type CommunityProfile } from '@/src/services/community';
-import { getUserPosts, type CommunityPost } from '@/src/services/communityPosts';
+import { getUserPosts, deletePost, type CommunityPost } from '@/src/services/communityPosts';
 import { getOrCreateConversation } from '@/src/services/communityChat';
 import { getProfile } from '@/src/services/profile';
 import { PostCard } from '@/src/components/community/PostCard';
@@ -21,6 +21,13 @@ export default function UserProfileScreen() {
   const [following, setFollowing] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
+
+  const isOwnProfile = !!viewerId && viewerId === targetUserId;
+
+  async function loadPosts(uid: string) {
+    if (!targetUserId) return;
+    setPosts(await getUserPosts(uid, targetUserId));
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -41,6 +48,11 @@ export default function UserProfileScreen() {
       setPosts(userPosts);
     });
   }, [targetUserId]);
+
+  async function handleDeletePost(postId: string) {
+    await deletePost(postId);
+    if (viewerId) await loadPosts(viewerId);
+  }
 
   async function handleFollowToggle() {
     if (!viewerId || !targetUserId) return;
@@ -93,15 +105,23 @@ export default function UserProfileScreen() {
                 <Text style={styles.count}>{profile.following_count} {t('community.following')}</Text>
               </View>
               <View style={styles.actionsRow}>
-                <TouchableOpacity style={[styles.followBtn, following && styles.followingBtn]} onPress={handleFollowToggle}>
-                  <Text style={styles.followBtnText}>{following ? t('community.unfollow') : t('community.follow')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn} onPress={handleMessage}>
-                  <Ionicons name="paper-plane-outline" size={18} color={Colors.textPrimary} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn} onPress={handleBlockToggle}>
-                  <Ionicons name={blocked ? 'checkmark-circle-outline' : 'ban-outline'} size={18} color={Colors.error} />
-                </TouchableOpacity>
+                {isOwnProfile ? (
+                  <TouchableOpacity style={styles.followBtn} onPress={() => router.push('/community/edit-profile')}>
+                    <Text style={styles.followBtnText}>{t('community.edit_profile')}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    <TouchableOpacity style={[styles.followBtn, following && styles.followingBtn]} onPress={handleFollowToggle}>
+                      <Text style={styles.followBtnText}>{following ? t('community.unfollow') : t('community.follow')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.iconBtn} onPress={handleMessage}>
+                      <Ionicons name="paper-plane-outline" size={18} color={Colors.textPrimary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.iconBtn} onPress={handleBlockToggle}>
+                      <Ionicons name={blocked ? 'checkmark-circle-outline' : 'ban-outline'} size={18} color={Colors.error} />
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
           </View>
@@ -113,6 +133,8 @@ export default function UserProfileScreen() {
             viewerLocale={viewerLocale}
             onPress={() => router.push(`/community/post/${item.id}`)}
             onAuthorPress={() => {}}
+            onEdit={isOwnProfile ? () => router.push(`/community/edit-post/${item.id}`) : undefined}
+            onDelete={isOwnProfile ? () => handleDeletePost(item.id) : undefined}
           />
         )}
       />

@@ -56,10 +56,32 @@ export async function createPost(
 
   if (input.photoUri) {
     const photo_url = await uploadCommunityImage(userId, input.photoUri, 'post', data.id);
-    await supabase.from('community_posts').update({ photo_url }).eq('id', data.id);
+    const { error: photoError } = await supabase.from('community_posts').update({ photo_url }).eq('id', data.id);
+    if (photoError) throw photoError;
   }
 
   return data.id;
+}
+
+export async function updatePost(
+  postId: string,
+  userId: string,
+  input: { caption?: string; photoUri?: string },
+): Promise<void> {
+  const patch: { caption?: string | null; photo_url?: string } = {};
+  if (input.caption !== undefined) patch.caption = input.caption || null;
+  if (input.photoUri) {
+    patch.photo_url = await uploadCommunityImage(userId, input.photoUri, 'post', postId);
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  const { error } = await supabase.from('community_posts').update(patch).eq('id', postId);
+  if (error) throw error;
+}
+
+export async function deletePost(postId: string): Promise<void> {
+  const { error } = await supabase.from('community_posts').delete().eq('id', postId);
+  if (error) throw error;
 }
 
 export interface CommunityPost {
@@ -111,6 +133,14 @@ export async function getFeed(viewerId: string, opts?: { limit?: number; before?
   const { data, error } = await query;
   if (error) throw error;
   return hydratePosts(viewerId, data ?? []);
+}
+
+export async function getPostById(viewerId: string, postId: string): Promise<CommunityPost | null> {
+  const { data, error } = await supabase.from('community_posts').select('*').eq('id', postId).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const [hydrated] = await hydratePosts(viewerId, [data]);
+  return hydrated ?? null;
 }
 
 export async function getUserPosts(viewerId: string, targetUserId: string): Promise<CommunityPost[]> {

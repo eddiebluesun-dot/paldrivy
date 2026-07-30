@@ -119,7 +119,20 @@
       "confirm_block_title": "Bloquear usuário?",
       "confirm_block_body": "Vocês deixarão de se ver na comunidade.",
       "confirm_report_title": "Denunciar post?",
-      "confirm_report_body": "Este post não aparecerá mais para você."
+      "confirm_report_body": "Este post não aparecerá mais para você.",
+      "edit_profile": "Editar perfil",
+      "edit_cover": "Editar capa",
+      "edit_avatar": "Editar foto",
+      "bio_placeholder": "Fale um pouco sobre você...",
+      "comments_permission_title": "Quem pode comentar",
+      "comments_permission_everyone": "Todos",
+      "comments_permission_followers": "Somente quem me segue",
+      "comments_permission_nobody": "Ninguém",
+      "save": "Salvar",
+      "edit_post": "Editar post",
+      "delete_post": "Apagar post",
+      "confirm_delete_post_title": "Apagar post?",
+      "confirm_delete_post_body": "Essa ação não pode ser desfeita."
     },
     "dashboard":  {
                       "today":  "Hoje",

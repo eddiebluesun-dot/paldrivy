@@ -48,9 +48,14 @@ export default function CommunityScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('community.feed_title')}</Text>
-        <TouchableOpacity onPress={() => router.push('/community/chats')}>
-          <Ionicons name="paper-plane-outline" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => router.push(`/community/${userId}`)}>
+            <Ionicons name="person-circle-outline" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/community/chats')}>
+            <Ionicons name="paper-plane-outline" size={22} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchBox}>

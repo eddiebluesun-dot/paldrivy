@@ -119,7 +119,20 @@
       "confirm_block_title": "Block user?",
       "confirm_block_body": "You'll no longer see each other in the community.",
       "confirm_report_title": "Report post?",
-      "confirm_report_body": "This post will no longer appear for you."
+      "confirm_report_body": "This post will no longer appear for you.",
+      "edit_profile": "Edit profile",
+      "edit_cover": "Edit cover",
+      "edit_avatar": "Edit photo",
+      "bio_placeholder": "Tell us a bit about yourself...",
+      "comments_permission_title": "Who can comment",
+      "comments_permission_everyone": "Everyone",
+      "comments_permission_followers": "Only people who follow me",
+      "comments_permission_nobody": "No one",
+      "save": "Save",
+      "edit_post": "Edit post",
+      "delete_post": "Delete post",
+      "confirm_delete_post_title": "Delete post?",
+      "confirm_delete_post_body": "This action cannot be undone."
     },
     "dashboard":  {
                       "today":  "Today",

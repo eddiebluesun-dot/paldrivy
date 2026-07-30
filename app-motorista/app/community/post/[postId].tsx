@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
-import { getFeed, getComments, addComment, type CommunityPost, type PostComment } from '@/src/services/communityPosts';
+import { getPostById, getComments, addComment, deletePost, type CommunityPost, type PostComment } from '@/src/services/communityPosts';
 import { hidePost } from '@/src/services/community';
 import { getProfile } from '@/src/services/profile';
 import { PostCard } from '@/src/components/community/PostCard';
@@ -30,12 +30,18 @@ export default function PostDetailScreen() {
       const uid = data.user?.id;
       if (!uid || !postId) return;
       setViewerId(uid);
-      const [viewerProfile, feed] = await Promise.all([getProfile(uid), getFeed(uid, { limit: 50 })]);
+      const [viewerProfile, foundPost] = await Promise.all([getProfile(uid), getPostById(uid, postId)]);
       setViewerLocale(viewerProfile?.locale ?? 'pt-BR');
-      setPost(feed.find((p) => p.id === postId) ?? null);
+      setPost(foundPost);
       await loadComments();
     });
   }, [postId]);
+
+  async function handleDeletePost() {
+    if (!postId) return;
+    await deletePost(postId);
+    router.back();
+  }
 
   async function handleSendComment() {
     if (!viewerId || !postId || !commentText.trim()) return;
@@ -68,7 +74,15 @@ export default function PostDetailScreen() {
           keyExtractor={(c) => c.id}
           contentContainerStyle={{ padding: Spacing.md }}
           ListHeaderComponent={
-            <PostCard post={post} viewerId={viewerId ?? ''} viewerLocale={viewerLocale} onPress={() => {}} onAuthorPress={() => router.push(`/community/${post.user_id}`)} />
+            <PostCard
+              post={post}
+              viewerId={viewerId ?? ''}
+              viewerLocale={viewerLocale}
+              onPress={() => {}}
+              onAuthorPress={() => router.push(`/community/${post.user_id}`)}
+              onEdit={post.user_id === viewerId ? () => router.push(`/community/edit-post/${post.id}`) : undefined}
+              onDelete={post.user_id === viewerId ? handleDeletePost : undefined}
+            />
           }
           renderItem={({ item }) => (
             <View style={styles.commentRow}>

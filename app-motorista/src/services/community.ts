@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 
+export type CommentsPermission = 'everyone' | 'followers' | 'nobody';
+
 export interface CommunityProfile {
   user_id: string;
   name: string;
@@ -11,6 +13,7 @@ export interface CommunityProfile {
   cover_url: string | null;
   followers_count: number;
   following_count: number;
+  comments_permission: CommentsPermission;
 }
 
 // profiles and community_profiles have no FK to each other (only a shared PK),
@@ -19,7 +22,7 @@ export interface CommunityProfile {
 export async function getCommunityProfile(userId: string): Promise<CommunityProfile | null> {
   const [{ data: profile }, { data: community }] = await Promise.all([
     supabase.from('profiles').select('id, name, city, state, country').eq('id', userId).maybeSingle(),
-    supabase.from('community_profiles').select('bio, avatar_url, cover_url, followers_count, following_count').eq('user_id', userId).maybeSingle(),
+    supabase.from('community_profiles').select('bio, avatar_url, cover_url, followers_count, following_count, comments_permission').eq('user_id', userId).maybeSingle(),
   ]);
   if (!profile) return null;
   return {
@@ -33,12 +36,13 @@ export async function getCommunityProfile(userId: string): Promise<CommunityProf
     cover_url: community?.cover_url ?? null,
     followers_count: community?.followers_count ?? 0,
     following_count: community?.following_count ?? 0,
+    comments_permission: (community?.comments_permission as CommentsPermission) ?? 'everyone',
   };
 }
 
 export async function updateCommunityProfile(
   userId: string,
-  patch: { bio?: string; avatar_url?: string; cover_url?: string },
+  patch: { bio?: string; avatar_url?: string; cover_url?: string; comments_permission?: CommentsPermission },
 ): Promise<void> {
   const { error } = await supabase.from('community_profiles').upsert(
     { user_id: userId, ...patch },
@@ -100,7 +104,7 @@ export async function searchUsers(query: string, excludeUserId: string): Promise
 
   const ids = profiles.map(p => p.id);
   const { data: communities } = await supabase
-    .from('community_profiles').select('user_id, bio, avatar_url, cover_url, followers_count, following_count')
+    .from('community_profiles').select('user_id, bio, avatar_url, cover_url, followers_count, following_count, comments_permission')
     .in('user_id', ids);
   const byId = new Map((communities ?? []).map(c => [c.user_id, c]));
 
@@ -110,6 +114,7 @@ export async function searchUsers(query: string, excludeUserId: string): Promise
       user_id: p.id, name: p.name, city: p.city, state: p.state, country: p.country,
       bio: c?.bio ?? null, avatar_url: c?.avatar_url ?? null, cover_url: c?.cover_url ?? null,
       followers_count: c?.followers_count ?? 0, following_count: c?.following_count ?? 0,
+      comments_permission: (c?.comments_permission as CommentsPermission) ?? 'everyone',
     };
   });
 }
