@@ -108,9 +108,13 @@ Deno.serve(async (req) => {
         .eq("id", user.id);
     }
 
-    // Card everywhere; Pix additionally for BR.
+    // Card only for now. Pix is not yet activated on the connected Stripe
+    // account (dashboard.stripe.com/account/payments/settings) — requesting
+    // it makes checkout.sessions.create reject with "payment method type:
+    // pix is invalid" for every BR user. Re-add "pix" to this array once
+    // it's enabled there.
     const paymentMethodTypes: Stripe.Checkout.SessionCreateParams.PaymentMethodType[] =
-      country === "BR" ? ["card", "pix"] : ["card"];
+      ["card"];
 
     // One-time payment for the full year, not a Stripe auto-renewing
     // Subscription: PalDrivy Premium is paid in full up front and renews
