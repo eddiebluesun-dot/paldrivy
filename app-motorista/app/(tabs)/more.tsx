@@ -895,10 +895,14 @@ export default function MoreScreen() {
     } catch (e: any) {
       popup?.close();
       console.error('checkout error:', e.message);
-      Alert.alert(
-        'Não foi possível abrir o checkout',
-        e.message || 'Tente novamente em alguns instantes. Se o problema continuar, fale com o suporte.'
-      );
+      const message = e.message || 'Tente novamente em alguns instantes. Se o problema continuar, fale com o suporte.';
+      // react-native-web's Alert.alert() is a no-op stub — it never shows
+      // anything on web, so fall back to window.alert there.
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`Não foi possível abrir o checkout\n\n${message}`);
+      } else {
+        Alert.alert('Não foi possível abrir o checkout', message);
+      }
     } finally {
       setCheckoutLoading(false);
     }
