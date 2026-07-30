@@ -878,10 +878,22 @@ export default function MoreScreen() {
 
   async function handleSubscribe() {
     setCheckoutLoading(true);
+    // On web, window.open must run synchronously inside the click handler or
+    // the browser's popup blocker silently swallows it (no exception, no tab) —
+    // so we open a blank tab here, before the await, and point it at the
+    // checkout URL once createStripeCheckout() resolves.
+    const popup = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.open('', '_blank')
+      : null;
     try {
       const { url } = await createStripeCheckout();
-      await WebBrowser.openBrowserAsync(url);
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        await WebBrowser.openBrowserAsync(url);
+      }
     } catch (e: any) {
+      popup?.close();
       console.error('checkout error:', e.message);
       Alert.alert(
         'Não foi possível abrir o checkout',
