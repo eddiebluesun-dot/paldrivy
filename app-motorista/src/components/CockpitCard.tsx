@@ -81,17 +81,18 @@ export function CockpitCard({
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onEditGoal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          {activeDaysThisMonth > 0 ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {activeDaysThisMonth > 0 && (
             <View style={styles.activeDaysChip}>
               <Ionicons name="diamond-outline" size={8} color={Colors.accent} />
-              <Text style={styles.activeDaysText}>{activeDaysThisMonth} {t('dashboard.active_days_month')}</Text>
+              <Text style={styles.activeDaysText} numberOfLines={1}>{activeDaysThisMonth} {t('dashboard.active_days_month')}</Text>
               <Ionicons name="diamond-outline" size={8} color={Colors.accent} />
             </View>
-          ) : (
-            <Ionicons name="pencil-outline" size={14} color={Colors.textSecondary} />
           )}
-        </TouchableOpacity>
+          <TouchableOpacity onPress={onEditGoal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="pencil-outline" size={14} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 3-column body */}
@@ -178,7 +179,7 @@ export function CockpitCard({
             <Text style={styles.expensesValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
               {formatMoney(expensesTodayCents, currencyCode, locale)}
             </Text>
-            <Text style={styles.expensesLabel}>DESPESAS</Text>
+            <Text style={styles.expensesLabel} numberOfLines={1}>DESPESAS</Text>
           </View>
         </View>
 
@@ -212,6 +213,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
+    flexShrink: 0,
   },
   activeDaysChip: {
     flexDirection: 'row',
@@ -223,11 +225,13 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderWidth: 1,
     borderColor: 'rgba(245,158,11,0.25)',
+    maxWidth: '68%',
   },
   activeDaysText: {
     color: Colors.accent,
     fontSize: 10,
     fontWeight: '700',
+    flexShrink: 1,
   },
   bodyRow: {
     flexDirection: 'row',

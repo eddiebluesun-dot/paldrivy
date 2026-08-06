@@ -30,7 +30,7 @@ import {
 import {
   getMonthHistory, getStreak, type MonthHistoryItem,
 } from '@/src/services/cockpit';
-import { getDailyGoalCents } from '@/src/utils/cockpitUtils';
+import { getAdaptiveDailyGoalCents } from '@/src/utils/cockpitUtils';
 import { VehiclePill } from '@/src/components/VehiclePill';
 import { StreakBar } from '@/src/components/StreakBar';
 import { CockpitCard } from '@/src/components/CockpitCard';
@@ -418,10 +418,11 @@ function FuelConsumptionCard({ trend }: { trend: ConsumptionTrend }) {
 
 // ─── monthly chart ────────────────────────────────────────────────────────────
 
-function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, selectedDay, consumptionTrend }: {
+function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, selectedDay, consumptionTrend, onEditGoal }: {
   buckets: MonthBucket[]; goalCents: number | null; currencyCode: string; locale: string;
   onDayPress?: (day: number) => void; selectedDay?: number | null;
   consumptionTrend?: ConsumptionTrend | null;
+  onEditGoal?: () => void;
 }) {
   const { t } = useTranslation();
   const today = new Date().getDate();
@@ -449,7 +450,14 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>{t('dashboard.monthly_chart')}</Text>
+      <View style={styles.cardRowBetween}>
+        <Text style={styles.cardTitle}>{t('dashboard.monthly_chart')}</Text>
+        {onEditGoal && (
+          <TouchableOpacity onPress={onEditGoal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="pencil-outline" size={14} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* 2-column: donut left + stats right */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
@@ -560,7 +568,9 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
       </ScrollView>
 
       {/* Consumo Real — merged from FuelConsumptionCard */}
-      {consumptionTrend && (
+      {/* Scoped to the current month (mês em exercício), matching RESUMO DO
+          MÊS above — not consumptionTrend.overall, which is lifetime. */}
+      {consumptionTrend?.current_month && (
         <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <Ionicons name="speedometer-outline" size={13} color={Colors.textSecondary} />
@@ -568,9 +578,9 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
           </View>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {[
-              { value: consumptionTrend.overall.km_per_l.toFixed(1), label: t('dashboard.km_avg'), color: Colors.success },
-              { value: consumptionTrend.overall.total_km.toFixed(0), label: t('dashboard.km_calculated'), color: Colors.textPrimary },
-              { value: String(consumptionTrend.overall.segments), label: t('dashboard.fueling_count'), color: Colors.accent },
+              { value: consumptionTrend.current_month.km_per_l.toFixed(1), label: t('dashboard.km_avg'), color: Colors.success },
+              { value: consumptionTrend.current_month.total_km.toFixed(0), label: t('dashboard.km_calculated'), color: Colors.textPrimary },
+              { value: String(consumptionTrend.current_month.segments), label: t('dashboard.fueling_count'), color: Colors.accent },
             ].map(item => (
               <View key={item.label} style={{ flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: 8, alignItems: 'center', gap: 2 }}>
                 <Text style={{ color: item.color, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{item.value}</Text>
@@ -715,7 +725,7 @@ function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }
         }, glass]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
             <Ionicons name={c.icon} size={12} color={c.iconColor} />
-            <Text style={{ color: Colors.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+            <Text style={{ color: Colors.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, flex: 1 }} numberOfLines={1}>
               {c.title}
             </Text>
           </View>
@@ -1291,11 +1301,13 @@ export default function DashboardScreen() {
 
   const now = new Date();
   const dailyGoalCents = goal != null
-    ? getDailyGoalCents(
+    ? getAdaptiveDailyGoalCents(
         goal.target_amount_cents,
         goal.working_days ?? [1, 2, 3, 4, 5, 6],
+        monthlyTotals?.gross_cents ?? 0,
         now.getFullYear(),
         now.getMonth() + 1,
+        now.getDate(),
       )
     : 0;
 
@@ -1458,6 +1470,7 @@ export default function DashboardScreen() {
                 onDayPress={handleMonthlyDayPress}
                 selectedDay={selectedMonthDay}
                 consumptionTrend={consumptionTrend}
+                onEditGoal={() => setGoalModalVisible(true)}
               />
             )}
 

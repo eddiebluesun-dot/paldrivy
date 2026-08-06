@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import * as SecureStore from 'expo-secure-store';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Colors } from '@/src/theme';
 import { BiometricGate } from '@/src/components/BiometricGate';
 import { TutorialModal } from '@/src/components/TutorialModal';
@@ -62,8 +62,8 @@ export default function TabLayout() {
             title: '',
             tabBarButton: () => (
               <View style={{ top: -14, alignItems: 'center', justifyContent: 'center' }}>
-                <View
-                  onTouchEnd={() => setQuickAddVisible(true)}
+                <Pressable
+                  onPress={() => setQuickAddVisible(true)}
                   style={{
                     width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.accent,
                     alignItems: 'center', justifyContent: 'center',
@@ -71,7 +71,7 @@ export default function TabLayout() {
                   }}
                 >
                   <Ionicons name="add" size={28} color={Colors.onAccent} />
-                </View>
+                </Pressable>
               </View>
             ),
           }}

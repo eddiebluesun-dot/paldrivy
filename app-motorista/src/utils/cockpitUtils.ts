@@ -24,6 +24,47 @@ export function getDailyGoalCents(
   return Math.ceil(goalCents / wd);
 }
 
+// Working days from `today` (inclusive) through the end of the month.
+// Mirrors the app/(tabs)/index.tsx `workingDaysLeft` helper, but pure/testable
+// (takes year/month/today instead of reading `new Date()` internally).
+export function workingDaysRemainingInMonth(
+  workingDays: number[],
+  year: number,
+  month: number,
+  today: number,
+): number {
+  if (workingDays.length === 0) return 0;
+  const lastDay = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = today; d <= lastDay; d++) {
+    const dow = new Date(year, month - 1, d).getDay(); // 0=Sun…6=Sat
+    const iso = dow === 0 ? 7 : dow;                    // Mon=1…Sun=7
+    if (workingDays.includes(iso)) count++;
+  }
+  return count;
+}
+
+// Adaptive daily target: (monthly goal − progress already made this month) ÷
+// working days remaining (including today). Recalculates every day so the
+// "HOJE" cockpit reflects how much is actually still needed to hit the
+// monthly goal — unlike a flat goalCents/totalWorkingDays split, this
+// tightens up if the driver falls behind and eases off once they're ahead.
+export function getAdaptiveDailyGoalCents(
+  goalCents: number,
+  workingDays: number[],
+  progressCentsThisMonth: number,
+  year: number,
+  month: number,
+  today: number,
+): number {
+  if (goalCents <= 0 || workingDays.length === 0) return 0;
+  const remaining = Math.max(goalCents - progressCentsThisMonth, 0);
+  if (remaining === 0) return 0;
+  const daysLeft = workingDaysRemainingInMonth(workingDays, year, month, today);
+  if (daysLeft === 0) return Math.ceil(remaining); // no working days left but goal unmet: show it all on "today"
+  return Math.ceil(remaining / daysLeft);
+}
+
 export function streakFromDates(activeDates: string[], todayStr: string): number {
   const dateSet = new Set(activeDates);
   if (!dateSet.has(todayStr)) return 0;

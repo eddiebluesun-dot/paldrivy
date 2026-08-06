@@ -1,4 +1,7 @@
 import { supabase } from '../lib/supabase';
+import { computeConsumptionTrend, type ConsumptionStats, type ConsumptionTrend } from '../utils/fuelConsumptionUtils';
+
+export type { ConsumptionStats, ConsumptionTrend };
 
 // ─── Weekly consumption ───────────────────────────────────────────────────────
 
@@ -85,19 +88,9 @@ export async function getWeeklyConsumption(
   return results.reverse();
 }
 
-export interface ConsumptionStats {
-  km_per_l: number;
-  total_km: number;
-  total_liters: number;
-  segments: number;
-}
-
-export interface ConsumptionTrend {
-  overall: ConsumptionStats;
-  recent: ConsumptionStats | null;
-  change_pct: number | null;
-}
-
+// Computation logic (overall / recent-90-days / current-month) lives in
+// src/utils/fuelConsumptionUtils.ts as a pure, unit-tested function — this
+// service is only responsible for fetching the raw rows from Supabase.
 export async function getConsumptionTrend(
   userId: string,
   vehicleId?: string | null
@@ -112,43 +105,8 @@ export async function getConsumptionTrend(
   if (vehicleId) query = query.eq('vehicle_id', vehicleId);
 
   const { data, error } = await query;
-  if (error || !data || data.length < 2) return null;
+  if (error || !data) return null;
 
   type E = { odometer_meters: number; volume_ml: number; filled_at: string };
-  const entries = data as E[];
-
-  // All-time: km = last odom − first odom (captures ALL km: work + personal)
-  // Liters = sum of all fills after first (skip-first method)
-  const total_km = (entries[entries.length - 1].odometer_meters - entries[0].odometer_meters) / 1000;
-  const total_liters = entries.slice(1).reduce((s, e) => s + e.volume_ml / 1000, 0);
-
-  if (total_km <= 0 || total_liters <= 0) return null;
-
-  const overall: ConsumptionStats = {
-    km_per_l: total_km / total_liters,
-    total_km,
-    total_liters,
-    segments: entries.length - 1,
-  };
-
-  // Recent: last 90 days (same skip-first method within the sub-window)
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 90);
-  const recentEntries = entries.filter(e => new Date(e.filled_at) >= cutoff);
-
-  let recent: ConsumptionStats | null = null;
-  let change_pct: number | null = null;
-
-  if (recentEntries.length >= 3) {
-    const recent_km = (recentEntries[recentEntries.length - 1].odometer_meters - recentEntries[0].odometer_meters) / 1000;
-    const recent_liters = recentEntries.slice(1).reduce((s, e) => s + e.volume_ml / 1000, 0);
-
-    if (recent_km > 0 && recent_liters > 0) {
-      const recent_km_per_l = recent_km / recent_liters;
-      recent = { km_per_l: recent_km_per_l, total_km: recent_km, total_liters: recent_liters, segments: recentEntries.length - 1 };
-      change_pct = ((recent_km_per_l - overall.km_per_l) / overall.km_per_l) * 100;
-    }
-  }
-
-  return { overall, recent, change_pct };
+  return computeConsumptionTrend(data as E[]);
 }
