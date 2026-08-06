@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -34,10 +34,11 @@ import {
   updateShift,
 } from '@/src/services/shifts';
 import { getUserPlatforms } from '@/src/services/platforms';
-import { getPriorSameDayPlatforms, reconcileShiftPlatforms } from '@/src/utils/shiftReconciliationUtils';
+import { reconcileShiftPlatforms } from '@/src/utils/shiftReconciliationUtils';
 import type { ShiftPause } from '@/src/types';
 import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
+import { useCumulativeDayTotalDefault } from '@/src/hooks/useCumulativeDayTotalDefault';
 import { UpgradeModal } from '@/src/components/UpgradeModal';
 import type { EndShiftData, MoodRating, Shift, ShiftPlatform } from '@/src/types';
 
@@ -155,20 +156,16 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
   const [error, setError] = useState<string | null>(null);
   const [editStartedAt, setEditStartedAt] = useState('');
   const [editEndedAt, setEditEndedAt] = useState('');
-  // Opt-in: the driver confirms the amounts they just entered are the
-  // platform's cumulative total for the whole day (what Uber/99/etc. show),
-  // not this shift's isolated earnings. Defaults to off — unchecked behavior
-  // is unchanged from before this fix, so a driver who already enters their
-  // true per-shift split isn't silently corrupted by an aggressive guess.
+  // Confirms the amounts just entered are the platform's cumulative total
+  // for the whole day (what Uber/99/etc. show), not this shift's isolated
+  // earnings. Auto-defaults to checked whenever a completed shift already
+  // exists earlier the same day (see useCumulativeDayTotalDefault below) —
+  // that's the common case this fix exists for — but the driver can still
+  // uncheck it if they know the value they entered is genuinely isolated.
   const [isCumulativeDayTotal, setIsCumulativeDayTotal] = useState(false);
 
-  const priorSameDayPlatforms = useMemo(() => {
-    const anchor = mode === 'end' ? startedAt : existingShift?.started_at;
-    if (!anchor || !otherShifts?.length) return [];
-    return getPriorSameDayPlatforms(otherShifts, anchor, shiftId);
-  }, [mode, startedAt, existingShift?.started_at, otherShifts, shiftId]);
-
-  const hasPriorSameDayShift = priorSameDayPlatforms.length > 0;
+  const { priorSameDayPlatforms, hasPriorSameDayShift, defaultChecked: cumulativeDayTotalDefault } =
+    useCumulativeDayTotalDefault(otherShifts, mode === 'end' ? startedAt : existingShift?.started_at, shiftId);
 
   // Load saved platforms to pre-fill the end-shift form
   useEffect(() => {
@@ -227,9 +224,9 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       setEditStartedAt('');
       setEditEndedAt('');
     }
-    setIsCumulativeDayTotal(false);
+    setIsCumulativeDayTotal(cumulativeDayTotalDefault);
     setError(null);
-  }, [visible, shiftId, mode, distanceUnit]);
+  }, [visible, shiftId, mode, distanceUnit, cumulativeDayTotalDefault]);
 
   function updatePlatform(index: number, field: 'name' | 'amount', value: string) {
     setPlatforms((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
