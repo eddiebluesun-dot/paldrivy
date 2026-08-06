@@ -97,16 +97,16 @@ export async function getConsumptionTrend(
 ): Promise<ConsumptionTrend | null> {
   let query = supabase
     .from('fuel_entries')
-    .select('odometer_meters, volume_ml, filled_at')
+    .select('odometer_meters, volume_ml, filled_at, vehicle_id')
     .eq('user_id', userId)
     .not('odometer_meters', 'is', null)
-    .order('odometer_meters', { ascending: true });
+    .order('filled_at', { ascending: true });
 
   if (vehicleId) query = query.eq('vehicle_id', vehicleId);
 
   const { data, error } = await query;
   if (error || !data) return null;
 
-  type E = { odometer_meters: number; volume_ml: number; filled_at: string };
+  type E = { odometer_meters: number; volume_ml: number; filled_at: string; vehicle_id: string | null };
   return computeConsumptionTrend(data as E[]);
 }
