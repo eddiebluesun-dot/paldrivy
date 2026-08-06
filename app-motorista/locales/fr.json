@@ -169,6 +169,7 @@
     "cockpit_above_goal": "+{{amount}} au-dessus de l'objectif ✓",
     "cockpit_above_goal_short": "au-dessus de l'objectif",
     "cockpit_daily_goal": "Obj. · {{goal}} · Reste {{remaining}}",
+    "cockpit_daily_goal_met": "Obj. · {{goal}} ✓",
     "active_days_month": "jours actifs ce mois",
     "donut_goal": "Objectif",
     "donut_done": "Réalisé",

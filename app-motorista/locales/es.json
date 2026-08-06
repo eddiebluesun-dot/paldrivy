@@ -212,6 +212,7 @@
                       "cockpit_above_goal":  "+{{amount}} sobre la meta ✓",
                       "cockpit_above_goal_short":  "encima de la meta",
                       "cockpit_daily_goal":  "Meta · {{goal}} · Faltan {{remaining}}",
+                      "cockpit_daily_goal_met":  "Meta · {{goal}} ✓",
                       "active_days_month":  "días activos este mes",
                       "donut_goal":  "Meta",
                       "donut_done":  "Logrado",

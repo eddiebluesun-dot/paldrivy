@@ -134,7 +134,9 @@ export function CockpitCard({
         {/* CENTER — earnings text */}
         <View style={styles.centerCol}>
           {metGoal ? (
-            <Text style={styles.metaLabel}>Meta! ✓</Text>
+            <Text style={styles.metaLabel}>{t('dashboard.cockpit_daily_goal_met', {
+              goal: formatMoney(dailyGoalCents, currencyCode, locale),
+            })}</Text>
           ) : hasGoal ? (
             <Text style={styles.metaLabel}>{t('dashboard.cockpit_daily_goal', {
               goal: formatMoney(dailyGoalCents, currencyCode, locale),
