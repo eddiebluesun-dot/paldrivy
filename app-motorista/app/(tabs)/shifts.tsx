@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -33,6 +34,7 @@ import {
   updateShift,
 } from '@/src/services/shifts';
 import { getUserPlatforms } from '@/src/services/platforms';
+import { getPriorSameDayPlatforms, reconcileShiftPlatforms } from '@/src/utils/shiftReconciliationUtils';
 import type { ShiftPause } from '@/src/types';
 import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
@@ -132,11 +134,15 @@ interface ShiftFormModalProps {
   existingShift?: Shift;
   distanceUnit: 'km' | 'mi';
   pauses?: ShiftPause[];
+  // Other shifts loaded on screen (recent + active), used to detect whether
+  // there's already an earlier completed shift the same day — see
+  // shiftReconciliationUtils.ts for why that matters.
+  otherShifts?: Shift[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, distanceUnit, pauses, onClose, onSaved }: ShiftFormModalProps) {
+function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, distanceUnit, pauses, otherShifts, onClose, onSaved }: ShiftFormModalProps) {
   const { t } = useTranslation();
   const [odometer, setOdometer] = useState('');
   const [platforms, setPlatforms] = useState<{ name: string; amount: string }[]>([{ name: '', amount: '' }]);
@@ -149,6 +155,20 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
   const [error, setError] = useState<string | null>(null);
   const [editStartedAt, setEditStartedAt] = useState('');
   const [editEndedAt, setEditEndedAt] = useState('');
+  // Opt-in: the driver confirms the amounts they just entered are the
+  // platform's cumulative total for the whole day (what Uber/99/etc. show),
+  // not this shift's isolated earnings. Defaults to off — unchecked behavior
+  // is unchanged from before this fix, so a driver who already enters their
+  // true per-shift split isn't silently corrupted by an aggressive guess.
+  const [isCumulativeDayTotal, setIsCumulativeDayTotal] = useState(false);
+
+  const priorSameDayPlatforms = useMemo(() => {
+    const anchor = mode === 'end' ? startedAt : existingShift?.started_at;
+    if (!anchor || !otherShifts?.length) return [];
+    return getPriorSameDayPlatforms(otherShifts, anchor, shiftId);
+  }, [mode, startedAt, existingShift?.started_at, otherShifts, shiftId]);
+
+  const hasPriorSameDayShift = priorSameDayPlatforms.length > 0;
 
   // Load saved platforms to pre-fill the end-shift form
   useEffect(() => {
@@ -207,6 +227,7 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       setEditStartedAt('');
       setEditEndedAt('');
     }
+    setIsCumulativeDayTotal(false);
     setError(null);
   }, [visible, shiftId, mode, distanceUnit]);
 
@@ -234,9 +255,14 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
     setSaving(true);
     try {
       const odometerMeters = odometer.trim() ? displayToMeters(parse(odometer), distanceUnit) : null;
-      const platformRows: ShiftPlatform[] = platforms
+      const rawPlatformRows: ShiftPlatform[] = platforms
         .filter((p) => p.name.trim() !== '' || p.amount.trim() !== '')
         .map((p) => ({ platform_name: p.name.trim(), amount_cents: decimalToCents(parse(p.amount)) }));
+      // If the driver confirmed these amounts are the platform's cumulative
+      // total for the day (not this shift alone), subtract what's already
+      // logged earlier the same day per platform. See
+      // shiftReconciliationUtils.ts for the full rationale.
+      const platformRows = reconcileShiftPlatforms(rawPlatformRows, priorSameDayPlatforms, isCumulativeDayTotal);
       const payload: EndShiftData = {
         odometer_end_meters: odometerMeters,
         platforms: platformRows,
@@ -328,6 +354,21 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
             <Ionicons name="add-circle-outline" size={16} color={Colors.accent} />
             <Text style={styles.addRowText}>{t('shift.add_platform')}</Text>
           </Pressable>
+
+          {hasPriorSameDayShift && (
+            <View style={styles.cumulativeToggleBox}>
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>{t('shift.cumulative_day_total_label')}</Text>
+                <Switch
+                  value={isCumulativeDayTotal}
+                  onValueChange={setIsCumulativeDayTotal}
+                  trackColor={{ true: Colors.accent, false: Colors.border }}
+                  thumbColor={Colors.onAccent}
+                />
+              </View>
+              <Text style={styles.cumulativeToggleHint}>{t('shift.cumulative_day_total_hint')}</Text>
+            </View>
+          )}
 
           <Text style={styles.fieldLabel}>{t('shift.rides_count_label')}</Text>
           <TextInput
@@ -696,6 +737,7 @@ export default function ShiftsScreen() {
           startedAt={activeShift.started_at}
           pauses={activeShift.pauses}
           distanceUnit={profile?.distance_unit ?? 'km'}
+          otherShifts={recentShifts}
           onClose={() => setEndModalVisible(false)}
           onSaved={handleShiftSaved}
         />
@@ -708,6 +750,7 @@ export default function ShiftsScreen() {
           shiftId={editingShift.id}
           existingShift={editingShift}
           distanceUnit={profile?.distance_unit ?? 'km'}
+          otherShifts={recentShifts}
           onClose={() => setEditingShift(null)}
           onSaved={handleEditSaved}
         />
@@ -828,6 +871,14 @@ const styles = StyleSheet.create({
   platformAmount: { width: 100, marginBottom: 0 },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
   addRowText: { color: Colors.accent, fontSize: 14, fontWeight: '600' },
+  cumulativeToggleBox: {
+    backgroundColor: Colors.surfaceAlt, borderRadius: Radius.input,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, marginBottom: Spacing.sm,
+  },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  switchLabel: { color: Colors.textPrimary, fontSize: 14, flex: 1 },
+  cumulativeToggleHint: { color: Colors.textSecondary, fontSize: 12, marginTop: Spacing.xs },
   costRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs, gap: Spacing.sm },
   costLabel: { color: Colors.textSecondary, fontSize: 14, flex: 1 },
   costInput: { width: 110, marginBottom: 0 },

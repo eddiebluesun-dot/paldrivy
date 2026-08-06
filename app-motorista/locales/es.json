@@ -229,6 +229,8 @@
                   "odometer_end":  "Km final",
                   "earnings":  "Ganancias por plataforma",
                   "add_platform":  "Agregar plataforma",
+                  "cumulative_day_total_label":  "¿Este valor ya es el total del día (no solo de este turno)?",
+                  "cumulative_day_total_hint":  "Si la app de la plataforma mostró el total ganado en todo el día —sumando turnos anteriores—, marca esta opción. Calculamos automáticamente cuánto fue solo de este turno.",
                   "costs":  "Costos del turno",
                   "tolls":  "Peajes",
                   "parking":  "Estacionamiento",

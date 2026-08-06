@@ -229,6 +229,8 @@
                   "odometer_end":  "Ending odometer",
                   "earnings":  "Earnings per platform",
                   "add_platform":  "Add platform",
+                  "cumulative_day_total_label":  "Is this amount already the day's total (not just this shift)?",
+                  "cumulative_day_total_hint":  "If the platform's app showed your whole day's earnings — including earlier shifts — check this. We'll work out how much was from this shift alone.",
                   "costs":  "Shift costs",
                   "tolls":  "Tolls",
                   "parking":  "Parking",

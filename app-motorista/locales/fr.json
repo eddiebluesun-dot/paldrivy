@@ -186,6 +186,8 @@
     "odometer_end": "Km final",
     "earnings": "Gains par plateforme",
     "add_platform": "Ajouter une plateforme",
+    "cumulative_day_total_label": "Ce montant est-il déjà le total du jour (pas seulement de ce service) ?",
+    "cumulative_day_total_hint": "Si l'appli de la plateforme a affiché le total gagné sur toute la journée — en incluant les services précédents — cochez cette case. Nous calculerons automatiquement la part de ce service seul.",
     "costs": "Coûts du trajet",
     "tolls": "Péages",
     "parking": "Parking",

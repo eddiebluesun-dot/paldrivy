@@ -186,6 +186,8 @@
     "odometer_end": "结束里程",
     "earnings": "各平台收入",
     "add_platform": "添加平台",
+    "cumulative_day_total_label": "这个金额是否已经是当天的总收入(不仅仅是本次班次)?",
+    "cumulative_day_total_hint": "如果平台应用显示的是当天全部收入(包含之前的班次),请勾选此项。我们会自动计算出本次班次单独的收入。",
     "costs": "行程费用",
     "tolls": "过路费",
     "parking": "停车费",
