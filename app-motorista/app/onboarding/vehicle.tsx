@@ -91,12 +91,12 @@ export default function VehicleScreen() {
         taxi_license_monthly_cents: isTaxi ? decimalToCents(parseFloat(taxiLicense) || 0) : 0,
         rental_contract_start_date: ownership === 'rent' && rentalStartDate ? rentalStartDate : null,
         rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
-          ? displayToMeters(parseFloat(rentalStartOdometer) || 0, 'km') : null,
+          ? displayToMeters(parseFloat(rentalStartOdometer.replace(',', '.')) || 0, 'km') : null,
         rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,
         rental_km_allowance_amount: ownership === 'rent' && allowancePeriod !== 'unlimited' && allowanceAmount
-          ? parseInt(allowanceAmount, 10) : null,
+          ? parseInt(allowanceAmount.replace(',', '.'), 10) : null,
         rental_km_excess_rate_cents: ownership === 'rent' && allowancePeriod !== 'unlimited' && excessRate
-          ? decimalToCents(parseFloat(excessRate) || 0) : null,
+          ? decimalToCents(parseFloat(excessRate.replace(',', '.')) || 0) : null,
       });
       router.push('/onboarding/platforms');
     } catch {
