@@ -2,6 +2,10 @@
 
 **Goal:** a complete, interactive walkthrough of the app's main screens, auto-shown to new users on first login and re-playable anytime from the "Mais" tab.
 
+## Existing system being replaced
+
+`src/components/TutorialModal.tsx` already exists and is auto-shown on first launch via `app/(tabs)/_layout.tsx` (gated by a device-local `SecureStore` flag, `paldrivy_tutorial_done`). It's a centered static modal carousel (emoji + title + body text, dot pagination) — not interactive, doesn't spotlight real UI elements, has no i18n (hardcoded Portuguese strings, unlike the rest of this app), and has no way to be replayed from "Mais" or anywhere else. It doesn't satisfy either of the owner's explicit choices (interactive spotlight tour; replayable from Mais). This plan REPLACES it entirely: `TutorialModal.tsx` and its `SecureStore`-based trigger are removed, superseded by the new `TourOverlay` + `profiles.tour_seen`.
+
 ## Architecture
 
 Build a custom, dependency-free spotlight overlay rather than adopting a third-party tour library. Rationale: this app's Expo SDK (56, very recent) makes third-party tour libraries a real compatibility risk — the exact class of problem this project already lost hours to today with a Node version mismatch. A small custom component is easy to keep working across Expo/RN upgrades.
