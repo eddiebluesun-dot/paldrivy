@@ -64,4 +64,24 @@ describe('getAdaptiveDailyGoalCents — the HOJE card "Meta" figure', () => {
     expect(getAdaptiveDailyGoalCents(0, [1, 2, 3, 4, 5, 6], 0, 2026, 8, 6)).toBe(0);
     expect(getAdaptiveDailyGoalCents(800000, [], 0, 2026, 8, 6)).toBe(0);
   });
+
+  // Regression for: "I added Saturday to my working days and the daily goal
+  // didn't change." Numbers here are the real production figures for the
+  // account that reported it (R$8.000 August goal, R$522,25 earned so far
+  // this month, checked on Aug 7th 2026) — R$356,09 is the exact figure the
+  // "HOJE" card showed. Reproducing it against Mon-Sat confirms the function
+  // DOES read the live working-days set; comparing against the Mon-Fri
+  // figure proves it's not a coincidence — the two must differ.
+  test('adding Saturday changes the figure — Mon-Fri vs Mon-Sat with real numbers', () => {
+    const goalCents = 800000; // R$8.000,00
+    const progressCents = 52225; // R$522,25 earned so far this month
+    const year = 2026, month = 8, today = 7; // Fri Aug 7 2026
+
+    const monFri = getAdaptiveDailyGoalCents(goalCents, [1, 2, 3, 4, 5], progressCents, year, month, today);
+    const monSat = getAdaptiveDailyGoalCents(goalCents, [1, 2, 3, 4, 5, 6], progressCents, year, month, today);
+
+    expect(monFri).toBe(43987); // R$439,87 — remaining ÷ 17 working days left
+    expect(monSat).toBe(35609); // R$356,09 — remaining ÷ 21 working days left (matches production)
+    expect(monSat).toBeLessThan(monFri); // adding a working day spreads the same remaining goal thinner
+  });
 });

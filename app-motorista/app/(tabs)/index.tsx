@@ -1231,7 +1231,14 @@ export default function DashboardScreen() {
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
       getActiveShift(uid),
-      getActiveGoal(uid),
+      // .catch() here (unlike a hard failure) matters specifically for the
+      // working-days-driven goal calc: getActiveGoal throws if Supabase ever
+      // returns >1 row for a user/type/starts_at (see the goals-table
+      // duplicate-row bug fixed in upsertMonthlyGoal). Without this, that
+      // one query failing silently aborts this entire Promise.all, so goal,
+      // dailyGoalCents and every other card on this screen stay frozen on
+      // stale data with only a barely-visible error banner as a clue.
+      getActiveGoal(uid).catch(() => null),
       getConsumptionTrend(uid, profile?.vehicle_id ?? null).catch(() => null),
       vehicleP,
       getMonthlyTotals(uid).catch(() => null),

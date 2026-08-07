@@ -314,13 +314,22 @@ export async function upsertMonthlyGoal(userId: string, targetCents: number, wor
   const now = new Date();
   const monthStr = toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1));
 
-  const { data: existing } = await supabase
+  // NOTE: must check `error` here (unlike a plain "not found" case, which is
+  // `data: null, error: null`). If two rows already exist for this
+  // user/type/starts_at, .maybeSingle() itself errors ("multiple rows
+  // returned"). Silently ignoring that and falling through to the insert
+  // branch below is what created runaway duplicate goal rows in production
+  // (goals.starts_at repeated across several rows) — each save after the
+  // first duplicate would find zero deterministic rows via this query,
+  // and insert yet another one instead of updating.
+  const { data: existing, error: lookupError } = await supabase
     .from('goals')
     .select('id')
     .eq('user_id', userId)
     .eq('type', 'monthly')
     .eq('starts_at', monthStr)
     .maybeSingle();
+  if (lookupError) throw lookupError;
 
   const payload: Record<string, unknown> = { target_amount_cents: targetCents };
   if (workingDays) payload.working_days = workingDays;
