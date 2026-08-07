@@ -15,8 +15,10 @@ import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
 import { upsertProfile } from '@/src/services/profile';
 import { createVehicle, updateVehicle } from '@/src/services/vehicles';
 import { createStripeCheckout } from '@/src/services/stripe';
+import { centsToDecimal, decimalToCents } from '@/src/utils/currency';
+import { displayToMeters, metersToDisplay } from '@/src/utils/units';
 import { Colors, Radius, Spacing } from '@/src/theme';
-import type { FuelType, Vehicle, WorkerType } from '@/src/types';
+import type { FuelType, OwnershipType, RentalAllowancePeriod, Vehicle, WorkerType } from '@/src/types';
 import {
   getNotificationsEnabled, setNotificationsEnabled,
   getDailyReminderTime, saveDailyReminderTime,
@@ -113,6 +115,8 @@ const LANG_ITEMS = [
 
 
 const FUEL_TYPES: FuelType[] = ['gasoline', 'ethanol', 'diesel', 'gnv', 'electric', 'hybrid'];
+const OWNERSHIP_TYPES: OwnershipType[] = ['own', 'rent', 'financed'];
+const ALLOWANCE_PERIODS: RentalAllowancePeriod[] = ['weekly', 'monthly', 'unlimited'];
 
 // ─── Quick Picker Modal ───────────────────────────────────────────────────────
 
@@ -273,6 +277,12 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
   const [year, setYear]             = useState('');
   const [fuel, setFuel]             = useState<FuelType>('gasoline');
   const [consumption, setConsumption] = useState('');
+  const [ownership, setOwnership]   = useState<OwnershipType>('own');
+  const [rentalStartDate, setRentalStartDate]         = useState('');
+  const [rentalStartOdometer, setRentalStartOdometer] = useState('');
+  const [allowancePeriod, setAllowancePeriod]         = useState<RentalAllowancePeriod>('unlimited');
+  const [allowanceAmount, setAllowanceAmount]         = useState('');
+  const [excessRate, setExcessRate]                   = useState('');
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState('');
 
@@ -282,22 +292,47 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
       setYear(String(vehicle.year)); setFuel(vehicle.fuel_type);
       const kmPerL = vehicle.avg_consumption_per_100 > 0 ? (100000 / vehicle.avg_consumption_per_100).toFixed(1) : '';
       setConsumption(kmPerL);
+      setOwnership(vehicle.ownership_type);
+      setRentalStartDate(vehicle.rental_contract_start_date ?? '');
+      setRentalStartOdometer(
+        vehicle.rental_contract_start_odometer != null
+          ? String(metersToDisplay(vehicle.rental_contract_start_odometer, 'km'))
+          : ''
+      );
+      setAllowancePeriod(vehicle.rental_km_allowance_period ?? 'unlimited');
+      setAllowanceAmount(vehicle.rental_km_allowance_amount != null ? String(vehicle.rental_km_allowance_amount) : '');
+      setExcessRate(vehicle.rental_km_excess_rate_cents != null ? String(centsToDecimal(vehicle.rental_km_excess_rate_cents)) : '');
     } else if (visible && !vehicle) {
       setBrand(''); setModel(''); setYear(String(new Date().getFullYear()));
       setFuel('gasoline'); setConsumption('');
+      setOwnership('own');
+      setRentalStartDate(''); setRentalStartOdometer('');
+      setAllowancePeriod('unlimited'); setAllowanceAmount(''); setExcessRate('');
     }
   }, [visible, vehicle]);
 
   async function handleSave() {
     if (!userId || !brand.trim() || !model.trim()) { setError(t('more.vehicle_required')); return; }
+    if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !rentalStartDate.trim()) { setError(t('more.vehicle_required')); return; }
     const kmPerLiter = parseFloat(consumption.replace(',', '.')) || 0;
     const mlPer100km = kmPerLiter > 0 ? Math.round((100 / kmPerLiter) * 1000) : 0;
+    const rentalFields = {
+      ownership_type: ownership,
+      rental_contract_start_date: ownership === 'rent' && rentalStartDate ? rentalStartDate : null,
+      rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
+        ? displayToMeters(parseFloat(rentalStartOdometer) || 0, 'km') : null,
+      rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,
+      rental_km_allowance_amount: ownership === 'rent' && allowancePeriod !== 'unlimited' && allowanceAmount
+        ? parseInt(allowanceAmount, 10) : null,
+      rental_km_excess_rate_cents: ownership === 'rent' && allowancePeriod !== 'unlimited' && excessRate
+        ? decimalToCents(parseFloat(excessRate) || 0) : null,
+    };
     setSaving(true); setError('');
     try {
       if (vehicle) {
-        await updateVehicle(vehicle.id, { brand: brand.trim(), model: model.trim(), year: parseInt(year) || vehicle.year, fuel_type: fuel, avg_consumption_per_100: mlPer100km });
+        await updateVehicle(vehicle.id, { brand: brand.trim(), model: model.trim(), year: parseInt(year) || vehicle.year, fuel_type: fuel, avg_consumption_per_100: mlPer100km, ...rentalFields });
       } else {
-        const newVehicle = await createVehicle({ user_id: userId, name: `${brand.trim()} ${model.trim()}`, brand: brand.trim(), model: model.trim(), year: parseInt(year) || new Date().getFullYear(), fuel_type: fuel, avg_consumption_per_100: mlPer100km, ownership_type: 'own', monthly_cost_cents: 0, monthly_insurance_cents: 0, current_odometer: 0, is_taxi: false, taxi_license_monthly_cents: 0 });
+        const newVehicle = await createVehicle({ user_id: userId, name: `${brand.trim()} ${model.trim()}`, brand: brand.trim(), model: model.trim(), year: parseInt(year) || new Date().getFullYear(), fuel_type: fuel, avg_consumption_per_100: mlPer100km, monthly_cost_cents: 0, monthly_insurance_cents: 0, current_odometer: 0, is_taxi: false, taxi_license_monthly_cents: 0, ...rentalFields });
         await upsertProfile({ id: userId, vehicle_id: newVehicle.id });
       }
       onSaved();
@@ -327,6 +362,74 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
           </View>
           <Text style={s.fieldLabel}>{t('more.vehicle_consumption')}</Text>
           <TextInput style={s.fieldInput} value={consumption} onChangeText={setConsumption} keyboardType="decimal-pad" placeholderTextColor={Colors.textSecondary} placeholder="Ex: 12,5" />
+
+          <Text style={s.fieldLabel}>{t('onboarding.ownership')}</Text>
+          <View style={s.fuelGrid}>
+            {OWNERSHIP_TYPES.map(o => (
+              <TouchableOpacity key={o} style={[s.fuelOption, ownership === o && s.fuelOptionActive]} onPress={() => setOwnership(o)}>
+                <Text style={[s.fuelOptionText, ownership === o && { color: Colors.accent }]}>{t(`onboarding.ownership_${o}`)}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {ownership === 'rent' ? (
+            <>
+              <Text style={s.fieldLabel}>{t('onboarding.rental_start_date')}</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={rentalStartDate}
+                onChangeText={setRentalStartDate}
+                placeholder="AAAA-MM-DD"
+                placeholderTextColor={Colors.textSecondary}
+                accessibilityLabel={t('onboarding.rental_start_date')}
+              />
+
+              <Text style={s.fieldLabel}>{t('onboarding.rental_start_odometer')}</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={rentalStartOdometer}
+                onChangeText={setRentalStartOdometer}
+                keyboardType="numeric"
+                placeholder={t('onboarding.rental_start_odometer_placeholder')}
+                placeholderTextColor={Colors.textSecondary}
+                accessibilityLabel={t('onboarding.rental_start_odometer')}
+              />
+
+              <Text style={s.fieldLabel}>{t('onboarding.allowance_period')}</Text>
+              <View style={s.fuelGrid}>
+                {ALLOWANCE_PERIODS.map(p => (
+                  <TouchableOpacity key={p} style={[s.fuelOption, allowancePeriod === p && s.fuelOptionActive]} onPress={() => setAllowancePeriod(p)}>
+                    <Text style={[s.fuelOptionText, allowancePeriod === p && { color: Colors.accent }]}>{t(`onboarding.allowance_${p}`)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {allowancePeriod !== 'unlimited' ? (
+                <>
+                  <Text style={s.fieldLabel}>{t('onboarding.allowance_amount')}</Text>
+                  <TextInput
+                    style={s.fieldInput}
+                    value={allowanceAmount}
+                    onChangeText={setAllowanceAmount}
+                    keyboardType="numeric"
+                    placeholderTextColor={Colors.textSecondary}
+                    accessibilityLabel={t('onboarding.allowance_amount')}
+                  />
+
+                  <Text style={s.fieldLabel}>{t('onboarding.excess_rate')}</Text>
+                  <TextInput
+                    style={s.fieldInput}
+                    value={excessRate}
+                    onChangeText={setExcessRate}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={Colors.textSecondary}
+                    accessibilityLabel={t('onboarding.excess_rate')}
+                  />
+                </>
+              ) : null}
+            </>
+          ) : null}
+
           <TouchableOpacity style={[s.saveBtn, saving && s.btnDisabled]} onPress={handleSave} disabled={saving}>
             {saving ? <ActivityIndicator color={Colors.onAccent} /> : <Text style={s.saveBtnText}>{t('more.vehicle_save')}</Text>}
           </TouchableOpacity>
