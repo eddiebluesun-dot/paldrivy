@@ -13,9 +13,27 @@ export interface PeriodBounds {
   periodEnd: Date;
 }
 
+// Adds `monthsToAdd` calendar months to `base`, clamping the result's
+// day-of-month to the last valid day of the target month. Date.UTC()
+// silently overflows out-of-range days (e.g. Date.UTC(2026, 1, 31) reads as
+// "31 days into February" and rolls into March), which would otherwise drift
+// a contract's anchor day forward permanently for any start date in the
+// 29th-31st range. Always anchors off `base`'s own day-of-month, so callers
+// must pass the ORIGINAL contract start date, not a previously-clamped
+// periodStart, to avoid compounding the clamp across periods.
+function addMonthClamped(base: Date, monthsToAdd: number): Date {
+  const day = base.getUTCDate();
+  const y = base.getUTCFullYear();
+  const m = base.getUTCMonth();
+  const lastDayOfTargetMonth = new Date(Date.UTC(y, m + monthsToAdd + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m + monthsToAdd, Math.min(day, lastDayOfTargetMonth)));
+}
+
 // Weekly: 7-day windows counted forward from contractStartDate. Monthly:
 // calendar-month-length windows anchored to the day-of-month of
-// contractStartDate (e.g. started the 5th -> periods run 5th-to-5th).
+// contractStartDate (e.g. started the 5th -> periods run 5th-to-5th),
+// clamped to the last valid day of the target month for start days that
+// don't exist in every month (29th-31st).
 export function getPeriodBounds(
   contractStartDate: string,
   allowancePeriod: RentalAllowancePeriod,
@@ -33,12 +51,17 @@ export function getPeriodBounds(
     return { periodStart, periodEnd };
   }
 
-  // monthly
-  let periodStart = new Date(start);
-  let periodEnd = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate()));
+  // monthly: both bounds are always computed from the ORIGINAL contract
+  // start date (never from a previous period's periodStart/periodEnd), so a
+  // clamp in one period (e.g. Feb 28 for a 31st-started contract) never
+  // becomes the anchor for the next period's clamp.
+  let n = 0;
+  let periodStart = addMonthClamped(start, n);
+  let periodEnd = addMonthClamped(start, n + 1);
   while (periodEnd <= now) {
-    periodStart = periodEnd;
-    periodEnd = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, periodStart.getUTCDate()));
+    n += 1;
+    periodStart = addMonthClamped(start, n);
+    periodEnd = addMonthClamped(start, n + 1);
   }
   return { periodStart, periodEnd };
 }
@@ -47,6 +70,7 @@ export interface RentalAllowanceStatus {
   periodStart: Date;
   periodEnd: Date;
   baselineMeters: number;
+  baselineIsEstimated: boolean; // true when baselineMeters came from the fallback (first in-period reading) rather than an explicit contract odometer
   currentOdometerMeters: number;
   usageKm: number;
   percentUsed: number;
@@ -79,9 +103,11 @@ export function computeRentalAllowanceStatus(params: {
   if (inPeriod.length === 0) return null;
 
   const isFirstPeriod = periodStart.getTime() === new Date(`${contractStartDate}T00:00:00.000Z`).getTime();
-  const baselineMeters = isFirstPeriod && contractStartOdometerMeters != null
-    ? contractStartOdometerMeters
+  const hasExplicitBaseline = isFirstPeriod && contractStartOdometerMeters != null;
+  const baselineMeters = hasExplicitBaseline
+    ? (contractStartOdometerMeters as number)
     : inPeriod[0].odometerMeters;
+  const baselineIsEstimated = !hasExplicitBaseline;
 
   const currentOdometerMeters = sorted[sorted.length - 1].odometerMeters;
   const usageMeters = Math.max(0, currentOdometerMeters - baselineMeters);
@@ -95,6 +121,7 @@ export function computeRentalAllowanceStatus(params: {
     periodStart,
     periodEnd,
     baselineMeters,
+    baselineIsEstimated,
     currentOdometerMeters,
     usageKm,
     percentUsed,

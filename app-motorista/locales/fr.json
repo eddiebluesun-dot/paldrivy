@@ -316,7 +316,9 @@
     "near_limit": "Vous avez déjà utilisé {{percent}} % du forfait km de cette période.",
     "over_limit": "Vous avez dépassé le forfait de {{km}} km (~{{cost}} de coût supplémentaire).",
     "add_expense": "Ajouter comme dépense",
-    "expense_added": "Dépense de kilométrage excédentaire ajoutée !"
+    "expense_added": "Dépense de kilométrage excédentaire ajoutée !",
+    "baseline_estimated": "Le suivi a commencé à partir de votre premier relevé de cette période.",
+    "expense_already_added": "Dépense déjà ajoutée"
   },
   "more": {
     "title": "Plus",

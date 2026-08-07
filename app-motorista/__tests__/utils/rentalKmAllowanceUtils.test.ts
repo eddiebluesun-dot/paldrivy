@@ -23,6 +23,30 @@ describe('getPeriodBounds', () => {
       periodEnd: new Date('2026-10-05T00:00:00.000Z'),
     });
   });
+
+  it('clamps the monthly period end to the last valid day instead of overflowing into the next month (contract started the 31st)', () => {
+    // contract started 2026-01-31. Naive Date.UTC(2026, 1, 31) overflows
+    // February's 28 days into 2026-03-03. period 1 must instead end on
+    // 2026-02-28 (last day of Feb), and period 2 -- checked at a "now" of
+    // 2026-03-02, which falls inside period 2 -- must stay anchored to the
+    // 31st of March (period 2's own last-valid-day clamp), not drift to the 3rd.
+    const bounds = getPeriodBounds('2026-01-31', 'monthly', new Date('2026-03-02T12:00:00Z'));
+    expect(bounds).toEqual({
+      periodStart: new Date('2026-02-28T00:00:00.000Z'),
+      periodEnd: new Date('2026-03-31T00:00:00.000Z'),
+    });
+  });
+
+  it('does not drift for a start day that exists in every month (regression check)', () => {
+    // contract started 2026-01-15 (a day with no overflow risk). "now" is
+    // 2026-03-20 -> period 3 is [2026-03-15, 2026-04-15), same as the
+    // unclamped calculation would give.
+    const bounds = getPeriodBounds('2026-01-15', 'monthly', new Date('2026-03-20T12:00:00Z'));
+    expect(bounds).toEqual({
+      periodStart: new Date('2026-03-15T00:00:00.000Z'),
+      periodEnd: new Date('2026-04-15T00:00:00.000Z'),
+    });
+  });
 });
 
 describe('computeRentalAllowanceStatus', () => {
@@ -47,6 +71,8 @@ describe('computeRentalAllowanceStatus', () => {
     expect(status?.percentUsed).toBeCloseTo(290 / 500);
     expect(status?.isNearLimit).toBe(false);
     expect(status?.isOverLimit).toBe(false);
+    // explicit contract-start odometer was available -> baseline is exact, not estimated
+    expect(status?.baselineIsEstimated).toBe(false);
   });
 
   it('falls back to the earliest in-period reading when no explicit start odometer is given (mid-contract signup)', () => {
@@ -62,6 +88,8 @@ describe('computeRentalAllowanceStatus', () => {
     // baseline = first reading (18332000) itself -> usage = 18622000-18332000 = 290km, identical
     // result here, but arrived at via the fallback path, not the explicit odometer
     expect(status?.usageKm).toBe(290);
+    // no explicit contract-start odometer -> baseline came from the fallback path, so it's estimated
+    expect(status?.baselineIsEstimated).toBe(true);
   });
 
   it('flags near-limit at >=90% and over-limit at >=100%, with an overage cost estimate', () => {

@@ -24,7 +24,7 @@ jest.mock('react-i18next', () => ({
 function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllowanceStatus {
   return {
     periodStart: new Date('2026-08-05'), periodEnd: new Date('2026-08-12'),
-    baselineMeters: 18332000, currentOdometerMeters: 18622000,
+    baselineMeters: 18332000, baselineIsEstimated: false, currentOdometerMeters: 18622000,
     usageKm: 290, percentUsed: 0.58, isNearLimit: false, isOverLimit: false,
     overageKm: 0, overageCostCents: 0,
     ...overrides,
@@ -56,5 +56,42 @@ describe('RentalAllowanceBanner', () => {
     const button = screen.getByRole('button');
     fireEvent.press(button);
     expect(onAddExpense).toHaveBeenCalledWith(3000);
+  });
+
+  it('shows a baseline-estimated disclosure on the warning banner when the baseline was estimated', () => {
+    render(<RentalAllowanceBanner
+      status={makeStatus({ isNearLimit: true, baselineIsEstimated: true, percentUsed: 0.92 })}
+      onAddExpense={jest.fn()}
+    />);
+    expect(screen.getByTestId('rental-allowance-baseline-estimated')).toBeTruthy();
+  });
+
+  it('shows a baseline-estimated disclosure on the over-limit banner when the baseline was estimated', () => {
+    render(<RentalAllowanceBanner
+      status={makeStatus({ isNearLimit: true, isOverLimit: true, baselineIsEstimated: true, percentUsed: 1.04, overageKm: 20, overageCostCents: 3000 })}
+      onAddExpense={jest.fn()}
+    />);
+    expect(screen.getByTestId('rental-allowance-baseline-estimated')).toBeTruthy();
+  });
+
+  it('does not show a baseline-estimated disclosure when the baseline came from an explicit odometer', () => {
+    render(<RentalAllowanceBanner
+      status={makeStatus({ isNearLimit: true, isOverLimit: true, baselineIsEstimated: false, percentUsed: 1.04, overageKm: 20, overageCostCents: 3000 })}
+      onAddExpense={jest.fn()}
+    />);
+    expect(screen.queryByTestId('rental-allowance-baseline-estimated')).toBeNull();
+  });
+
+  it('relabels the action as already-added and skips onAddExpense when alreadyLogged is true', () => {
+    const onAddExpense = jest.fn();
+    render(<RentalAllowanceBanner
+      status={makeStatus({ isNearLimit: true, isOverLimit: true, percentUsed: 1.04, overageKm: 20, overageCostCents: 3000 })}
+      onAddExpense={onAddExpense}
+      alreadyLogged
+    />);
+    const button = screen.getByRole('button');
+    expect(button.props.accessibilityLabel).toBe('Despesa já adicionada');
+    fireEvent.press(button);
+    expect(onAddExpense).not.toHaveBeenCalled();
   });
 });

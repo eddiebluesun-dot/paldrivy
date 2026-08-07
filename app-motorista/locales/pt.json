@@ -359,7 +359,9 @@
                              "near_limit":  "Você já usou {{percent}}% da franquia de km deste período.",
                              "over_limit":  "Você excedeu a franquia em {{km}} km (~{{cost}} de custo extra).",
                              "add_expense":  "Adicionar como despesa",
-                             "expense_added":  "Despesa de km excedente adicionada!"
+                             "expense_added":  "Despesa de km excedente adicionada!",
+                             "baseline_estimated":  "Contagem iniciada a partir do seu primeiro registro neste período.",
+                             "expense_already_added":  "Despesa já adicionada"
                          },
     "more":  {
                  "title":  "Mais",

@@ -38,7 +38,7 @@ import { MonthHistoryCard } from '@/src/components/MonthHistoryCard';
 import { MonthDetailSheet } from '@/src/components/MonthDetailSheet';
 import { RentalAllowanceBanner } from '@/src/components/RentalAllowanceBanner';
 import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
-import { addExpense } from '@/src/services/expenses';
+import { addExpense, hasExpenseSince } from '@/src/services/expenses';
 import type { RentalAllowanceStatus } from '@/src/utils/rentalKmAllowanceUtils';
 import type { Shift, Vehicle } from '@/src/types';
 
@@ -1218,6 +1218,7 @@ export default function DashboardScreen() {
   const [platformBreakdown, setPlatformBreakdown] = useState<PlatformItem[]>([]);
   const [rentalStatus, setRentalStatus] = useState<RentalAllowanceStatus | null>(null);
   const [overageExpenseAdded, setOverageExpenseAdded] = useState(false);
+  const [overageAlreadyLogged, setOverageAlreadyLogged] = useState(false);
 
   function refreshNotifCount() {
     getInAppNotifications().then(ns => setNotifCount(ns.length)).catch(() => {});
@@ -1252,7 +1253,20 @@ export default function DashboardScreen() {
         return null;
       }
     })();
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, platforms, rentalStatusData] = await Promise.all([
+    // Only over the limit does the "Adicionar como despesa" button (and its
+    // duplicate-guard) matter, so this stays a no-op query the rest of the
+    // time. Failure here must not block the dashboard load either -- worst
+    // case the button is offered again and handleAddOverageExpense's own
+    // guard catches the duplicate before insert.
+    const overageAlreadyLoggedP: Promise<boolean> = rentalStatusP.then(async status => {
+      if (!status || !status.isOverLimit) return false;
+      try {
+        return await hasExpenseSince(uid, 'km_excedente', status.periodStart.toISOString().slice(0, 10));
+      } catch {
+        return false;
+      }
+    });
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, platforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -1275,6 +1289,7 @@ export default function DashboardScreen() {
       getPreviousMonthGross(uid).catch(() => 0),
       getMonthPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
       rentalStatusP,
+      overageAlreadyLoggedP,
     ]);
     setSummary(todaySummary);
     setWeekBuckets(buckets);
@@ -1284,6 +1299,7 @@ export default function DashboardScreen() {
     setConsumptionTrend(consumption);
     setVehicleInfo(vehicleData as VehicleInfo | null);
     setRentalStatus(rentalStatusData);
+    setOverageAlreadyLogged(overageAlreadyLoggedData);
     setMonthlyTotals(mTotals);
     setWeekTotals(wTotals);
     setMonthHistory(history);
@@ -1315,9 +1331,20 @@ export default function DashboardScreen() {
   // estimated overage cost as a one-off expense. Success feedback follows
   // the same inline checkmark-banner pattern as profile_saved/settings_saved
   // in more.tsx (auto-hides after 3s) rather than introducing a toast lib.
+  // Re-checks for an existing km_excedente expense this period right before
+  // inserting (rather than trusting only the loadData-computed
+  // overageAlreadyLogged flag) so a second tap in the same session -- before
+  // loadData has re-run -- can't still slip a duplicate through.
   async function handleAddOverageExpense(overageCostCents: number) {
-    if (!userId) return;
+    if (!userId || !rentalStatus) return;
     try {
+      const alreadyLogged = await hasExpenseSince(
+        userId, 'km_excedente', rentalStatus.periodStart.toISOString().slice(0, 10)
+      );
+      if (alreadyLogged) {
+        setOverageAlreadyLogged(true);
+        return;
+      }
       await addExpense({
         user_id: userId,
         category: 'km_excedente',
@@ -1454,6 +1481,7 @@ export default function DashboardScreen() {
         <RentalAllowanceBanner
           status={rentalStatus}
           onAddExpense={handleAddOverageExpense}
+          alreadyLogged={overageAlreadyLogged}
           currencyCode={currencyCode}
           locale={locale}
         />

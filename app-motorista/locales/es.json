@@ -359,7 +359,9 @@
                              "near_limit":  "Ya usaste el {{percent}}% de la franquicia de km de este período.",
                              "over_limit":  "Superaste la franquicia en {{km}} km (~{{cost}} de costo extra).",
                              "add_expense":  "Agregar como gasto",
-                             "expense_added":  "¡Gasto de km excedente agregado!"
+                             "expense_added":  "¡Gasto de km excedente agregado!",
+                             "baseline_estimated":  "El conteo comenzó a partir de tu primer registro en este período.",
+                             "expense_already_added":  "Gasto ya agregado"
                          },
     "more":  {
                  "title":  "Más",

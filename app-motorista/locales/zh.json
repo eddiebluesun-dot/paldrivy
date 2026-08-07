@@ -316,7 +316,9 @@
     "near_limit": "本周期已使用 {{percent}}% 的公里配额。",
     "over_limit": "已超出配额 {{km}} 公里（额外费用约 {{cost}}）。",
     "add_expense": "添加为支出",
-    "expense_added": "已添加超额里程支出！"
+    "expense_added": "已添加超额里程支出！",
+    "baseline_estimated": "本周期的公里数统计从您的第一条记录开始。",
+    "expense_already_added": "支出已添加"
   },
   "more": {
     "title": "更多",

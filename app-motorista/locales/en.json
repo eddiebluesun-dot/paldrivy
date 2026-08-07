@@ -359,7 +359,9 @@
                              "near_limit":  "You've used {{percent}}% of this period's km allowance.",
                              "over_limit":  "You've exceeded the allowance by {{km}} km (~{{cost}} extra cost).",
                              "add_expense":  "Add as expense",
-                             "expense_added":  "Overage expense added!"
+                             "expense_added":  "Overage expense added!",
+                             "baseline_estimated":  "Tracking started from your first record this period.",
+                             "expense_already_added":  "Expense already added"
                          },
     "more":  {
                  "title":  "More",
