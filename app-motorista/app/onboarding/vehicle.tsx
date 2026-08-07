@@ -19,7 +19,7 @@ import { getProfile } from '../../src/services/profile';
 import { decimalToCents } from '../../src/utils/currency';
 import { displayToMeters } from '../../src/utils/units';
 import { Colors, Radius, Spacing } from '../../src/theme';
-import type { FuelType, OwnershipType } from '../../src/types';
+import type { FuelType, OwnershipType, RentalAllowancePeriod } from '../../src/types';
 
 export default function VehicleScreen() {
   const { t } = useTranslation();
@@ -37,6 +37,11 @@ export default function VehicleScreen() {
   const [isTaxi, setIsTaxi] = useState(false);
   const [taxiLicense, setTaxiLicense] = useState('0');
   const [odometer, setOdometer] = useState('0');
+  const [rentalStartDate, setRentalStartDate] = useState('');
+  const [rentalStartOdometer, setRentalStartOdometer] = useState('');
+  const [allowancePeriod, setAllowancePeriod] = useState<RentalAllowancePeriod>('unlimited');
+  const [allowanceAmount, setAllowanceAmount] = useState('');
+  const [excessRate, setExcessRate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -54,6 +59,10 @@ export default function VehicleScreen() {
   const handleSave = async () => {
     setError('');
     if (!brand.trim() || !model.trim()) {
+      setError(t('common.required'));
+      return;
+    }
+    if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !rentalStartDate.trim()) {
       setError(t('common.required'));
       return;
     }
@@ -80,6 +89,14 @@ export default function VehicleScreen() {
         current_odometer: displayToMeters(parseFloat(odometer) || 0, 'km'),
         is_taxi: isTaxi,
         taxi_license_monthly_cents: isTaxi ? decimalToCents(parseFloat(taxiLicense) || 0) : 0,
+        rental_contract_start_date: ownership === 'rent' && rentalStartDate ? rentalStartDate : null,
+        rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
+          ? displayToMeters(parseFloat(rentalStartOdometer) || 0, 'km') : null,
+        rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,
+        rental_km_allowance_amount: ownership === 'rent' && allowancePeriod !== 'unlimited' && allowanceAmount
+          ? parseInt(allowanceAmount, 10) : null,
+        rental_km_excess_rate_cents: ownership === 'rent' && allowancePeriod !== 'unlimited' && excessRate
+          ? decimalToCents(parseFloat(excessRate) || 0) : null,
       });
       router.push('/onboarding/platforms');
     } catch {
@@ -164,6 +181,66 @@ export default function VehicleScreen() {
             { label: t('onboarding.ownership_financed'), value: 'financed' },
           ]}
         />
+
+        {ownership === 'rent' ? (
+          <>
+            <Text style={s.label}>{t('onboarding.rental_start_date')}</Text>
+            <TextInput
+              style={s.input}
+              value={rentalStartDate}
+              onChangeText={setRentalStartDate}
+              placeholder="AAAA-MM-DD"
+              placeholderTextColor={Colors.textSecondary}
+              accessibilityLabel={t('onboarding.rental_start_date')}
+            />
+
+            <Text style={s.label}>{t('onboarding.rental_start_odometer')}</Text>
+            <TextInput
+              style={s.input}
+              value={rentalStartOdometer}
+              onChangeText={setRentalStartOdometer}
+              keyboardType="numeric"
+              placeholder={t('onboarding.rental_start_odometer_placeholder')}
+              placeholderTextColor={Colors.textSecondary}
+              accessibilityLabel={t('onboarding.rental_start_odometer')}
+            />
+
+            <Text style={s.label}>{t('onboarding.allowance_period')}</Text>
+            <Select
+              value={allowancePeriod}
+              onValueChange={(v) => setAllowancePeriod(v as RentalAllowancePeriod)}
+              items={[
+                { label: t('onboarding.allowance_weekly'), value: 'weekly' },
+                { label: t('onboarding.allowance_monthly'), value: 'monthly' },
+                { label: t('onboarding.allowance_unlimited'), value: 'unlimited' },
+              ]}
+            />
+
+            {allowancePeriod !== 'unlimited' ? (
+              <>
+                <Text style={s.label}>{t('onboarding.allowance_amount')}</Text>
+                <TextInput
+                  style={s.input}
+                  value={allowanceAmount}
+                  onChangeText={setAllowanceAmount}
+                  keyboardType="numeric"
+                  placeholderTextColor={Colors.textSecondary}
+                  accessibilityLabel={t('onboarding.allowance_amount')}
+                />
+
+                <Text style={s.label}>{t('onboarding.excess_rate')}</Text>
+                <TextInput
+                  style={s.input}
+                  value={excessRate}
+                  onChangeText={setExcessRate}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={Colors.textSecondary}
+                  accessibilityLabel={t('onboarding.excess_rate')}
+                />
+              </>
+            ) : null}
+          </>
+        ) : null}
 
         <Text style={s.label}>{t('onboarding.monthly_cost')}</Text>
         <TextInput
