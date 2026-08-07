@@ -16,8 +16,8 @@ Build a custom, dependency-free spotlight overlay rather than adopting a third-p
 
 ## Trigger logic
 
-- **Auto-start for new users**: `profiles.onboarding_done` already exists in the schema (boolean, default `false`) — reuse it, don't add a new column. On the dashboard's mount, if `onboarding_done === false`, start the tour automatically (after the screen's first paint, so there's something real to spotlight). On tour completion OR skip, set `onboarding_done = true`. This field may already be used elsewhere for other onboarding purposes — check before wiring, and if so, confirm setting it here doesn't skip some other onboarding step unintentionally.
-- **Manual replay**: new "Mais" menu item ("Tutorial do app" / "Como usar") that starts the same tour on demand, regardless of `onboarding_done`'s value. Replaying does NOT reset `onboarding_done` — it's already `true` for anyone who can reach this menu item by definition (new users only get the auto-trigger before it flips to true).
+- **Auto-start for new users**: verified during planning that `profiles.onboarding_done` is ALREADY fully consumed by `app/_layout.tsx`'s routing (redirects to `/onboarding/locale` when false, to the main app when true) — by the time any user reaches the dashboard, it's already `true`, so reusing it here would mean the tour trigger could never fire. Add a new, separate `profiles.tour_seen` boolean column (default `false`) instead. On the dashboard's mount, if `tour_seen === false`, start the tour automatically (after the screen's first paint, so there's something real to spotlight). On tour completion OR skip, set `tour_seen = true`.
+- **Manual replay**: new "Mais" menu item ("Tutorial do app" / "Como usar") that starts the same tour on demand, regardless of `tour_seen`'s value. Replaying does NOT reset `tour_seen` — it's already `true` for anyone who has already seen it once, and setting it again is a harmless no-op.
 
 ## Coverage (first version, per the owner's scope choice)
 
