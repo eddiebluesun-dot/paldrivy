@@ -20,7 +20,11 @@
     "verify_email_resend_wait": "{{seconds}}秒后重新发送",
     "verify_email_resent": "邮件已重新发送！",
     "verify_email_already_confirmed": "已确认，去登录",
-    "verify_email_wrong_email": "邮箱有误？返回"
+    "verify_email_wrong_email": "邮箱有误？返回",
+    "email_banner_title": "确认您的邮箱",
+    "email_banner_body": "点击重新发送确认链接。",
+    "email_banner_resend": "重新发送",
+    "email_banner_dismiss": "关闭邮箱确认提示"
   },
   "consent": {
     "title": "条款与隐私",
@@ -296,7 +300,14 @@
     "food": "餐饮",
     "taxes": "税款 / 社保",
     "health_insurance": "医疗保险",
-    "other": "其他"
+    "other": "其他",
+    "km_excedente": "超额里程（租车）"
+  },
+  "rental_allowance": {
+    "near_limit": "本周期已使用 {{percent}}% 的公里配额。",
+    "over_limit": "已超出配额 {{km}} 公里（额外费用约 {{cost}}）。",
+    "add_expense": "添加为支出",
+    "expense_added": "已添加超额里程支出！"
   },
   "more": {
     "title": "更多",

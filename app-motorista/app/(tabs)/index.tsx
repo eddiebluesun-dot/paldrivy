@@ -36,7 +36,11 @@ import { StreakBar } from '@/src/components/StreakBar';
 import { CockpitCard } from '@/src/components/CockpitCard';
 import { MonthHistoryCard } from '@/src/components/MonthHistoryCard';
 import { MonthDetailSheet } from '@/src/components/MonthDetailSheet';
-import type { Shift } from '@/src/types';
+import { RentalAllowanceBanner } from '@/src/components/RentalAllowanceBanner';
+import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
+import { addExpense } from '@/src/services/expenses';
+import type { RentalAllowanceStatus } from '@/src/utils/rentalKmAllowanceUtils';
+import type { Shift, Vehicle } from '@/src/types';
 
 function secondsToHHMM(s: number): string {
   return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
@@ -1212,6 +1216,8 @@ export default function DashboardScreen() {
   const [moodStats, setMoodStats] = useState<MonthMoodStats | null>(null);
   const [prevMonthGross, setPrevMonthGross] = useState(0);
   const [platformBreakdown, setPlatformBreakdown] = useState<PlatformItem[]>([]);
+  const [rentalStatus, setRentalStatus] = useState<RentalAllowanceStatus | null>(null);
+  const [overageExpenseAdded, setOverageExpenseAdded] = useState(false);
 
   function refreshNotifCount() {
     getInAppNotifications().then(ns => setNotifCount(ns.length)).catch(() => {});
@@ -1221,12 +1227,32 @@ export default function DashboardScreen() {
   useEffect(() => { refreshNotifCount(); }, []);
 
   const loadData = useCallback(async (uid: string) => {
+    // Extended beyond the display-only columns to also pull the 5 rental
+    // km-allowance fields, so the same fetch can feed both VehicleInfo (the
+    // pill) and getRentalAllowanceStatus (the dashboard hero banner) without
+    // a second query.
+    const vehicleColumns = 'id, user_id, brand, model, year, fuel_type, avg_consumption_per_100, ownership_type, rental_contract_start_date, rental_contract_start_odometer, rental_km_allowance_period, rental_km_allowance_amount, rental_km_excess_rate_cents';
     const vehicleP = profile?.vehicle_id
-      ? supabase.from('vehicles').select('brand, model, year, fuel_type, avg_consumption_per_100')
+      ? supabase.from('vehicles').select(vehicleColumns)
           .eq('id', profile.vehicle_id).maybeSingle().then(r => r.data, () => null)
-      : supabase.from('vehicles').select('brand, model, year, fuel_type, avg_consumption_per_100')
+      : supabase.from('vehicles').select(vehicleColumns)
           .eq('user_id', uid).order('created_at', { ascending: false }).limit(1).maybeSingle().then(r => r.data, () => null);
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, platforms] = await Promise.all([
+    // try/catch here mirrors getActiveGoal's .catch() pattern below: a
+    // rental-status fetch failure must not abort this whole Promise.all and
+    // freeze every other card on stale data. Wrapped in an async IIFE
+    // (rather than vehicleP.then(...).catch(...)) because vehicleP resolves
+    // through a Supabase query builder's PromiseLike, which only exposes
+    // .then, not .catch.
+    const rentalStatusP: Promise<RentalAllowanceStatus | null> = (async () => {
+      const v = await vehicleP;
+      if (!v) return null;
+      try {
+        return await getRentalAllowanceStatus(v as unknown as Vehicle);
+      } catch {
+        return null;
+      }
+    })();
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, platforms, rentalStatusData] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -1248,6 +1274,7 @@ export default function DashboardScreen() {
       getMonthMoodStats(uid).catch(() => null),
       getPreviousMonthGross(uid).catch(() => 0),
       getMonthPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
+      rentalStatusP,
     ]);
     setSummary(todaySummary);
     setWeekBuckets(buckets);
@@ -1256,6 +1283,7 @@ export default function DashboardScreen() {
     setGoal(goalData);
     setConsumptionTrend(consumption);
     setVehicleInfo(vehicleData as VehicleInfo | null);
+    setRentalStatus(rentalStatusData);
     setMonthlyTotals(mTotals);
     setWeekTotals(wTotals);
     setMonthHistory(history);
@@ -1281,6 +1309,31 @@ export default function DashboardScreen() {
   async function handleGoalSaved() {
     setGoalModalVisible(false);
     if (userId) await loadData(userId).catch(() => {});
+  }
+
+  // "Adicionar como despesa" on the over-limit rental banner: logs the
+  // estimated overage cost as a one-off expense. Success feedback follows
+  // the same inline checkmark-banner pattern as profile_saved/settings_saved
+  // in more.tsx (auto-hides after 3s) rather than introducing a toast lib.
+  async function handleAddOverageExpense(overageCostCents: number) {
+    if (!userId) return;
+    try {
+      await addExpense({
+        user_id: userId,
+        category: 'km_excedente',
+        amount_cents: overageCostCents,
+        expense_date: new Date().toISOString().slice(0, 10),
+        description: null,
+        recurring: false,
+        recurring_frequency: null,
+      });
+      setOverageExpenseAdded(true);
+      setTimeout(() => setOverageExpenseAdded(false), 3000);
+      await loadData(userId).catch(() => {});
+    } catch (e) {
+      console.error('addExpense (km_excedente) failed:', e);
+      setFetchError(true);
+    }
   }
 
   const handleMonthlyDayPress = useCallback((day: number) => {
@@ -1397,6 +1450,20 @@ export default function DashboardScreen() {
         </View>
 
         {fetchError && <Text style={styles.errorBanner}>{t('common.error')}</Text>}
+
+        <RentalAllowanceBanner
+          status={rentalStatus}
+          onAddExpense={handleAddOverageExpense}
+          currencyCode={currencyCode}
+          locale={locale}
+        />
+
+        {overageExpenseAdded && (
+          <View style={styles.successBanner}>
+            <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+            <Text style={styles.successText}>{t('rental_allowance.expense_added')}</Text>
+          </View>
+        )}
 
         {vehicleInfo && (
           <VehiclePill
@@ -1534,6 +1601,8 @@ const styles = StyleSheet.create({
   avatarText: { color: Colors.onAccent, fontSize: 17, fontWeight: '800' },
   // error
   errorBanner: { color: Colors.error, fontSize: 14, backgroundColor: Colors.errorBg, padding: Spacing.sm, borderRadius: Radius.input, marginBottom: Spacing.md },
+  successBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.successBg, borderRadius: Radius.input, padding: Spacing.sm, marginBottom: Spacing.md, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' },
+  successText: { color: Colors.success, fontSize: 14, fontWeight: '500' },
   // active shift
   activeBanner: {
     backgroundColor: Colors.successBg, borderRadius: Radius.card, padding: Spacing.md,
