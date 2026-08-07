@@ -5,6 +5,7 @@ export type OwnershipType = 'own' | 'rent' | 'financed';
 export type PlatformType = 'rideshare' | 'taxi_app' | 'taxi_conventional' | 'delivery';
 export type WorkerType = 'driver' | 'motoboy';
 export type RecurringFrequency = 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+export type RentalAllowancePeriod = 'weekly' | 'monthly' | 'unlimited';
 
 export type GoalType = 'bruto' | 'liquido';
 
@@ -49,6 +50,11 @@ export interface Vehicle {
   target_swap_budget_cents?: number;
   is_taxi: boolean;
   taxi_license_monthly_cents: number;
+  rental_contract_start_date?: string | null;
+  rental_contract_start_odometer?: number | null;
+  rental_km_allowance_period?: RentalAllowancePeriod | null;
+  rental_km_allowance_amount?: number | null;
+  rental_km_excess_rate_cents?: number | null;
   created_at: string;
 }
 
