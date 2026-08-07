@@ -20,7 +20,11 @@
     "verify_email_resend_wait": "Renvoyer dans {{seconds}}s",
     "verify_email_resent": "E-mail renvoyé !",
     "verify_email_already_confirmed": "Déjà confirmé, se connecter",
-    "verify_email_wrong_email": "Mauvais e-mail ? Retour"
+    "verify_email_wrong_email": "Mauvais e-mail ? Retour",
+    "email_banner_title": "Confirmez votre e-mail",
+    "email_banner_body": "Appuyez pour renvoyer le lien de confirmation.",
+    "email_banner_resend": "Renvoyer",
+    "email_banner_dismiss": "Ignorer l'avis de confirmation d'e-mail"
   },
   "consent": {
     "title": "Conditions et Confidentialité",

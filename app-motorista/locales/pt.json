@@ -20,7 +20,11 @@
                  "verify_email_resend_wait":  "Reenviar em {{seconds}}s",
                  "verify_email_resent":  "E-mail reenviado!",
                  "verify_email_already_confirmed":  "Já confirmei, entrar",
-                 "verify_email_wrong_email":  "E-mail errado? Voltar"
+                 "verify_email_wrong_email":  "E-mail errado? Voltar",
+                 "email_banner_title":  "Confirme seu e-mail",
+                 "email_banner_body":  "Toque para reenviar o link de confirmação.",
+                 "email_banner_resend":  "Reenviar",
+                 "email_banner_dismiss":  "Dispensar aviso de confirmação de e-mail"
              },
     "consent":  {
                     "title":  "Termos e Privacidade",

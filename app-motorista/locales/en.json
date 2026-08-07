@@ -20,7 +20,11 @@
                  "verify_email_resend_wait":  "Resend in {{seconds}}s",
                  "verify_email_resent":  "Email resent!",
                  "verify_email_already_confirmed":  "I confirmed it, sign in",
-                 "verify_email_wrong_email":  "Wrong email? Go back"
+                 "verify_email_wrong_email":  "Wrong email? Go back",
+                 "email_banner_title":  "Confirm your email",
+                 "email_banner_body":  "Tap to resend the confirmation link.",
+                 "email_banner_resend":  "Resend",
+                 "email_banner_dismiss":  "Dismiss email confirmation notice"
              },
     "consent":  {
                     "title":  "Terms \u0026 Privacy",
