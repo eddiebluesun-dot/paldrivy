@@ -161,33 +161,26 @@ export async function getStreak(userId: string): Promise<number> {
 
   const localDate = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const monthStartStr = localDate(monthStart);
-  const monthEndStr = localDate(monthEnd);
 
-  const [shiftsRes, expRes] = await Promise.all([
-    supabase
-      .from('shifts')
-      .select('started_at')
-      .eq('user_id', userId)
-      .gte('started_at', monthStart.toISOString())
-      .lt('started_at', monthEnd.toISOString())
-      .not('ended_at', 'is', null),
-    supabase
-      .from('expenses')
-      .select('expense_date')
-      .eq('user_id', userId)
-      .gte('expense_date', monthStartStr)
-      .lt('expense_date', monthEndStr),
-  ]);
+  // "Active day" = a day with at least one completed shift. Logging an
+  // expense on a day with no shift does NOT count — see
+  // src/utils/cockpitUtils.ts#countActiveDays for why (verified against
+  // production data after this drifted to include expense-only days).
+  const { data } = await supabase
+    .from('shifts')
+    .select('started_at')
+    .eq('user_id', userId)
+    .gte('started_at', monthStart.toISOString())
+    .lt('started_at', monthEnd.toISOString())
+    .not('ended_at', 'is', null);
 
-  const shiftDates = (shiftsRes.data ?? []).map(
+  const shiftDates = (data ?? []).map(
     (row: { started_at: string }) => localDate(new Date(row.started_at)),
   );
-  const expenseDates = (expRes.data ?? []).map((row: { expense_date: string }) => row.expense_date);
 
   // Single source of truth for "days active this month" — see
   // src/utils/cockpitUtils.ts#countActiveDays. Every UI element that shows
   // this figure (StreakBar today; the HOJE card previously) must read from
   // this function's result, not recompute it independently.
-  return countActiveDays(shiftDates, expenseDates);
+  return countActiveDays(shiftDates);
 }

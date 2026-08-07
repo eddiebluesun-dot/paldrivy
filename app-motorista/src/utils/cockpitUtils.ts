@@ -67,13 +67,17 @@ export function getAdaptiveDailyGoalCents(
 
 // Single definition of "active day" for the current month, used by every
 // place that shows a "days active this month" figure (the streak badge near
-// the vehicle picker and, previously, a second badge on the HOJE card). A
-// day counts as active if it has at least one completed shift OR at least
-// one logged expense; duplicate shifts/expenses on the same day still count
-// once. Callers pass already-extracted 'YYYY-MM-DD' date strings so this
-// stays pure and independent of Supabase/timezone concerns.
-export function countActiveDays(shiftDates: string[], expenseDates: string[]): number {
-  return new Set([...shiftDates, ...expenseDates]).size;
+// the vehicle picker; the "DIAS DO MÊS" bars on Resumo do Mês, which are
+// driven by getMonthlyBucketsForMonth — shifts only). A day counts as active
+// only if it has at least one completed shift; duplicate shifts on the same
+// day still count once. Logging an expense (e.g. a fuel fill-up or
+// maintenance cost) on a day with no shift does NOT make that day "active" —
+// verified against production data where an expense-only day was inflating
+// this count from the correct 2 to a wrong 4. Callers pass already-extracted
+// 'YYYY-MM-DD' date strings so this stays pure and independent of
+// Supabase/timezone concerns.
+export function countActiveDays(shiftDates: string[]): number {
+  return new Set(shiftDates).size;
 }
 
 export function streakFromDates(activeDates: string[], todayStr: string): number {

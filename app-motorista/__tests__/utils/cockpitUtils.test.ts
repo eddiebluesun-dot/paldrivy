@@ -87,13 +87,24 @@ describe('getAdaptiveDailyGoalCents — the HOJE card "Meta" figure', () => {
   });
 });
 
-// Regression for the production bug where the "🔥 N dias ativos" badge near
-// the vehicle picker (fed by getStreak → this function) and the "🏅 N dias
-// ativos" badge on the HOJE card (which used to independently filter
-// monthlyBuckets by `net_cents > 0`, shifts only) showed two different
-// numbers for the same moment in time — 4 vs 2. Both call sites must now
-// route through this single function so there's no way for them to drift
-// apart again.
+// Regression for two production bugs in a row on this same metric:
+//
+// 1. The "🔥 N dias ativos" badge near the vehicle picker (fed by
+//    getStreak → this function) and the "🏅 N dias ativos" badge on the
+//    HOJE card (which used to independently filter monthlyBuckets by
+//    `net_cents > 0`, shifts only) showed two different numbers for the
+//    same moment in time — 4 vs 2. Both call sites now route through this
+//    single function so there's no way for them to drift apart again.
+//
+// 2. The first fix for #1 unified both call sites onto the WRONG
+//    definition — "shift OR expense that day" — without checking it
+//    against real data. Verified against production (account
+//    db85eea7-8cd7-464d-ba68-05f1e8a15560, August 2026): 2 distinct shift
+//    days (Aug 3, Aug 6) but 2 additional expense-only days (Aug 9, Aug 16)
+//    with no shift, which the union counted as "active" and inflated the
+//    badge to 4 when the real, correct answer — confirmed by the
+//    shift-only "DIAS DO MÊS" bars on Resumo do Mês — is 2. "Active day"
+//    means "day with a shift," full stop; expenses never factor in.
 describe('countActiveDays — single source of truth for "days active this month"', () => {
   test('a day with 2 shifts still counts as 1 active day, not 2', () => {
     const shiftDates = [
@@ -102,31 +113,22 @@ describe('countActiveDays — single source of truth for "days active this month
       '2026-08-03',
       '2026-08-07',
     ];
-    expect(countActiveDays(shiftDates, [])).toBe(3);
-  });
-
-  test('a day with only a logged expense (no shift) still counts as active', () => {
-    const shiftDates = ['2026-08-01', '2026-08-03'];
-    const expenseDates = ['2026-08-05']; // fuel/expense logged, no shift that day
-    expect(countActiveDays(shiftDates, expenseDates)).toBe(3);
-  });
-
-  test('a shift and an expense on the same day count once', () => {
-    const shiftDates = ['2026-08-01'];
-    const expenseDates = ['2026-08-01'];
-    expect(countActiveDays(shiftDates, expenseDates)).toBe(1);
+    expect(countActiveDays(shiftDates)).toBe(3);
   });
 
   test('no activity gives 0', () => {
-    expect(countActiveDays([], [])).toBe(0);
+    expect(countActiveDays([])).toBe(0);
   });
 
-  // This is the exact scenario that caused the production discrepancy: 4
-  // distinct active days this month (3 with shifts, including one day with
-  // two shifts, plus 1 expense-only day) — the correct, unified count.
-  test('reproduces the production discrepancy scenario: unified count is 4', () => {
-    const shiftDates = ['2026-08-01', '2026-08-01', '2026-08-03', '2026-08-06'];
-    const expenseDates = ['2026-08-02'];
-    expect(countActiveDays(shiftDates, expenseDates)).toBe(4);
+  // Real production scenario (account db85eea7-8cd7-464d-ba68-05f1e8a15560,
+  // Aug 2026): 2 shift days plus 2 expense-only days on the same month.
+  // Expense dates are intentionally NOT passed in — an expense-only day
+  // must not count as active. Correct answer is 2, not 4.
+  test('reproduces the production scenario: expense-only days do not inflate the count', () => {
+    const shiftDates = ['2026-08-03', '2026-08-06'];
+    // Expense-only days (2026-08-09, 2026-08-16 in production) have no
+    // representation here at all — countActiveDays no longer takes an
+    // expense-dates argument, which is the point of the fix.
+    expect(countActiveDays(shiftDates)).toBe(2);
   });
 });
