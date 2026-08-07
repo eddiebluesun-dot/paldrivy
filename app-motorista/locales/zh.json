@@ -20,11 +20,7 @@
     "verify_email_resend_wait": "{{seconds}}秒后重新发送",
     "verify_email_resent": "邮件已重新发送！",
     "verify_email_already_confirmed": "已确认，去登录",
-    "verify_email_wrong_email": "邮箱有误？返回",
-    "email_banner_title": "确认您的邮箱",
-    "email_banner_body": "点击重新发送确认链接。",
-    "email_banner_resend": "重新发送",
-    "email_banner_dismiss": "关闭邮箱确认提示"
+    "verify_email_wrong_email": "邮箱有误？返回"
   },
   "consent": {
     "title": "条款与隐私",
