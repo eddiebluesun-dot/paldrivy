@@ -42,7 +42,7 @@ const EXPENSE_CATEGORIES = [
   'rent', 'financing', 'insurance', 'internet', 'tracker',
   'licensing', 'taxi_license', 'fuel', 'car_wash', 'maintenance',
   'tires', 'oil_change', 'tolls', 'parking', 'food',
-  'taxes', 'health_insurance', 'other',
+  'taxes', 'health_insurance', 'km_excedente', 'other',
 ] as const;
 
 const RECURRING_FREQUENCIES = [
@@ -127,7 +127,7 @@ function ExpenseForm({
       description: description.trim() !== '' ? description.trim() : null,
       recurring,
       recurring_frequency: recurring ? frequency : null,
-    } as any);
+    });
   }
 
   return (

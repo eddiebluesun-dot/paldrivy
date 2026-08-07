@@ -143,7 +143,7 @@ export interface Expense {
   category: string;
   expense_date: string;
   amount_cents: number;
-  description?: string;
+  description?: string | null;
   recurring: boolean;
   recurring_frequency?: RecurringFrequency | null;
 }
