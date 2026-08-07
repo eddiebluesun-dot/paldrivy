@@ -1,9 +1,10 @@
 import { supabase } from '../lib/supabase';
-import { streakFromDates } from '../utils/cockpitUtils';
+import { streakFromDates, countActiveDays } from '../utils/cockpitUtils';
 export {
   workingDaysInMonth,
   getDailyGoalCents,
   streakFromDates,
+  countActiveDays,
   intensityForCents,
 } from '../utils/cockpitUtils';
 
@@ -179,13 +180,14 @@ export async function getStreak(userId: string): Promise<number> {
       .lt('expense_date', monthEndStr),
   ]);
 
-  const activeDates = new Set<string>();
-  for (const row of (shiftsRes.data ?? []) as Array<{ started_at: string }>) {
-    activeDates.add(localDate(new Date(row.started_at)));
-  }
-  for (const row of (expRes.data ?? []) as Array<{ expense_date: string }>) {
-    activeDates.add(row.expense_date);
-  }
+  const shiftDates = (shiftsRes.data ?? []).map(
+    (row: { started_at: string }) => localDate(new Date(row.started_at)),
+  );
+  const expenseDates = (expRes.data ?? []).map((row: { expense_date: string }) => row.expense_date);
 
-  return activeDates.size; // total unique days with activity this month
+  // Single source of truth for "days active this month" — see
+  // src/utils/cockpitUtils.ts#countActiveDays. Every UI element that shows
+  // this figure (StreakBar today; the HOJE card previously) must read from
+  // this function's result, not recompute it independently.
+  return countActiveDays(shiftDates, expenseDates);
 }

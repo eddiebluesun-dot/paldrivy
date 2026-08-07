@@ -171,6 +171,7 @@
     "cockpit_daily_goal": "Obj. · {{goal}} · Reste {{remaining}}",
     "cockpit_daily_goal_met": "Obj. · {{goal}} ✓",
     "active_days_month": "jours actifs ce mois",
+    "edit_goal_btn": "Modifier l'objectif mensuel",
     "donut_goal": "Objectif",
     "donut_done": "Réalisé",
     "donut_remaining": "Restant",

@@ -29,7 +29,6 @@ interface CockpitCardProps {
   onResetToday?: () => void;
   odometerStartMeters?: number | null;
   odometerEndMeters?: number | null;
-  activeDaysThisMonth?: number;
 }
 
 export function CockpitCard({
@@ -47,7 +46,6 @@ export function CockpitCard({
   onResetToday,
   odometerStartMeters,
   odometerEndMeters,
-  activeDaysThisMonth = 0,
 }: CockpitCardProps) {
   const { t } = useTranslation();
 
@@ -81,18 +79,20 @@ export function CockpitCard({
           </Text>
         </TouchableOpacity>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {activeDaysThisMonth > 0 && (
-            <View style={styles.activeDaysChip}>
-              <Ionicons name="diamond-outline" size={8} color={Colors.accent} />
-              <Text style={styles.activeDaysText} numberOfLines={1}>{activeDaysThisMonth} {t('dashboard.active_days_month')}</Text>
-              <Ionicons name="diamond-outline" size={8} color={Colors.accent} />
-            </View>
-          )}
-          <TouchableOpacity onPress={onEditGoal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="pencil-outline" size={14} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
+        {/* "Days active this month" already lives at the top of the
+            dashboard (StreakBar) — showing it again here just duplicated
+            that figure and, worse, drifted out of sync with it. This is now
+            a single, clearly-labeled edit-goal action instead. It also
+            doubles as the only reachable edit-goal control for free users,
+            since the other one (Resumo do Mês) is premium-gated. */}
+        <TouchableOpacity
+          onPress={onEditGoal}
+          style={styles.editGoalPill}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="pencil-outline" size={12} color={Colors.accent} />
+          <Text style={styles.editGoalText} numberOfLines={1}>{t('dashboard.edit_goal_btn')}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 3-column body */}
@@ -217,21 +217,21 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     flexShrink: 0,
   },
-  activeDaysChip: {
+  editGoalPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: Colors.accentDim,
     borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: 'rgba(245,158,11,0.25)',
     maxWidth: '68%',
   },
-  activeDaysText: {
+  editGoalText: {
     color: Colors.accent,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     flexShrink: 1,
   },

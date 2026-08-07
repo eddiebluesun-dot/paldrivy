@@ -65,6 +65,17 @@ export function getAdaptiveDailyGoalCents(
   return Math.ceil(remaining / daysLeft);
 }
 
+// Single definition of "active day" for the current month, used by every
+// place that shows a "days active this month" figure (the streak badge near
+// the vehicle picker and, previously, a second badge on the HOJE card). A
+// day counts as active if it has at least one completed shift OR at least
+// one logged expense; duplicate shifts/expenses on the same day still count
+// once. Callers pass already-extracted 'YYYY-MM-DD' date strings so this
+// stays pure and independent of Supabase/timezone concerns.
+export function countActiveDays(shiftDates: string[], expenseDates: string[]): number {
+  return new Set([...shiftDates, ...expenseDates]).size;
+}
+
 export function streakFromDates(activeDates: string[], todayStr: string): number {
   const dateSet = new Set(activeDates);
   if (!dateSet.has(todayStr)) return 0;

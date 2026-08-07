@@ -171,6 +171,7 @@
     "cockpit_daily_goal": "目标 · {{goal}} · 剩余 {{remaining}}",
     "cockpit_daily_goal_met": "目标 · {{goal}} ✓",
     "active_days_month": "本月活跃天数",
+    "edit_goal_btn": "编辑月目标",
     "donut_goal": "目标",
     "donut_done": "已完成",
     "donut_remaining": "剩余",

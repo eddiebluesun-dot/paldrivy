@@ -214,6 +214,7 @@
                       "cockpit_daily_goal":  "Goal · {{goal}} · {{remaining}} left",
                       "cockpit_daily_goal_met":  "Goal · {{goal}} ✓",
                       "active_days_month":  "active days this month",
+                      "edit_goal_btn":  "Edit monthly goal",
                       "donut_goal":  "Goal",
                       "donut_done":  "Achieved",
                       "donut_remaining":  "Remaining",

@@ -1432,7 +1432,6 @@ export default function DashboardScreen() {
           onResetToday={resetCockpit}
           odometerStartMeters={cockpitOdomStart}
           odometerEndMeters={cockpitOdomEnd}
-          activeDaysThisMonth={monthlyBuckets.filter(b => b.net_cents > 0).length}
         />
 
         <PremiumGate isPremium={isPremium} reason="dashboard_locked">

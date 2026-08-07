@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, fireEvent } from '@testing-library/react-native';
 import { CockpitCard } from '../../src/components/CockpitCard';
 import { formatMoney } from '../../src/utils/currency';
 import pt from '../../locales/pt.json';
@@ -62,6 +62,38 @@ describe('CockpitCard — daily goal target must always be visible ("Hoje" card)
 
     // The "above goal" delta should still be shown alongside it, not instead of it.
     expect(screen.getByText(new RegExp(`\\+${escapeRegex(aboveStr)}.*acima da meta`))).toBeTruthy();
+  });
+});
+
+// Regression for two production bugs in the HOJE card header:
+// 1. The "🏅 N dias ativos" chip here used to show a DIFFERENT number than
+//    the "🔥 N dias ativos" badge near the vehicle picker (StreakBar), because
+//    this card independently filtered monthlyBuckets by net_cents > 0
+//    (shifts only, profitable days only) instead of using the shared
+//    countActiveDays source of truth. Fix: this card no longer computes or
+//    displays "days active" at all — that figure lives in exactly one place
+//    (StreakBar, driven by getStreak/countActiveDays) — so there is no
+//    second call site left to drift.
+// 2. The badge+pencil combo next to it was confusing as an edit-goal
+//    trigger. It's replaced by a single, clearly-labeled button.
+describe('CockpitCard header — no duplicated "days active" display, clear edit-goal action', () => {
+  test('never renders "dias ativos" text, regardless of any legacy prop', () => {
+    render(<CockpitCard {...baseProps} todayGrossCents={0} dailyGoalCents={30770}
+      // @ts-expect-error — activeDaysThisMonth was removed from CockpitCardProps;
+      // this proves the component ignores/no longer accepts it rather than
+      // silently reviving the old duplicated display if the prop reappears.
+      activeDaysThisMonth={99} />);
+
+    expect(screen.queryByText(/dias ativos/i)).toBeNull();
+  });
+
+  test('shows a single "Editar meta mensal" button that calls onEditGoal when pressed', () => {
+    const onEditGoal = jest.fn();
+    render(<CockpitCard {...baseProps} todayGrossCents={0} dailyGoalCents={30770} onEditGoal={onEditGoal} />);
+
+    const editButton = screen.getByText('Editar meta mensal');
+    fireEvent.press(editButton);
+    expect(onEditGoal).toHaveBeenCalledTimes(1);
   });
 });
 

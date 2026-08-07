@@ -214,6 +214,7 @@
                       "cockpit_daily_goal":  "Meta · {{goal}} · Faltam {{remaining}}",
                       "cockpit_daily_goal_met":  "Meta · {{goal}} ✓",
                       "active_days_month":  "dias ativos este mês",
+                      "edit_goal_btn":  "Editar meta mensal",
                       "donut_goal":  "Meta",
                       "donut_done":  "Cumprido",
                       "donut_remaining":  "Faltante",
