@@ -8,6 +8,7 @@ import { Colors } from '@/src/theme';
 import { BiometricGate } from '@/src/components/BiometricGate';
 import { TutorialModal } from '@/src/components/TutorialModal';
 import { QuickAddSheet } from '@/src/components/QuickAddSheet';
+import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -38,6 +39,7 @@ export default function TabLayout() {
 
   return (
     <BiometricGate>
+      <EmailVerificationBanner />
       <Tabs
         screenOptions={({ route }) => ({
           headerShown: false,

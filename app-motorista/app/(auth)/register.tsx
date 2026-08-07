@@ -34,9 +34,21 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!validate()) return;
     setLoading(true);
-    const { error } = await authSignUp(email.trim(), password);
+    const { data, error } = await authSignUp(email.trim(), password);
+    if (error) { setLoading(false); setGeneralError(error.message); return; }
+
+    // Soft-gate: when Supabase returns a session immediately (email
+    // confirmation not required to sign in), let the user into the app right
+    // away — the onAuthStateChange listener in useAuth() + RootLayoutNav's
+    // existing redirect-to-onboarding logic carry them in from here, same as
+    // login.tsx already relies on. Email confirmation becomes a dismissible
+    // nudge (EmailVerificationBanner) instead of a blocker.
+    //
+    // If no session came back, Supabase still requires confirmation — fall
+    // back to the verify-email screen so nothing breaks before that project
+    // setting is changed.
+    if (data.session) return;
     setLoading(false);
-    if (error) { setGeneralError(error.message); return; }
     router.replace({ pathname: '/(auth)/verify-email', params: { email: email.trim() } });
   };
 
