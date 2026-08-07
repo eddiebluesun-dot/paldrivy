@@ -6,12 +6,14 @@
 
 Real example from the owner: rented a car starting 2026-08-05 at odometer 18332. A driver's shift can end at 12300 and the next shift start at 12400 — the 100 km in between is personal/leisure driving, and rental contracts cap TOTAL km driven, not just work km. The allowance must include that gap.
 
+**Existing users joining mid-contract:** a driver installing the app for the first time may already be months into a rental contract. They'll typically still know/have the contract's start date on paper, but are unlikely to remember the exact odometer reading from pickup day. `rental_contract_start_odometer` must therefore be OPTIONAL, not required — see the baseline-determination fallback below.
+
 ## Data model
 
 New nullable columns on `public.vehicles`, populated only when `ownership_type = 'rent'` (matching the existing pattern of ownership-type-conditional columns already on this table, e.g. `monthly_cost_cents`, `purchase_date` for 'own'/'financed'):
 
-- `rental_contract_start_date` (date) — anchor date for period calculation.
-- `rental_contract_start_odometer` (integer, meters) — the odometer reading at pickup. Explicit, not inferred, because the first logged shift/fuel entry may come days after pickup and would otherwise miss the gap.
+- `rental_contract_start_date` (date) — anchor date for period calculation. Required whenever `rental_km_allowance_period != 'unlimited'` — a driver signing up mid-contract will still know this from their paperwork even if they don't remember the exact odometer.
+- `rental_contract_start_odometer` (integer, meters, nullable/OPTIONAL) — the odometer reading at pickup, if known. Explicit rather than inferred when available, because the first logged shift/fuel entry may come days after pickup and would otherwise miss the gap. Left blank by drivers joining the app mid-contract who no longer remember/have this — see the baseline fallback below for what happens then.
 - `rental_km_allowance_period` (text, check: `'weekly' | 'monthly' | 'unlimited'`).
 - `rental_km_allowance_amount` (integer) — in the unit implied by `profiles.distance_unit` (km or mi) at the time it's set; store consistently, format for display via existing unit-conversion helpers.
 - `rental_km_excess_rate_cents` (integer) — cost per km/mile over the allowance, in the same unit as the allowance.
@@ -28,8 +30,8 @@ For a given rental vehicle and "now":
    - If `rental_km_allowance_period = 'unlimited'`: no tracking, no alerts — skip everything below.
    - Otherwise, compute the period boundary on or before "now", counting forward from `rental_contract_start_date` in 7-day (weekly) or 1-calendar-month (monthly) increments. (E.g. contract started 2026-08-05, monthly: periods are [08-05, 09-05), [09-05, 10-05), ...)
 2. Determine the period's starting odometer baseline:
-   - If this is the FIRST period (period start == `rental_contract_start_date`): baseline = `rental_contract_start_odometer`.
-   - Otherwise: baseline = the odometer value from the most recent shift/fuel-entry reading at or before the period's start date. If none exists (no logged activity since the period began until some point after it started), baseline = the first reading found at/after the period start (the gap before that first reading is then unavoidably unmeasured — surface this as a known limitation in the UI copy if it matters, not a silent wrong number).
+   - If this is the FIRST period (period start == `rental_contract_start_date`) AND `rental_contract_start_odometer` is set: baseline = `rental_contract_start_odometer`.
+   - Otherwise (a later period, OR the first period but the driver left the start odometer blank because they joined mid-contract): baseline = the odometer value from the most recent shift/fuel-entry reading at or before the period's start date. If none exists (no logged activity since the period began until some point after it started — this is the expected case for a driver who just installed the app), baseline = the first reading found at/after the period start. Either way, the gap before that first available reading is unavoidably unmeasured for that period — surface this as a known limitation in the UI copy (e.g. "Contagem iniciada a partir do seu primeiro registro neste período") rather than a silent wrong number.
 3. Current usage = (latest known odometer reading for this vehicle, from shifts or fuel_entries) − baseline. This inherently includes all driving in between, work or personal — no need to classify individual trips.
 4. Percentage used = usage ÷ `rental_km_allowance_amount`.
 
@@ -44,7 +46,7 @@ Shown in the dashboard's hero/top section (near the vehicle picker pill), only f
 
 ## Registration/edit form
 
-In the vehicle add/edit form, when `ownership_type = 'rent'` is selected, reveal the four new fields (contract start date, contract start odometer, allowance period, allowance amount, excess rate — labeled/formatted using the driver's configured distance unit). Hidden entirely for 'own'/'financed'. If the driver later switches an existing vehicle from 'rent' to something else, the rental fields become irrelevant but the columns stay (nullable, harmless) — no migration/cleanup needed for that edge case.
+In the vehicle add/edit form, when `ownership_type = 'rent'` is selected, reveal the five new fields (contract start date, contract start odometer, allowance period, allowance amount, excess rate — labeled/formatted using the driver's configured distance unit). Hidden entirely for 'own'/'financed'. Contract start date is required whenever the allowance period isn't 'unlimited'; contract start odometer is optional, with placeholder/helper copy along the lines of "Não sabe o km da retirada? Deixe em branco — vamos contar a partir do seu primeiro registro" so drivers joining mid-contract aren't blocked. If the driver later switches an existing vehicle from 'rent' to something else, the rental fields become irrelevant but the columns stay (nullable, harmless) — no migration/cleanup needed for that edge case.
 
 ## Out of scope for this pass
 
