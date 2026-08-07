@@ -6,6 +6,28 @@ jest.mock('@/src/lib/supabase', () => ({
   supabase: { from: jest.fn() },
 }));
 
+// Minimal fake Supabase query builder: filters an in-memory row array as
+// .eq()/.lte() calls come in, and resolves like the real client when awaited.
+// This lets tests assert on the *result* of filtering (e.g. a future-dated
+// row genuinely excluded) rather than just on which methods were called.
+function makeQueryBuilder(rows: Record<string, unknown>[]) {
+  let filtered = rows;
+  const builder: any = {
+    select: () => builder,
+    eq: (field: string, value: unknown) => {
+      filtered = filtered.filter(r => r[field] === value);
+      return builder;
+    },
+    lte: (field: string, value: unknown) => {
+      filtered = filtered.filter(r => (r[field] as string) <= (value as string));
+      return builder;
+    },
+    then: (resolve: (v: { data: Record<string, unknown>[] }) => unknown) =>
+      resolve({ data: filtered }),
+  };
+  return builder;
+}
+
 function mockVehicle(overrides: Partial<Vehicle> = {}): Vehicle {
   return {
     id: 'v1', user_id: 'u1', name: 'Kwid', brand: 'Renault', model: 'Kwid', year: 2026,
@@ -40,23 +62,55 @@ describe('getRentalAllowanceStatus', () => {
     const vehicle = mockVehicle();
     (supabase.from as jest.Mock).mockImplementation((table: string) => {
       if (table === 'shifts') {
-        return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({
+        return { select: () => ({ eq: () => ({ eq: () => ({ lte: () => Promise.resolve({
           data: [
             { odometer_start_meters: 18332000, odometer_end_meters: 18522000, started_at: '2026-08-06T08:00:00Z' },
           ],
-        }) }) }) };
+        }) }) }) }) };
       }
       if (table === 'fuel_entries') {
-        return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({
+        return { select: () => ({ eq: () => ({ eq: () => ({ lte: () => Promise.resolve({
           data: [
             { odometer_meters: 18622000, filled_at: '2026-08-07T08:30:00Z' },
           ],
-        }) }) }) };
+        }) }) }) }) };
       }
       throw new Error(`unexpected table ${table}`);
     });
 
     const result = await getRentalAllowanceStatus(vehicle, new Date('2026-08-07T09:00:00Z'));
     expect(result?.usageKm).toBe(290); // 18622000 - 18332000
+  });
+
+  it('bounds both queries to now, so a future-dated (e.g. mistyped-year) reading is excluded', async () => {
+    const vehicle = mockVehicle();
+    const now = new Date('2026-08-07T09:00:00Z');
+
+    (supabase.from as jest.Mock).mockImplementation((table: string) => {
+      if (table === 'shifts') {
+        return makeQueryBuilder([
+          {
+            vehicle_id: 'v1', user_id: 'u1',
+            odometer_start_meters: 18332000, odometer_end_meters: 18522000,
+            started_at: '2026-08-06T08:00:00Z',
+          },
+        ]);
+      }
+      if (table === 'fuel_entries') {
+        return makeQueryBuilder([
+          { vehicle_id: 'v1', user_id: 'u1', odometer_meters: 18622000, filled_at: '2026-08-07T08:30:00Z' },
+          // Mistyped year: a driver fat-fingers the date when logging a fill-up.
+          // Without a query-level bound this would be the globally-latest reading
+          // and would silently pin currentOdometerMeters to it.
+          { vehicle_id: 'v1', user_id: 'u1', odometer_meters: 99999000, filled_at: '2027-01-01T00:00:00Z' },
+        ]);
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const result = await getRentalAllowanceStatus(vehicle, now);
+
+    expect(result?.currentOdometerMeters).toBe(18622000);
+    expect(result?.usageKm).toBe(290); // unaffected by the 99999000 future-dated row
   });
 });

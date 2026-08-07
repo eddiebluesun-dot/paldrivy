@@ -12,9 +12,11 @@ export async function getRentalAllowanceStatus(
 
   const [{ data: shifts }, { data: fuelEntries }] = await Promise.all([
     supabase.from('shifts').select('odometer_start_meters, odometer_end_meters, started_at')
-      .eq('vehicle_id', vehicle.id).eq('user_id', vehicle.user_id),
+      .eq('vehicle_id', vehicle.id).eq('user_id', vehicle.user_id)
+      .lte('started_at', now.toISOString()),
     supabase.from('fuel_entries').select('odometer_meters, filled_at')
-      .eq('vehicle_id', vehicle.id).eq('user_id', vehicle.user_id),
+      .eq('vehicle_id', vehicle.id).eq('user_id', vehicle.user_id)
+      .lte('filled_at', now.toISOString()),
   ]);
 
   const readings: OdometerReading[] = [];
