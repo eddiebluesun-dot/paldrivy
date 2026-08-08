@@ -36,6 +36,8 @@ import {
   getCreditCards, createCreditCard, updateCreditCard, deleteCreditCard,
   nextOccurrence, type CreditCard, type CreditCardInput,
 } from '@/src/services/creditCards';
+import { TourOverlay } from '@/src/components/TourOverlay';
+import { TOUR_STEPS } from '@/src/tour/steps';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -919,6 +921,7 @@ export default function MoreScreen() {
   const [exportingJSON, setExportingJSON]             = useState(false);
   const [cartoesModalVisible, setCartoesModalVisible]   = useState(false);
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [tourVisible, setTourVisible]                   = useState(false);
 
   useEffect(() => {
     getNotificationsEnabled().then(setNotifEnabled);
@@ -1506,6 +1509,21 @@ export default function MoreScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Guia */}
+        <Text style={s.sectionHeader}>GUIA</Text>
+        <View style={s.card}>
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => setTourVisible(true)}>
+            <View style={s.rowIconLabel}>
+              <Ionicons name="help-circle-outline" size={18} color={Colors.accent} style={s.rowIcon} />
+              <View>
+                <Text style={s.rowLabel}>{t('more.tour_replay')}</Text>
+                <Text style={[s.rowValue, { fontSize: 12 }]}>Reveja o tutorial interativo do app</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Sign out */}
         <TouchableOpacity style={s.signOutBtn} onPress={() => authSignOut().catch(console.warn)} activeOpacity={0.8}>
           <Ionicons name="log-out-outline" size={18} color={Colors.error} style={{ marginRight: 6 }} />
@@ -1561,6 +1579,12 @@ export default function MoreScreen() {
         onSelect={val => pickerConfig && handleQuickSave(pickerConfig.field, val)}
         onClose={() => setPickerConfig(null)}
         searchable={pickerConfig?.searchable}
+      />
+
+      <TourOverlay
+        visible={tourVisible}
+        steps={TOUR_STEPS}
+        onFinish={() => setTourVisible(false)}
       />
     </SafeAreaView>
   );
