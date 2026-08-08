@@ -13,6 +13,7 @@ import { getActiveLegalDocs, type LegalDoc } from '../../src/services/legal';
 import { PRESET_PLATFORMS } from '../../src/services/platforms';
 import {
   completeRegistration,
+  EMAIL_CONFIRMATION_REQUIRED,
   type RegistrationInput,
   type RegistrationStep,
 } from '../../src/services/completeRegistration';
@@ -257,9 +258,15 @@ export default function RegisterScreen() {
   // `phone` is pre-filled with the country's dial code (e.g. "+55 "), so a bare
   // `phone.trim()` truthiness check would pass with nothing actually typed.
   // Require meaningfully more digits than the dial code alone contributes.
+  //
+  // The absolute floor comes FIRST and is deliberately prefix-independent: a
+  // driver in a country with a 3-digit dial code who deletes the prefix and
+  // types a short (8-digit) national number is perfectly valid, but the
+  // dial-relative rule alone would have blocked them permanently. Whichever of
+  // the two rules is more permissive wins.
   const phoneDigits   = phone.replace(/\D/g, '');
   const dialDigits    = (COUNTRY_DIAL[auto.country] ?? '').replace(/\D/g, '');
-  const phoneOk       = phoneDigits.length > dialDigits.length + 6;
+  const phoneOk       = phoneDigits.length >= 8 || phoneDigits.length > dialDigits.length + 6;
   const profileOk     = !!fullName.trim() && phoneOk && !!city.trim() && !!state.trim() && countryOk;
   // Mirrors vehicle.tsx's own rule: the rental start date is only required once
   // a km allowance period is set (vehicle.tsx never hard-requires the start
@@ -284,6 +291,11 @@ export default function RegisterScreen() {
   const showEmailMismatch = emailConfirmTouched && emailConfirm.length > 0 && !emailOk;
   const showPasswordError = password.length > 0 && !passwordOk;
   const showCountryError  = countryTouched && !countryOk;
+  // Only once the driver has typed something beyond the pre-filled dial code —
+  // otherwise the field would open in an error state on a screen the driver has
+  // not touched yet. Without this the phone gate was the one required field
+  // that silently disabled the CTA with no explanation.
+  const showPhoneError    = phoneDigits.length > dialDigits.length && !phoneOk;
 
   // ── Submit ──────────────────────────────────────────────────────────────
   function buildInput(): RegistrationInput {
@@ -358,7 +370,15 @@ export default function RegisterScreen() {
       if (result.status === 'account_creation_failed') {
         // Nothing was created — safe to correct and resubmit from scratch.
         setPartial(null);
-        setGeneralError(result.message);
+        // completeRegistration has no access to `t()`, so the one message it
+        // authors itself crosses the boundary as a sentinel and is translated
+        // here. Every other value in this field is Supabase's own error text
+        // (e.g. "email already registered") and is shown verbatim.
+        setGeneralError(
+          result.message === EMAIL_CONFIRMATION_REQUIRED
+            ? t('register.email_confirmation_required')
+            : result.message,
+        );
         return;
       }
       // partial_failure: the account EXISTS. Never offer the plain submit path
@@ -469,7 +489,7 @@ export default function RegisterScreen() {
 
             <Text style={s.label}>{t('onboarding.phone')}<Text style={s.required}> *</Text></Text>
             <TextInput
-              style={inp}
+              style={[inp, showPhoneError ? s.inputErr : null]}
               value={phone}
               onChangeText={setPhone}
               placeholder={(COUNTRY_DIAL[auto.country] ?? '') + ' ' + t('onboarding.phone_placeholder')}
@@ -477,7 +497,9 @@ export default function RegisterScreen() {
               keyboardType="phone-pad"
               autoComplete="tel"
               returnKeyType="next"
+              accessibilityLabel={t('onboarding.phone')}
             />
+            {showPhoneError ? <Text style={s.fieldError}>{t('register.phone_invalid')}</Text> : null}
 
             <Text style={s.label}>{t('onboarding.worker_type_prompt')}</Text>
             <View style={s.pillRow}>

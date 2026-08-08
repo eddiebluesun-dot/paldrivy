@@ -64,14 +64,28 @@ function RootLayoutNav() {
   const topSegment = segments[0] as string | undefined;
   const subSegment = segments[1] as string | undefined;
 
+  // Derived OUTSIDE the effect on purpose, and depended on INSTEAD of the raw
+  // `subSegment`. Inside /(tabs)/* `subSegment` is the active tab name
+  // (index/shifts/community/more), so depending on it directly re-ran this
+  // entire effect on every tab tap — a getProfile() round-trip plus, whenever
+  // the profile has a locale, scheduleAllNotifications() (permission check +
+  // up to 9 scheduleNotificationAsync calls + several AsyncStorage reads).
+  // It also multiplied the blast radius of getProfile()'s null-on-error
+  // behaviour: one transient network blip on any tab tap would have bounced a
+  // fully onboarded driver into the retired /onboarding flow.
+  //
+  // These three booleans are all stable `false` for the whole time the driver
+  // is inside the tab group, so the effect now only re-runs when the route
+  // group actually changes — while still reacting correctly when it does.
+  const inAuth       = topSegment === '(auth)';
+  const inOnboarding = topSegment === 'onboarding';
+  const inRegister   = inAuth && subSegment === 'register';
+
   useEffect(() => {
     if (authLoading) return;
     if (!topSegment) return;
 
     let cancelled = false;
-    const inAuth = topSegment === '(auth)';
-    const inOnboarding = topSegment === 'onboarding';
-    const inRegister = inAuth && subSegment === 'register';
 
     if (!session) {
       if (!inAuth) router.replace('/(auth)/login');
@@ -115,7 +129,7 @@ function RootLayoutNav() {
     }).catch(() => {});
 
     return () => { cancelled = true; };
-  }, [session, authLoading, topSegment, subSegment]);
+  }, [session, authLoading, topSegment, inAuth, inOnboarding, inRegister]);
 
   return <Slot />;
 }

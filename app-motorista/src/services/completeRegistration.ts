@@ -9,6 +9,18 @@ import type { LegalDoc } from './legal';
 
 export type RegistrationStep = 'account' | 'profile' | 'vehicle' | 'platforms' | 'goal' | 'consent' | 'finish';
 
+/**
+ * Sentinel returned as `message` when sign-up succeeded but Supabase withheld a
+ * session because the project still requires e-mail confirmation.
+ *
+ * This is NOT display copy. It is a stable identifier the caller maps to a
+ * translated string — this file is a plain service with no access to `t()`, so
+ * anything hardcoded here would render in Portuguese for en/en-GB/es/fr/zh
+ * drivers. Every OTHER `account_creation_failed` still carries Supabase's own
+ * (already localizable/actionable) error message verbatim.
+ */
+export const EMAIL_CONFIRMATION_REQUIRED = 'email_confirmation_required';
+
 export interface RegistrationInput {
   email: string;
   password: string;
@@ -52,10 +64,13 @@ export async function completeRegistration(
       // Reported as `account_creation_failed` on purpose: nothing downstream was
       // created, so there is nothing to resume — the screen renders it as an
       // inline, retry-safe error.
+      //
+      // The sentinel (not prose) is what crosses the boundary; register.tsx
+      // translates it. See EMAIL_CONFIRMATION_REQUIRED above.
       if (!data.session) {
         return {
           status: 'account_creation_failed',
-          message: 'Confirme seu e-mail para continuar (verifique sua caixa de entrada).',
+          message: EMAIL_CONFIRMATION_REQUIRED,
         };
       }
       userId = data.user.id;

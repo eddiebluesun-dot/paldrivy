@@ -14,6 +14,8 @@
     "country": "Pays",
     "country_hint": "Code pays à 2 lettres (ex : FR)",
     "country_invalid": "Utilisez le code pays à 2 lettres (ex : FR)",
+    "phone_invalid": "Saisissez un numéro de téléphone valide, avec l'indicatif",
+    "email_confirmation_required": "Confirmez votre e-mail pour continuer — vérifiez votre boîte de réception.",
     "missing_required": "Remplissez tous les champs obligatoires et acceptez les documents pour créer votre compte.",
     "docs_reload": "Recharger les documents",
     "partial_failure": "Votre compte a été créé, mais un problème est survenu lors de l'enregistrement de {{step}} — appuyez pour réessayer.",

@@ -14,6 +14,8 @@
                      "country":  "Country",
                      "country_hint":  "2-letter country code (e.g. US)",
                      "country_invalid":  "Use the 2-letter country code (e.g. US)",
+                     "phone_invalid":  "Enter a valid phone number, including the area code",
+                     "email_confirmation_required":  "Confirm your email to continue — check your inbox.",
                      "missing_required":  "Fill in every required field and accept the documents to create your account.",
                      "docs_reload":  "Reload documents",
                      "partial_failure":  "Your account was created, but something went wrong while saving {{step}} — tap to try again.",

@@ -14,6 +14,8 @@
     "country": "国家/地区",
     "country_hint": "两位字母的国家/地区代码（例如 CN）",
     "country_invalid": "请使用两位字母的国家/地区代码（例如 CN）",
+    "phone_invalid": "请输入有效的电话号码（含区号）",
+    "email_confirmation_required": "请先确认您的电子邮件后再继续（请查看收件箱）。",
     "missing_required": "请填写所有必填项并接受相关文件后再创建账户。",
     "docs_reload": "重新加载文件",
     "partial_failure": "账户已创建，但保存{{step}}时出现问题 — 点击重试。",

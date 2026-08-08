@@ -14,6 +14,8 @@
                      "country":  "País",
                      "country_hint":  "Código de país de 2 letras (ej: MX)",
                      "country_invalid":  "Usa el código de país de 2 letras (ej: MX)",
+                     "phone_invalid":  "Ingresa un número de teléfono válido, con código de área",
+                     "email_confirmation_required":  "Confirma tu correo para continuar: revisa tu bandeja de entrada.",
                      "missing_required":  "Completa todos los campos obligatorios y acepta los documentos para crear tu cuenta.",
                      "docs_reload":  "Recargar documentos",
                      "partial_failure":  "Tu cuenta fue creada, pero hubo un problema al guardar {{step}}: toca para intentarlo de nuevo.",
