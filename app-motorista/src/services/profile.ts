@@ -15,3 +15,8 @@ export async function markOnboardingDone(userId: string): Promise<void> {
   const { error } = await supabase.from('profiles').update({ onboarding_done: true }).eq('id', userId);
   if (error) throw error;
 }
+
+export async function markTourSeen(userId: string): Promise<void> {
+  const { error } = await supabase.from('profiles').update({ tour_seen: true }).eq('id', userId);
+  if (error) throw error;
+}

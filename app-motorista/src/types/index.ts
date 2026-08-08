@@ -22,6 +22,7 @@ export interface Profile {
   timezone: string;
   locale: string;
   onboarding_done: boolean;
+  tour_seen: boolean;
   vehicle_id?: string | null;
   worker_type?: WorkerType;
   goal_type?: GoalType;
