@@ -119,6 +119,7 @@ export interface Shift {
   mood_rating?: MoodRating | null;
   notes?: string | null;
   calc?: ShiftCalc;
+  allocated_fixed_cents: number;
   created_at: string;
 }
 
