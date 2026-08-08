@@ -1040,9 +1040,10 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
 
   return (
     <View style={styles.card}>
-      {/* Header */}
-      <View style={styles.cardRowBetween}>
-        <Text style={styles.cardTitle}>{t('dashboard.weekly_title')}</Text>
+      {/* Header — the "esta semana" title itself now lives above this whole section
+          (rendered by the parent, alongside the summary grid) so only the distance pill
+          stays here. */}
+      <View style={[styles.cardRowBetween, { justifyContent: 'flex-end' }]}>
         {weekKm && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.surfaceAlt, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border }}>
             <Text style={{ color: Colors.textSecondary, fontSize: 10 }}>~</Text>
@@ -1053,8 +1054,12 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
 
       {/* 2-column body: bars + right summary */}
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        {/* Bars */}
-        <View style={{ flex: 1, flexDirection: 'row', gap: 4 }}>
+        {/* Bars — minWidth: 0 is required on web: without it, a flex:1 row's children
+            default to a content-based minimum width and refuse to shrink, so a wide day
+            value (e.g. today's "R$ 395,17") pushes past its own column and visually
+            overlaps the "SEMANA" summary column to the right instead of wrapping/shrinking
+            the way it does natively (React Native Web flexbox quirk). */}
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', gap: 4 }}>
           {buckets.map(b => {
             const isToday = b.date === today;
             const hasData = b.net_cents > 0;
@@ -1063,7 +1068,7 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
             const dayLabel = new Date(b.date + 'T12:00:00').toLocaleDateString(language, { weekday: 'short' }).replace('.', '').toUpperCase().slice(0, 3);
             const dayNum = new Date(b.date + 'T12:00:00').getDate();
             return (
-              <TouchableOpacity key={b.date} onPress={() => onPress(b.date)} style={{ flex: 1, alignItems: 'center' }} activeOpacity={0.7}>
+              <TouchableOpacity key={b.date} onPress={() => onPress(b.date)} style={{ flex: 1, minWidth: 0, alignItems: 'center' }} activeOpacity={0.7}>
                 <Text style={{ fontSize: 7, color: isToday ? Colors.accent : Colors.textSecondary, fontVariant: ['tabular-nums'], fontWeight: isToday ? '700' : '400', marginBottom: 3, minHeight: 11, textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
                   {hasData ? formatMoney(b.net_cents, currencyCode, locale) : ''}
                 </Text>
@@ -1557,6 +1562,14 @@ export default function DashboardScreen() {
             )}
           </>
         </PremiumGate>
+
+        {/* Section title lives here, above BOTH the weekly summary grid and the bar chart
+            below it, so it's clear both belong to "esta semana" -- previously this title
+            only rendered inside WeekBarChart's own card, making it look like only the chart
+            (not the summary grid above it) was week-scoped. */}
+        {weekTotals !== null && weekTotals.gross_cents > 0 && (
+          <Text style={[styles.cardTitle, { marginTop: Spacing.md, marginBottom: -Spacing.xs }]}>{t('dashboard.weekly_title')}</Text>
+        )}
 
         {/* Kill shot: 4 glassmorphism cards — resumo da semana, logo antes do gráfico semanal.
             Wrapped in its own PremiumGate (rather than nested inside the block above) so the

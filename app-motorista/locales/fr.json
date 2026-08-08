@@ -206,6 +206,7 @@
     "greeting_anon": "Bonjour !",
     "cockpit_no_goal": "sans objectif",
     "cockpit_earnings_today": "gains aujourd'hui",
+    "cockpit_distance_driven": "parcourus",
     "cockpit_above_goal": "+{{amount}} au-dessus de l'objectif ✓",
     "cockpit_above_goal_short": "au-dessus de l'objectif",
     "cockpit_daily_goal": "Obj. · {{goal}} · Reste {{remaining}}",

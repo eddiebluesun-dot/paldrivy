@@ -166,9 +166,12 @@ export function CockpitCard({
             <View style={styles.odomRow}>
               <Ionicons name="speedometer-outline" size={10} color={Colors.textSecondary} />
               <Text style={styles.odomText}>
-                {odometerStartMeters != null ? `${(odometerStartMeters / 1000).toFixed(0)}` : '?'}
+                {odometerStartMeters != null ? `${metersToDisplay(odometerStartMeters, distanceUnit).toFixed(0)}` : '?'}
                 {' → '}
-                {odometerEndMeters != null ? `${(odometerEndMeters / 1000).toFixed(0)} km` : '?'}
+                {odometerEndMeters != null ? `${metersToDisplay(odometerEndMeters, distanceUnit).toFixed(0)} ${distanceUnit}` : '?'}
+                {odometerStartMeters != null && odometerEndMeters != null && odometerEndMeters > odometerStartMeters
+                  ? ` (${metersToDisplay(odometerEndMeters - odometerStartMeters, distanceUnit).toFixed(0)} ${distanceUnit} ${t('dashboard.cockpit_distance_driven')})`
+                  : ''}
               </Text>
             </View>
           )}

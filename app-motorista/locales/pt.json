@@ -249,6 +249,7 @@
                       "greeting_anon":  "Olá!",
                       "cockpit_no_goal":  "sem meta",
                       "cockpit_earnings_today":  "ganhos hoje",
+                      "cockpit_distance_driven":  "rodados",
                       "cockpit_above_goal":  "+{{amount}} acima da meta ✓",
                       "cockpit_above_goal_short":  "acima da meta",
                       "cockpit_daily_goal":  "Meta · {{goal}} · Faltam {{remaining}}",

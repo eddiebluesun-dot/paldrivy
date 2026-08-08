@@ -1512,7 +1512,17 @@ export default function MoreScreen() {
         {/* Guia */}
         <Text style={s.sectionHeader}>GUIA</Text>
         <View style={s.card}>
-          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => setTourVisible(true)}>
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => {
+            // The tour's first 3 steps (vehicle-pill/goal-card/summary-cards) live on the
+            // dashboard tab. React Navigation keeps visited tabs mounted (just hidden) rather
+            // than unmounting them, so their TourTarget refs stay registered even while "Mais"
+            // is active -- but measureInWindow() on a hidden tab's elements returns coordinates
+            // that don't correspond to anything visible here, so the spotlight silently fails
+            // to land on the right field. Navigate to the dashboard first so those steps are
+            // genuinely on-screen before measuring, same settle-delay as the auto-trigger uses.
+            router.push('/(tabs)');
+            setTimeout(() => setTourVisible(true), 400);
+          }}>
             <View style={s.rowIconLabel}>
               <Ionicons name="help-circle-outline" size={18} color={Colors.accent} style={s.rowIcon} />
               <View>

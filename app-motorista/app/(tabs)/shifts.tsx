@@ -34,6 +34,7 @@ import {
   updateShift,
 } from '@/src/services/shifts';
 import { getUserPlatforms } from '@/src/services/platforms';
+import { getEffectiveVehicleId } from '@/src/services/vehicles';
 import { reconcileShiftPlatforms } from '@/src/utils/shiftReconciliationUtils';
 import type { ShiftPause } from '@/src/types';
 import { useProfile } from '@/src/hooks/useProfile';
@@ -566,7 +567,8 @@ export default function ShiftsScreen() {
     setStarting(true);
     setScreenError(null);
     try {
-      const shift = await startShift(userId, profile?.vehicle_id ?? null, odometerMeters, isPremium);
+      const vehicleId = await getEffectiveVehicleId(userId, profile?.vehicle_id ?? null);
+      const shift = await startShift(userId, vehicleId, odometerMeters, isPremium);
       setActiveShift(shift);
       setElapsed(0);
     } catch (e) {

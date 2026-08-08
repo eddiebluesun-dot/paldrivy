@@ -26,7 +26,7 @@ import { displayToMl } from '@/src/utils/units';
 import { addExpense, deleteExpense, getExpenses, updateExpense } from '@/src/services/expenses';
 import { addFuelEntry } from '@/src/services/fuel';
 import type { FuelType } from '@/src/services/fuel';
-import { getVehicles } from '@/src/services/vehicles';
+import { getVehicles, getEffectiveVehicleId } from '@/src/services/vehicles';
 import { useProfile } from '@/src/hooks/useProfile';
 import type { Expense } from '@/src/services/expenses';
 import { getCalendarHeatmap } from '@/src/services/cockpit';
@@ -536,6 +536,7 @@ export default function ExpensesScreen() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [vehicleFuelType, setVehicleFuelType] = useState<FuelType>('gasoline');
+  const [effectiveVehicleId, setEffectiveVehicleId] = useState<string | null>(null);
   const [entries, setEntries] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -562,6 +563,16 @@ export default function ExpensesScreen() {
       }
     });
   }, []);
+
+  // Resolve which vehicle new fuel entries (logged here as an expense) get
+  // tagged with -- profile.vehicle_id if explicitly set, otherwise the same
+  // fallback the dashboard uses. Without this, a user who never explicitly
+  // picked a vehicle logs every fuel entry with vehicle_id: null, breaking
+  // anything scoped per-vehicle (rental km allowance tracking, fuel trend).
+  useEffect(() => {
+    if (!userId) return;
+    getEffectiveVehicleId(userId, profile?.vehicle_id ?? null).then(setEffectiveVehicleId).catch(() => {});
+  }, [userId, profile?.vehicle_id]);
 
   const loadEntries = useCallback(async () => {
     if (!userId) return;
@@ -633,7 +644,7 @@ export default function ExpensesScreen() {
 
   const currencyCode = profile?.currency_code ?? 'BRL';
   const locale = profile?.locale ?? 'pt-BR';
-  const vehicleId = profile?.vehicle_id ?? null;
+  const vehicleId = effectiveVehicleId;
   const volumeUnit = profile?.volume_unit ?? 'liters';
 
   if (loading) {

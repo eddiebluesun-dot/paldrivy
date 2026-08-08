@@ -206,6 +206,7 @@
     "greeting_anon": "你好！",
     "cockpit_no_goal": "未设目标",
     "cockpit_earnings_today": "今日收入",
+    "cockpit_distance_driven": "已行驶",
     "cockpit_above_goal": "+{{amount}} 超过目标 ✓",
     "cockpit_above_goal_short": "超过目标",
     "cockpit_daily_goal": "目标 · {{goal}} · 剩余 {{remaining}}",

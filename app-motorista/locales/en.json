@@ -249,6 +249,7 @@
                       "greeting_anon":  "Hi!",
                       "cockpit_no_goal":  "no goal",
                       "cockpit_earnings_today":  "earnings today",
+                      "cockpit_distance_driven":  "driven",
                       "cockpit_above_goal":  "+{{amount}} above goal ✓",
                       "cockpit_above_goal_short":  "above goal",
                       "cockpit_daily_goal":  "Goal · {{goal}} · {{remaining}} left",
