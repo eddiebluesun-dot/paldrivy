@@ -9,6 +9,7 @@ import { BiometricGate } from '@/src/components/BiometricGate';
 import { TutorialModal } from '@/src/components/TutorialModal';
 import { QuickAddSheet } from '@/src/components/QuickAddSheet';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
+import { TourTarget } from '@/src/tour/TourTarget';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -17,6 +18,19 @@ const TAB_ICONS: Record<string, [IoniconName, IoniconName]> = {
   shifts:    ['time-outline',    'time'],
   community: ['people-outline',  'people'],
   more:      ['ellipsis-horizontal-circle-outline', 'ellipsis-horizontal-circle'],
+};
+
+// Tab bar icons are produced by the shared tabBarIcon render prop below, not
+// by JSX directly in this file's tree, so they can't be wrapped with
+// <TourTarget> the normal declarative way. Wrapping the returned icon
+// element per-route (keyed off route.name) achieves the same effect: React
+// still reconciles it as a stable element type at that tab's position, so
+// TourTarget's mount/unmount effect fires once per tab, not on every
+// tabBarIcon call.
+const TAB_TOUR_TARGET_IDS: Record<string, string> = {
+  shifts:    'tab-shifts',
+  community: 'tab-community',
+  more:      'tab-more',
 };
 
 const TUTORIAL_KEY = 'paldrivy_tutorial_done';
@@ -52,7 +66,9 @@ export default function TabLayout() {
           tabBarLabelStyle: { fontSize: 9 },
           tabBarIcon: ({ focused, color, size }) => {
             const [outline, filled] = TAB_ICONS[route.name] ?? ['help-circle-outline', 'help-circle'];
-            return <Ionicons name={focused ? filled : outline} size={size} color={color} />;
+            const icon = <Ionicons name={focused ? filled : outline} size={size} color={color} />;
+            const targetId = TAB_TOUR_TARGET_IDS[route.name];
+            return targetId ? <TourTarget id={targetId}>{icon}</TourTarget> : icon;
           },
         })}
       >
@@ -64,16 +80,18 @@ export default function TabLayout() {
             title: '',
             tabBarButton: () => (
               <View style={{ top: -14, alignItems: 'center', justifyContent: 'center' }}>
-                <Pressable
-                  onPress={() => setQuickAddVisible(true)}
-                  style={{
-                    width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.accent,
-                    alignItems: 'center', justifyContent: 'center',
-                    shadowColor: Colors.accent, shadowOpacity: 0.6, shadowRadius: 10, elevation: 8,
-                  }}
-                >
-                  <Ionicons name="add" size={28} color={Colors.onAccent} />
-                </Pressable>
+                <TourTarget id="quickadd-button">
+                  <Pressable
+                    onPress={() => setQuickAddVisible(true)}
+                    style={{
+                      width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.accent,
+                      alignItems: 'center', justifyContent: 'center',
+                      shadowColor: Colors.accent, shadowOpacity: 0.6, shadowRadius: 10, elevation: 8,
+                    }}
+                  >
+                    <Ionicons name="add" size={28} color={Colors.onAccent} />
+                  </Pressable>
+                </TourTarget>
               </View>
             ),
           }}

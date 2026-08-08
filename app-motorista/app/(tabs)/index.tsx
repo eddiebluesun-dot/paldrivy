@@ -32,6 +32,7 @@ import {
 } from '@/src/services/cockpit';
 import { getAdaptiveDailyGoalCents } from '@/src/utils/cockpitUtils';
 import { VehiclePill } from '@/src/components/VehiclePill';
+import { TourTarget } from '@/src/tour/TourTarget';
 import { StreakBar } from '@/src/components/StreakBar';
 import { CockpitCard } from '@/src/components/CockpitCard';
 import { MonthHistoryCard } from '@/src/components/MonthHistoryCard';
@@ -1497,40 +1498,44 @@ export default function DashboardScreen() {
         )}
 
         {vehicleInfo && (
-          <VehiclePill
-            brand={vehicleInfo.brand}
-            model={vehicleInfo.model}
-            year={vehicleInfo.year}
-            fuelType={vehicleInfo.fuel_type}
-            kmPerL={
-              consumptionTrend?.overall.km_per_l ??
-              (vehicleInfo.avg_consumption_per_100 > 0
-                ? 100000 / vehicleInfo.avg_consumption_per_100
-                : null)
-            }
-          />
+          <TourTarget id="vehicle-pill">
+            <VehiclePill
+              brand={vehicleInfo.brand}
+              model={vehicleInfo.model}
+              year={vehicleInfo.year}
+              fuelType={vehicleInfo.fuel_type}
+              kmPerL={
+                consumptionTrend?.overall.km_per_l ??
+                (vehicleInfo.avg_consumption_per_100 > 0
+                  ? 100000 / vehicleInfo.avg_consumption_per_100
+                  : null)
+              }
+            />
+          </TourTarget>
         )}
 
         <StreakBar streak={streak} />
 
         {activeShift !== null && <ActiveShiftBanner shift={activeShift} />}
 
-        <CockpitCard
-          todayGrossCents={cockpitGrossCents}
-          dailyGoalCents={dailyGoalCents}
-          rides={cockpitRides}
-          durationSeconds={cockpitDurationSeconds}
-          distanceMeters={cockpitDistanceMeters}
-          expensesTodayCents={cockpitExpensesCents}
-          distanceUnit={distanceUnit}
-          currencyCode={currencyCode}
-          locale={locale}
-          onEditGoal={() => setGoalModalVisible(true)}
-          dateLabel={cockpitDateLabel}
-          onResetToday={resetCockpit}
-          odometerStartMeters={cockpitOdomStart}
-          odometerEndMeters={cockpitOdomEnd}
-        />
+        <TourTarget id="goal-card">
+          <CockpitCard
+            todayGrossCents={cockpitGrossCents}
+            dailyGoalCents={dailyGoalCents}
+            rides={cockpitRides}
+            durationSeconds={cockpitDurationSeconds}
+            distanceMeters={cockpitDistanceMeters}
+            expensesTodayCents={cockpitExpensesCents}
+            distanceUnit={distanceUnit}
+            currencyCode={currencyCode}
+            locale={locale}
+            onEditGoal={() => setGoalModalVisible(true)}
+            dateLabel={cockpitDateLabel}
+            onResetToday={resetCockpit}
+            odometerStartMeters={cockpitOdomStart}
+            odometerEndMeters={cockpitOdomEnd}
+          />
+        </TourTarget>
 
         <PremiumGate isPremium={isPremium} reason="dashboard_locked">
           <>
@@ -1553,13 +1558,15 @@ export default function DashboardScreen() {
 
             {/* Kill shot: 4 glassmorphism cards — resumo da semana, logo antes do gráfico semanal */}
             {weekTotals !== null && weekTotals.gross_cents > 0 && (
-              <KillShotCards
-                totals={weekTotals}
-                prevGross={prevWeekGross}
-                currencyCode={currencyCode}
-                locale={locale}
-                distanceUnit={distanceUnit}
-              />
+              <TourTarget id="summary-cards">
+                <KillShotCards
+                  totals={weekTotals}
+                  prevGross={prevWeekGross}
+                  currencyCode={currencyCode}
+                  locale={locale}
+                  distanceUnit={distanceUnit}
+                />
+              </TourTarget>
             )}
 
             {weekBuckets.length > 0 && (
