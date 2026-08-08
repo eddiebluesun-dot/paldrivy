@@ -107,9 +107,7 @@ function RootLayoutNav() {
     // Deliberately scoped to `register`, NOT to all of (auth): login.tsx does
     // not navigate itself — it relies on the `else if (inAuth)` branch below to
     // reach /(tabs) after a successful sign-in — so exempting the whole group
-    // would strand every returning driver on the login screen. verify-email.tsx
-    // is only ever reached without a session and is handled by the `!session`
-    // branch above, so it is unaffected either way.
+    // would strand every returning driver on the login screen.
     if (inOnboarding || inRegister) return;
 
     // Fetch profile fresh so we always see the latest onboarding_done state
@@ -122,7 +120,14 @@ function RootLayoutNav() {
         scheduleAllNotifications(lang).catch(() => {});
       }
       if (!profile || !profile.onboarding_done) {
-        router.replace('/onboarding/locale');
+        // The multi-screen /onboarding/* flow was retired once register.tsx
+        // started setting onboarding_done:true as its own last step, so no
+        // NEW account can ever reach this branch. A small number of accounts
+        // created before that change may still be sitting at onboarding_done:
+        // false (abandoned the old flow partway through) — there is no
+        // working onboarding route left to send them to, so "has an account"
+        // is treated as sufficient access and they go straight to the tabs.
+        router.replace('/(tabs)');
       } else if (inAuth) {
         router.replace('/(tabs)');
       }

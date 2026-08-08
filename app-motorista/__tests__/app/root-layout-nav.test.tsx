@@ -165,15 +165,31 @@ describe('RootLayoutNav — auth routing guard', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('still redirects an onboarded-incomplete driver out of the tabs into onboarding', async () => {
-    mockSegments = ['(tabs)', 'index'];
+  it('sends a legacy onboarding-incomplete driver to the tabs, since the old onboarding flow no longer exists', async () => {
+    // register.tsx always sets onboarding_done:true as its last step now, so no
+    // NEW account can land here. But accounts created before this change may
+    // still have onboarding_done:false (abandoned the old multi-screen flow
+    // partway through) — there is no working /onboarding/* route left to send
+    // them to, so "has an account" is treated as sufficient access.
+    mockSegments = ['(auth)', 'login'];
     mockSession = { user: { id: 'u1' } };
     (getProfile as jest.Mock).mockResolvedValue({ id: 'u1', onboarding_done: false });
 
     render(<RootLayout />);
     await flush();
 
-    expect(mockReplace).toHaveBeenCalledWith('/onboarding/locale');
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
+  });
+
+  it('sends a driver with no profile row at all into the tabs rather than the deleted onboarding route', async () => {
+    mockSegments = ['(auth)', 'login'];
+    mockSession = { user: { id: 'u1' } };
+    (getProfile as jest.Mock).mockResolvedValue(null);
+
+    render(<RootLayout />);
+    await flush();
+
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
   });
 
   it('defers entirely while auth is still loading', async () => {
