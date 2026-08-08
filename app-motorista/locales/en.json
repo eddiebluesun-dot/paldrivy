@@ -10,6 +10,7 @@
                      "section_terms":  "Terms & Privacy",
                      "email_confirm":  "Confirm email",
                      "email_mismatch":  "The emails do not match",
+                     "language":  "Language",
                      "country":  "Country",
                      "country_hint":  "2-letter country code (e.g. US)",
                      "country_invalid":  "Use the 2-letter country code (e.g. US)",

@@ -62,6 +62,7 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const topSegment = segments[0] as string | undefined;
+  const subSegment = segments[1] as string | undefined;
 
   useEffect(() => {
     if (authLoading) return;
@@ -70,14 +71,32 @@ function RootLayoutNav() {
     let cancelled = false;
     const inAuth = topSegment === '(auth)';
     const inOnboarding = topSegment === 'onboarding';
+    const inRegister = inAuth && subSegment === 'register';
 
     if (!session) {
       if (!inAuth) router.replace('/(auth)/login');
       return;
     }
 
-    // While in onboarding, let the screens handle their own navigation
-    if (inOnboarding) return;
+    // The onboarding screens and the consolidated registration screen own their
+    // own navigation — this guard must not race ahead of them.
+    //
+    // register.tsx drives ~6 sequential writes through completeRegistration().
+    // Supabase fires SIGNED_IN on the very first one (sign-up), which flips
+    // `session` here long before markOnboardingDone() sets onboarding_done.
+    // Without this exemption the guard needs only one round-trip to win that
+    // race: it would fetch a profile that either does not exist yet or still
+    // has onboarding_done:false, replace the route with the old /onboarding
+    // flow, and unmount register.tsx mid-submit. register.tsx does its own
+    // router.replace('/(tabs)') once completeRegistration() returns success.
+    //
+    // Deliberately scoped to `register`, NOT to all of (auth): login.tsx does
+    // not navigate itself — it relies on the `else if (inAuth)` branch below to
+    // reach /(tabs) after a successful sign-in — so exempting the whole group
+    // would strand every returning driver on the login screen. verify-email.tsx
+    // is only ever reached without a session and is handled by the `!session`
+    // branch above, so it is unaffected either way.
+    if (inOnboarding || inRegister) return;
 
     // Fetch profile fresh so we always see the latest onboarding_done state
     getProfile(session.user.id).then((profile) => {
@@ -96,7 +115,7 @@ function RootLayoutNav() {
     }).catch(() => {});
 
     return () => { cancelled = true; };
-  }, [session, authLoading, topSegment]);
+  }, [session, authLoading, topSegment, subSegment]);
 
   return <Slot />;
 }

@@ -10,6 +10,7 @@
     "section_terms": "条款与隐私",
     "email_confirm": "确认电子邮件",
     "email_mismatch": "两次输入的电子邮件不一致",
+    "language": "语言",
     "country": "国家/地区",
     "country_hint": "两位字母的国家/地区代码（例如 CN）",
     "country_invalid": "请使用两位字母的国家/地区代码（例如 CN）",

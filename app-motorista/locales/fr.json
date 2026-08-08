@@ -10,6 +10,7 @@
     "section_terms": "Conditions et confidentialité",
     "email_confirm": "Confirmez l'e-mail",
     "email_mismatch": "Les e-mails ne correspondent pas",
+    "language": "Langue",
     "country": "Pays",
     "country_hint": "Code pays à 2 lettres (ex : FR)",
     "country_invalid": "Utilisez le code pays à 2 lettres (ex : FR)",

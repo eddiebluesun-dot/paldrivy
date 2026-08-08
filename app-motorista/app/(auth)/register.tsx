@@ -254,11 +254,23 @@ export default function RegisterScreen() {
   const emailOk       = emailsMatch(email, emailConfirm);
   const passwordOk    = password.length >= 6;
   const countryOk     = COUNTRY_RE.test(country.trim());
-  const profileOk     = !!fullName.trim() && !!phone.trim() && !!city.trim() && !!state.trim() && countryOk;
-  const rentalOk      = ownership !== 'rent'
+  // `phone` is pre-filled with the country's dial code (e.g. "+55 "), so a bare
+  // `phone.trim()` truthiness check would pass with nothing actually typed.
+  // Require meaningfully more digits than the dial code alone contributes.
+  const phoneDigits   = phone.replace(/\D/g, '');
+  const dialDigits    = (COUNTRY_DIAL[auto.country] ?? '').replace(/\D/g, '');
+  const phoneOk       = phoneDigits.length > dialDigits.length + 6;
+  const profileOk     = !!fullName.trim() && phoneOk && !!city.trim() && !!state.trim() && countryOk;
+  // Mirrors vehicle.tsx's own rule: the rental start date is only required once
+  // a km allowance period is set (vehicle.tsx never hard-requires the start
+  // odometer at all). Requiring both unconditionally was stricter than the
+  // shipped screen and risked blocking legitimate signups — the opposite of
+  // this feature's purpose. The allowance amount/excess rate stay required,
+  // though: a driver who picked weekly/monthly has stated they have a cap, and
+  // those two fields feed the real excess-km cost calculation.
+  const rentalOk      = ownership !== 'rent' || allowancePeriod === 'unlimited'
     ? true
-    : !!rentalStartDate.trim() && !!rentalStartOdometer.trim()
-      && (allowancePeriod === 'unlimited' || (!!allowanceAmount.trim() && !!excessRate.trim()));
+    : !!rentalStartDate.trim() && !!allowanceAmount.trim() && !!excessRate.trim();
   const vehicleOk     = !!brand.trim() && !!model.trim() && !!year.trim()
     && !!fuelType && !!consumption.trim() && !!ownership && rentalOk;
   // LGPD: every active legal document must be individually accepted. This is
@@ -395,7 +407,7 @@ export default function RegisterScreen() {
           <Section icon="person-circle-outline" title={t('register.section_account')}>
             <Text style={s.label}>{t('auth.email')}<Text style={s.required}> *</Text></Text>
             <TextInput
-              style={inp}
+              style={[inp, partial ? s.inputDisabled : null]}
               value={email}
               onChangeText={setEmail}
               editable={!partial}
@@ -407,7 +419,7 @@ export default function RegisterScreen() {
 
             <Text style={s.label}>{t('register.email_confirm')}<Text style={s.required}> *</Text></Text>
             <TextInput
-              style={[inp, showEmailMismatch ? s.inputErr : null]}
+              style={[inp, showEmailMismatch ? s.inputErr : null, partial ? s.inputDisabled : null]}
               value={emailConfirm}
               onChangeText={setEmailConfirm}
               onBlur={() => setEmailConfirmTouched(true)}
@@ -422,7 +434,7 @@ export default function RegisterScreen() {
             <Text style={s.label}>{t('auth.password')}<Text style={s.required}> *</Text></Text>
             <View style={s.passwordRow}>
               <TextInput
-                style={[inp, s.passwordInput, showPasswordError ? s.inputErr : null]}
+                style={[inp, s.passwordInput, showPasswordError ? s.inputErr : null, partial ? s.inputDisabled : null]}
                 value={password}
                 onChangeText={setPassword}
                 editable={!partial}
@@ -485,7 +497,10 @@ export default function RegisterScreen() {
               ))}
             </View>
 
-            <Text style={s.label}>{t('onboarding.country')}</Text>
+            {/* `onboarding.country` ("País / Idioma") is left to locale.tsx,
+                where one Select still drives both. Here country is its own
+                field below, so this one is labelled purely as the language. */}
+            <Text style={s.label}>{t('register.language')}</Text>
             <Select
               value={lang}
               onValueChange={(v) => setLang(v as SupportedLang)}
@@ -637,7 +652,12 @@ export default function RegisterScreen() {
 
             {ownership === 'rent' ? (
               <>
-                <Text style={s.label}>{t('onboarding.rental_start_date')}<Text style={s.required}> *</Text></Text>
+                {/* Required only alongside a km allowance period — same rule as
+                    vehicle.tsx. The odometer is never hard-required. */}
+                <Text style={s.label}>
+                  {t('onboarding.rental_start_date')}
+                  {allowancePeriod !== 'unlimited' ? <Text style={s.required}> *</Text> : null}
+                </Text>
                 <TextInput
                   style={inp}
                   value={rentalStartDate}
@@ -647,7 +667,7 @@ export default function RegisterScreen() {
                   accessibilityLabel={t('onboarding.rental_start_date')}
                 />
 
-                <Text style={s.label}>{t('onboarding.rental_start_odometer')}<Text style={s.required}> *</Text></Text>
+                <Text style={s.label}>{t('onboarding.rental_start_odometer')}</Text>
                 <TextInput
                   style={inp}
                   value={rentalStartOdometer}
@@ -901,40 +921,24 @@ export default function RegisterScreen() {
             </View>
           ) : null}
 
-          {/* ── Submit / Retry ─────────────────────────────────────────── */}
-          {partial ? (
-            <>
-              <TouchableOpacity
-                style={[s.cta, (!canSubmit || submitting) && s.ctaDisabled]}
-                onPress={handleRetry}
-                disabled={!canSubmit || submitting}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canSubmit || submitting }}
-                accessibilityLabel={t('register.retry')}
-              >
-                {submitting
-                  ? <ActivityIndicator color={Colors.onAccent} />
-                  : <Text style={s.ctaText}>{t('register.retry')}</Text>}
-              </TouchableOpacity>
-              {!canSubmit ? <Text style={s.ctaHint}>{t('register.missing_required')}</Text> : null}
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={[s.cta, (!canSubmit || submitting) && s.ctaDisabled]}
-                onPress={handleSubmit}
-                disabled={!canSubmit || submitting}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canSubmit || submitting }}
-                accessibilityLabel={t('auth.register')}
-              >
-                {submitting
-                  ? <ActivityIndicator color={Colors.onAccent} />
-                  : <Text style={s.ctaText}>{t('auth.register')}</Text>}
-              </TouchableOpacity>
-              {!canSubmit ? <Text style={s.ctaHint}>{t('register.missing_required')}</Text> : null}
-            </>
-          )}
+          {/* ── Submit / Retry ─────────────────────────────────────────────
+              One CTA for both paths. After a partial failure the account
+              already exists, so the button resumes from the failed step
+              (handleRetry) instead of re-running sign-up (handleSubmit). Both
+              paths share the identical `canSubmit` gate. */}
+          <TouchableOpacity
+            style={[s.cta, (!canSubmit || submitting) && s.ctaDisabled]}
+            onPress={partial ? handleRetry : handleSubmit}
+            disabled={!canSubmit || submitting}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canSubmit || submitting }}
+            accessibilityLabel={partial ? t('register.retry') : t('auth.register')}
+          >
+            {submitting
+              ? <ActivityIndicator color={Colors.onAccent} />
+              : <Text style={s.ctaText}>{partial ? t('register.retry') : t('auth.register')}</Text>}
+          </TouchableOpacity>
+          {!canSubmit ? <Text style={s.ctaHint}>{t('register.missing_required')}</Text> : null}
 
           <View style={s.dividerRow}>
             <View style={s.dividerLine} />
@@ -1026,6 +1030,10 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.sm + 4, fontSize: 16, color: Colors.textPrimary, minHeight: 48,
   },
   inputErr: { borderColor: Colors.error },
+  // Applied to email/emailConfirm/password while a partial failure is being
+  // resumed — those are `editable={!partial}` and need to look it. Matches the
+  // opacity convention already used by `ctaDisabled`.
+  inputDisabled: { opacity: 0.55, backgroundColor: Colors.surfaceAlt },
   fieldError: { color: Colors.error, fontSize: 12, marginTop: Spacing.xs },
 
   passwordRow: { position: 'relative' },

@@ -61,6 +61,20 @@ describe('completeRegistration', () => {
     expect(upsertProfile).not.toHaveBeenCalled();
   });
 
+  it('stops with an account-creation failure when sign-up returns a user but no session (email confirmation still required)', async () => {
+    // Supabase returns user-without-session when the project's "Confirm email"
+    // setting is on. Every later step would then fail on RLS, so this must not
+    // become an unresumable partial_failure loop.
+    (authSignUp as jest.Mock).mockResolvedValue({ data: { user: { id: 'u1' }, session: null }, error: null });
+
+    const result = await completeRegistration(baseInput);
+
+    expect(result.status).toBe('account_creation_failed');
+    expect(upsertProfile).not.toHaveBeenCalled();
+    expect(createVehicle).not.toHaveBeenCalled();
+    expect(markOnboardingDone).not.toHaveBeenCalled();
+  });
+
   it('returns a resumable partial-failure result identifying the failed step and the created user id, without retrying automatically', async () => {
     (authSignUp as jest.Mock).mockResolvedValue({ data: { user: { id: 'u1' }, session: {} }, error: null });
     (upsertProfile as jest.Mock).mockRejectedValue(new Error('network'));

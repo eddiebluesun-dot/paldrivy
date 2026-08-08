@@ -46,6 +46,18 @@ export async function completeRegistration(
       if (error || !data.user) {
         return { status: 'account_creation_failed', message: error?.message ?? 'Sign-up failed' };
       }
+      // No session means this Supabase project still has "Confirm email" on, so
+      // every subsequent step would fail on RLS. Stop here with a clear message
+      // instead of letting the driver loop on an unresumable partial_failure.
+      // Reported as `account_creation_failed` on purpose: nothing downstream was
+      // created, so there is nothing to resume — the screen renders it as an
+      // inline, retry-safe error.
+      if (!data.session) {
+        return {
+          status: 'account_creation_failed',
+          message: 'Confirme seu e-mail para continuar (verifique sua caixa de entrada).',
+        };
+      }
       userId = data.user.id;
     }
     if (!userId) throw new Error('completeRegistration: missing userId after account step');
