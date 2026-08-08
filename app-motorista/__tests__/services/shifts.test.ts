@@ -133,15 +133,54 @@ describe('endShift', () => {
 });
 
 describe('updateShift', () => {
-  it('wires the same allocation deduction as endShift', async () => {
+  it('wires the same allocation deduction as endShift, via a two-phase write (persist fields first, then correct the allocation)', async () => {
     mockedGetAllocated.mockResolvedValue(2000);
     const { updates } = mockShiftsTable({ fetchRow: { user_id: 'user-1' } });
 
     await updateShift('shift-2', basePayload(), '2026-08-05T08:00:00.000Z', '2026-08-05T18:00:00.000Z');
 
     expect(mockedGetAllocated).toHaveBeenCalledWith('user-1', '2026-08-05', 'shift-2');
-    expect(updates[0].net_cents).toBe(20500 - 2000);
-    expect(updates[0].allocated_fixed_cents).toBe(2000);
+    expect(updates).toHaveLength(2);
+    // Phase 1: placeholder allocation, but started_at/etc. already persisted.
+    expect(updates[0].allocated_fixed_cents).toBe(0);
+    expect(updates[0].net_cents).toBe(20500);
+    // Phase 2: follow-up update corrects both fields.
+    expect(updates[1].net_cents).toBe(20500 - 2000);
+    expect(updates[1].allocated_fixed_cents).toBe(2000);
+  });
+
+  // Regression test for the bug flagged in review: safeGetAllocatedFixedCents
+  // (and thus getAllocatedFixedCentsForShift) used to run BEFORE updateShift's
+  // own .update() persisted the new started_at. getAllocatedFixedCentsForShift
+  // queries the shifts table for rows already persisted within the NEW
+  // shiftDate's UTC-day window and throws if shiftId isn't found there -- so
+  // editing a shift's start time across a day boundary (e.g. correcting
+  // 23:58 to 00:02 the next day) meant the DB row was still on the OLD day
+  // at lookup time, the lookup threw, and safeGetAllocatedFixedCents silently
+  // degraded to allocated_fixed_cents=0. The fix: persist started_at FIRST
+  // (phase 1), then look up the allocation (phase 2), mirroring
+  // createManualShift's two-phase write.
+  it('persists the new started_at BEFORE looking up the allocation, so a shift edited across a UTC day boundary resolves under its NEW day', async () => {
+    const { updates } = mockShiftsTable({ fetchRow: { user_id: 'user-1' } });
+    mockedGetAllocated.mockImplementation(async (_userId: string, shiftDate: string, _shiftId: string) => {
+      // Prove ordering: by the time the allocation lookup runs, phase 1's
+      // update (persisting the new started_at) must already have happened --
+      // otherwise this is exactly the stale-day race being regression-tested.
+      expect(updates).toHaveLength(1);
+      expect(shiftDate).toBe('2026-08-05'); // the NEW day, not the old '2026-08-04'
+      return 4200;
+    });
+
+    // Shift originally started 2026-08-04T23:58:00Z, edited to
+    // 2026-08-05T00:02:00Z -- crossing a UTC day boundary.
+    await updateShift('shift-3', basePayload(), '2026-08-05T00:02:00.000Z', '2026-08-05T10:00:00.000Z');
+
+    expect(mockedGetAllocated).toHaveBeenCalledWith('user-1', '2026-08-05', 'shift-3');
+    expect(updates).toHaveLength(2);
+    expect(updates[0].started_at).toBe('2026-08-05T00:02:00.000Z');
+    expect(updates[0].allocated_fixed_cents).toBe(0);
+    expect(updates[1].net_cents).toBe(20500 - 4200);
+    expect(updates[1].allocated_fixed_cents).toBe(4200);
   });
 });
 

@@ -177,8 +177,14 @@ export async function updateShift(
   startedAt?: string,
   endedAt?: string,
 ): Promise<void> {
-  const allocatedFixedCents = await safeGetAllocatedFixedCents(shiftId, startedAt);
-  const { grossCents, netCents } = calcGrossNet(payload, allocatedFixedCents);
+  // Two-phase write, mirroring createManualShift: getAllocatedFixedCentsForShift
+  // queries `shifts` for rows already persisted within the shiftDate's UTC-day
+  // window and throws if shiftId isn't found there. If this edit moves
+  // started_at across a day boundary, the allocation lookup must run AFTER
+  // the new started_at is durably persisted (phase 1) -- otherwise the DB row
+  // is still on the OLD day at lookup time, the lookup throws, and
+  // safeGetAllocatedFixedCents silently degrades to 0.
+  const { grossCents, netCents: placeholderNetCents } = calcGrossNet(payload);
   const updateData: Record<string, unknown> = {
     odometer_end_meters: payload.odometer_end_meters,
     platforms: payload.platforms,
@@ -189,8 +195,8 @@ export async function updateShift(
     bonuses_cents: payload.bonuses_cents,
     rides_count: payload.rides_count,
     gross_cents: grossCents,
-    net_cents: netCents,
-    allocated_fixed_cents: allocatedFixedCents,
+    net_cents: placeholderNetCents,
+    allocated_fixed_cents: 0,
     mood_rating: payload.mood_rating ?? null,
     notes: payload.notes?.trim() || null,
   };
@@ -204,6 +210,21 @@ export async function updateShift(
   }
   const { error } = await supabase.from('shifts').update(updateData).eq('id', shiftId);
   if (error) throw error;
+
+  // Phase 2: started_at (if changed) is now durably persisted, so the
+  // allocation lookup can correctly resolve this shift's day.
+  const allocatedFixedCents = await safeGetAllocatedFixedCents(shiftId, startedAt);
+  const { netCents: correctedNetCents } = calcGrossNet(payload, allocatedFixedCents);
+  const { error: correctionError } = await supabase
+    .from('shifts')
+    .update({ net_cents: correctedNetCents, allocated_fixed_cents: allocatedFixedCents })
+    .eq('id', shiftId);
+  if (correctionError) {
+    // The shift's primary fields were already persisted above -- don't fail
+    // the edit over the correction write; just leave the placeholder
+    // allocation in place and log for investigation.
+    console.error(`[shifts] failed to persist corrected allocated_fixed_cents for shift ${shiftId}`, correctionError);
+  }
 }
 
 export async function createManualShift(
