@@ -415,7 +415,8 @@
                  "my_platforms":  "Minhas plataformas",
                  "platforms_empty":  "Nenhuma plataforma cadastrada",
                  "platforms_custom":  "Outra plataforma",
-                 "platforms_custom_placeholder":  "Ex: Cabify, Buser..."
+                 "platforms_custom_placeholder":  "Ex: Cabify, Buser...",
+                 "tour_replay": "Tutorial do app"
              },
     "notifications":  {
                           "title":  "Notificações",
@@ -486,5 +487,25 @@
     "dashboard_locked_body": "Assine o Premium para desbloquear gráficos e histórico detalhado.",
     "upgrade_cta": "Assinar Premium",
     "maybe_later": "Agora não"
+  },
+  "tour": {
+    "next": "Próximo",
+    "back": "Anterior",
+    "skip": "Pular",
+    "finish": "Concluir",
+    "vehicle_pill_title": "Seu veículo",
+    "vehicle_pill_desc": "Aqui você vê o veículo ativo e o consumo médio. Toque para trocar entre veículos cadastrados.",
+    "goal_card_title": "Meta do dia",
+    "goal_card_desc": "Acompanhe quanto falta pra bater sua meta hoje. Toque em \"Editar meta mensal\" pra ajustar o valor a qualquer momento.",
+    "summary_cards_title": "Resumo financeiro",
+    "summary_cards_desc": "Receita, despesas, lucro e R$/hora da semana — atualizados a cada turno e despesa que você lança.",
+    "quickadd_title": "Lançamento rápido",
+    "quickadd_desc": "Toque aqui pra iniciar um turno, lançar abastecimento ou registrar uma despesa.",
+    "tab_shifts_title": "Turnos",
+    "tab_shifts_desc": "Veja o histórico completo dos seus turnos trabalhados.",
+    "tab_community_title": "Comunidade",
+    "tab_community_desc": "Troque experiências com outros motoristas PalDrivy.",
+    "tab_more_title": "Mais",
+    "tab_more_desc": "Configurações, veículos, notificações -- e é aqui que você reabre este tutorial quando quiser."
   }
 }

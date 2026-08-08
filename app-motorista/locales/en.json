@@ -415,7 +415,8 @@
                  "my_platforms":  "My platforms",
                  "platforms_empty":  "No platforms saved",
                  "platforms_custom":  "Other platform",
-                 "platforms_custom_placeholder":  "e.g. Lyft, DoorDash..."
+                 "platforms_custom_placeholder":  "e.g. Lyft, DoorDash...",
+                 "tour_replay": "App tutorial"
              },
     "notifications":  {
                           "title":  "Notifications",
@@ -486,5 +487,25 @@
     "dashboard_locked_body": "Subscribe to Premium to unlock charts and detailed history.",
     "upgrade_cta": "Subscribe to Premium",
     "maybe_later": "Not now"
+  },
+  "tour": {
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip",
+    "finish": "Done",
+    "vehicle_pill_title": "Your vehicle",
+    "vehicle_pill_desc": "Here's your active vehicle and its average consumption. Tap to switch between your saved vehicles.",
+    "goal_card_title": "Today's goal",
+    "goal_card_desc": "Track how much you have left to hit today's goal. Tap \"Edit monthly goal\" to adjust the amount anytime.",
+    "summary_cards_title": "Financial summary",
+    "summary_cards_desc": "Revenue, expenses, profit, and earnings/hour for the week — updated with every shift and expense you log.",
+    "quickadd_title": "Quick add",
+    "quickadd_desc": "Tap here to start a shift, log a fill-up, or add an expense.",
+    "tab_shifts_title": "Shifts",
+    "tab_shifts_desc": "See the full history of your worked shifts.",
+    "tab_community_title": "Community",
+    "tab_community_desc": "Swap tips and experiences with other PalDrivy drivers.",
+    "tab_more_title": "More",
+    "tab_more_desc": "Settings, vehicles, notifications -- and this is where you reopen this tutorial anytime."
   }
 }

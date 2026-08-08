@@ -372,7 +372,8 @@
     "my_platforms": "我的平台",
     "platforms_empty": "暂无平台记录",
     "platforms_custom": "其他平台",
-    "platforms_custom_placeholder": "例：曹操出行、如祺..."
+    "platforms_custom_placeholder": "例：曹操出行、如祺...",
+    "tour_replay": "应用教程"
   },
   "notifications": {
     "title": "通知",
@@ -406,5 +407,25 @@
     "annual_title": "年度利润表",
     "comparison_title": "月度对比",
     "year_total": "年度合计"
+  },
+  "tour": {
+    "next": "下一步",
+    "back": "上一步",
+    "skip": "跳过",
+    "finish": "完成",
+    "vehicle_pill_title": "您的车辆",
+    "vehicle_pill_desc": "这里显示当前使用的车辆和平均油耗。点击可切换您已添加的车辆。",
+    "goal_card_title": "今日目标",
+    "goal_card_desc": "查看今天距离达成目标还差多少。点击“编辑月目标”可随时调整金额。",
+    "summary_cards_title": "财务摘要",
+    "summary_cards_desc": "本周的收入、支出、利润和每小时收益 — 每次记录行程或支出后自动更新。",
+    "quickadd_title": "快速记录",
+    "quickadd_desc": "点击这里开始行程、记录加油或添加支出。",
+    "tab_shifts_title": "行程",
+    "tab_shifts_desc": "查看您完整的行程记录。",
+    "tab_community_title": "社区",
+    "tab_community_desc": "与其他PalDrivy司机交流经验。",
+    "tab_more_title": "更多",
+    "tab_more_desc": "设置、车辆、通知——您也可以在这里随时重新打开本教程。"
   }
 }

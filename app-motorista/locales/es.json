@@ -416,7 +416,8 @@
                  "my_platforms":  "Mis plataformas",
                  "platforms_empty":  "Sin plataformas guardadas",
                  "platforms_custom":  "Otra plataforma",
-                 "platforms_custom_placeholder":  "Ej: DiDi, Cabify..."
+                 "platforms_custom_placeholder":  "Ej: DiDi, Cabify...",
+                 "tour_replay": "Tutorial de la app"
              },
     "notifications":  {
                           "title":  "Notificaciones",
@@ -487,5 +488,25 @@
     "dashboard_locked_body": "Suscríbete a Premium para desbloquear gráficos e historial detallado.",
     "upgrade_cta": "Suscribirse a Premium",
     "maybe_later": "Ahora no"
+  },
+  "tour": {
+    "next": "Siguiente",
+    "back": "Atrás",
+    "skip": "Omitir",
+    "finish": "Finalizar",
+    "vehicle_pill_title": "Tu vehículo",
+    "vehicle_pill_desc": "Aquí ves el vehículo activo y el consumo promedio. Toca para cambiar entre tus vehículos guardados.",
+    "goal_card_title": "Meta de hoy",
+    "goal_card_desc": "Sigue cuánto te falta para alcanzar tu meta de hoy. Toca \"Editar meta mensual\" para ajustar el valor cuando quieras.",
+    "summary_cards_title": "Resumen financiero",
+    "summary_cards_desc": "Ingresos, gastos, ganancia y ganancia por hora de la semana — se actualizan con cada turno y gasto que registras.",
+    "quickadd_title": "Registro rápido",
+    "quickadd_desc": "Toca aquí para iniciar un turno, registrar una carga de combustible o un gasto.",
+    "tab_shifts_title": "Turnos",
+    "tab_shifts_desc": "Consulta el historial completo de tus turnos trabajados.",
+    "tab_community_title": "Comunidad",
+    "tab_community_desc": "Comparte experiencias con otros conductores de PalDrivy.",
+    "tab_more_title": "Más",
+    "tab_more_desc": "Ajustes, vehículos, notificaciones -- y aquí puedes volver a abrir este tutorial cuando quieras."
   }
 }

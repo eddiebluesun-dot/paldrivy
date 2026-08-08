@@ -372,7 +372,8 @@
     "my_platforms": "Mes plateformes",
     "platforms_empty": "Aucune plateforme enregistrée",
     "platforms_custom": "Autre plateforme",
-    "platforms_custom_placeholder": "Ex : Bolt, Heetch..."
+    "platforms_custom_placeholder": "Ex : Bolt, Heetch...",
+    "tour_replay": "Tutoriel de l'application"
   },
   "notifications": {
     "title": "Notifications",
@@ -406,5 +407,25 @@
     "annual_title": "Compte de résultat annuel",
     "comparison_title": "Comparatif mensuel",
     "year_total": "Total annuel"
+  },
+  "tour": {
+    "next": "Suivant",
+    "back": "Retour",
+    "skip": "Passer",
+    "finish": "Terminer",
+    "vehicle_pill_title": "Votre véhicule",
+    "vehicle_pill_desc": "Retrouvez ici le véhicule actif et sa consommation moyenne. Appuyez pour basculer entre vos véhicules enregistrés.",
+    "goal_card_title": "Objectif du jour",
+    "goal_card_desc": "Suivez ce qu'il vous reste pour atteindre votre objectif du jour. Appuyez sur \"Modifier l'objectif mensuel\" pour ajuster le montant à tout moment.",
+    "summary_cards_title": "Résumé financier",
+    "summary_cards_desc": "Revenus, dépenses, bénéfice et gain/heure de la semaine — mis à jour à chaque trajet et dépense que vous enregistrez.",
+    "quickadd_title": "Ajout rapide",
+    "quickadd_desc": "Appuyez ici pour démarrer un trajet, enregistrer un plein ou ajouter une dépense.",
+    "tab_shifts_title": "Trajets",
+    "tab_shifts_desc": "Consultez l'historique complet de vos trajets effectués.",
+    "tab_community_title": "Communauté",
+    "tab_community_desc": "Échangez avec d'autres chauffeurs PalDrivy.",
+    "tab_more_title": "Plus",
+    "tab_more_desc": "Paramètres, véhicules, notifications -- et c'est ici que vous pouvez rouvrir ce tutoriel quand vous voulez."
   }
 }
