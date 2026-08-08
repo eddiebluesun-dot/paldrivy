@@ -6,6 +6,8 @@
 
 Real example from the owner: a weekly car rental of R$660, driver configured to work Mon-Sat (6 days) → R$660 ÷ 6 = R$110/day. If the driver skips a day (e.g. doesn't work a Monday), the recurring expense's total does NOT shrink — it's still R$660 for the week — but that day simply has no shift to allocate a share to, so no allocation entry exists for it.
 
+Second example, confirming the same rule applies to monthly-frequency expenses: monthly car insurance. The owner's own phrase for the divisor was "dias úteis no mês" (business days in the month) — explicitly confirmed this means the driver's OWN configured `working_days` count within that month (e.g. ~26 days for a Mon-Sat driver), NOT a calendar business-day definition (Mon-Fri excluding holidays, typically 21-23/month). "Dias úteis"/"dias trabalhados" are used interchangeably by the owner throughout — both always resolve to `goal.working_days`, never a generic calendar concept, for both weekly and monthly recurring expenses.
+
 `ShiftCalc.allocated_fixed_cents` already exists in `src/types/index.ts` as a field, but nothing in the codebase currently computes or writes to it — this feature is what finally implements it.
 
 ## Data model
