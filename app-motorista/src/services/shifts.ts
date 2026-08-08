@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { Shift, EndShiftData, ShiftPause } from '../types';
 import { hasReachedShiftLimit } from '../utils/freeLimits';
+import { getAllocatedFixedCentsForShift } from './recurringExpenseAllocation';
 
 function totalPausedSeconds(pauses: ShiftPause[]): number {
   return pauses.reduce((sum, p) => {
@@ -81,15 +82,60 @@ export async function startShift(
   return data;
 }
 
-function calcGrossNet(payload: EndShiftData): { grossCents: number; netCents: number } {
+function calcGrossNet(payload: EndShiftData, allocatedFixedCents = 0): { grossCents: number; netCents: number } {
   const platformGross = payload.platforms.reduce((sum, p) => sum + p.amount_cents, 0);
   const grossCents = platformGross + payload.tips_cents + payload.bonuses_cents;
   const deductions = payload.tolls_cents + payload.parking_cents + payload.food_cents;
-  return { grossCents, netCents: grossCents - deductions };
+  return { grossCents, netCents: grossCents - deductions - allocatedFixedCents };
+}
+
+// shiftDate must be derived using UTC-day extraction, matching
+// getAllocatedFixedCentsForShift's own internal dayStart/dayEnd convention
+// (see recurringExpenseAllocation.ts) -- NOT local-calendar-day extraction,
+// which would silently misattribute shifts near local midnight.
+function toUtcShiftDate(startedAt: string): string {
+  return new Date(startedAt).toISOString().slice(0, 10);
+}
+
+// Looks up this shift's allocated fixed cost for its day, tolerating any
+// failure (missing context row, Task 3's own defensive throw, network error,
+// etc.) by falling back to 0 -- today's pre-feature behavior. A rare
+// allocation-calculation bug must never block a driver from completing a
+// shift, so this never throws.
+//
+// `knownUserId` lets createManualShift skip the extra context fetch below,
+// since it already has userId and startedAt as direct parameters. endShift
+// and updateShift don't receive userId at all, so they always need the
+// fetch (for user_id, and for started_at too when the caller omitted it).
+async function safeGetAllocatedFixedCents(
+  shiftId: string,
+  startedAt: string | undefined,
+  knownUserId?: string,
+): Promise<number> {
+  try {
+    let userId = knownUserId;
+    let effectiveStartedAt = startedAt;
+    if (!userId || !effectiveStartedAt) {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('user_id, started_at')
+        .eq('id', shiftId)
+        .single();
+      if (error) throw error;
+      userId = userId ?? (data as { user_id: string }).user_id;
+      effectiveStartedAt = effectiveStartedAt ?? (data as { started_at: string }).started_at;
+    }
+    const shiftDate = toUtcShiftDate(effectiveStartedAt);
+    return await getAllocatedFixedCentsForShift(userId, shiftDate, shiftId);
+  } catch (err) {
+    console.error(`[shifts] failed to compute allocated_fixed_cents for shift ${shiftId}; defaulting to 0`, err);
+    return 0;
+  }
 }
 
 export async function endShift(shiftId: string, payload: EndShiftData, startedAt?: string, pauses: ShiftPause[] = []): Promise<void> {
-  const { grossCents, netCents } = calcGrossNet(payload);
+  const allocatedFixedCents = await safeGetAllocatedFixedCents(shiftId, startedAt);
+  const { grossCents, netCents } = calcGrossNet(payload, allocatedFixedCents);
 
   // If the shift is currently paused, use that pause's start as the effective end time
   const openPause = pauses.find(p => !p.ended_at);
@@ -116,6 +162,7 @@ export async function endShift(shiftId: string, payload: EndShiftData, startedAt
     rides_count: payload.rides_count,
     gross_cents: grossCents,
     net_cents: netCents,
+    allocated_fixed_cents: allocatedFixedCents,
     mood_rating: payload.mood_rating ?? null,
     notes: payload.notes?.trim() || null,
   };
@@ -130,7 +177,8 @@ export async function updateShift(
   startedAt?: string,
   endedAt?: string,
 ): Promise<void> {
-  const { grossCents, netCents } = calcGrossNet(payload);
+  const allocatedFixedCents = await safeGetAllocatedFixedCents(shiftId, startedAt);
+  const { grossCents, netCents } = calcGrossNet(payload, allocatedFixedCents);
   const updateData: Record<string, unknown> = {
     odometer_end_meters: payload.odometer_end_meters,
     platforms: payload.platforms,
@@ -142,6 +190,7 @@ export async function updateShift(
     rides_count: payload.rides_count,
     gross_cents: grossCents,
     net_cents: netCents,
+    allocated_fixed_cents: allocatedFixedCents,
     mood_rating: payload.mood_rating ?? null,
     notes: payload.notes?.trim() || null,
   };
@@ -169,7 +218,13 @@ export async function createManualShift(
     const count = await getShiftsCountThisMonth(userId);
     if (hasReachedShiftLimit(count)) throw new FreeLimitError('shifts');
   }
-  const { grossCents, netCents } = calcGrossNet(payload);
+  // Phase 1: calcGrossNet's allocation lookup needs the shift's own id to
+  // find its position among same-day shifts (getAllocatedFixedCentsForShift
+  // throws if the id isn't already persisted with started_at set) -- but the
+  // id is only generated by this insert. Insert first with a 0 placeholder
+  // allocation (and the not-yet-corrected net_cents), then correct both
+  // fields in a follow-up update once the real id is known (phase 2 below).
+  const { grossCents: placeholderGrossCents, netCents: placeholderNetCents } = calcGrossNet(payload);
   const durationSeconds = Math.max(
     Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000),
     0,
@@ -189,13 +244,32 @@ export async function createManualShift(
     tips_cents: payload.tips_cents,
     bonuses_cents: payload.bonuses_cents,
     rides_count: payload.rides_count,
-    gross_cents: grossCents,
-    net_cents: netCents,
+    gross_cents: placeholderGrossCents,
+    net_cents: placeholderNetCents,
+    allocated_fixed_cents: 0,
     mood_rating: payload.mood_rating ?? null,
     notes: payload.notes?.trim() || null,
   }).select('id').single();
   if (error) throw error;
-  return (data as { id: string }).id;
+  const shiftId = (data as { id: string }).id;
+
+  // Phase 2: the row (with started_at) now exists and is queryable, so the
+  // allocation lookup can run. userId/startedAt are already known here, so
+  // this skips the extra context-fetch that endShift/updateShift need.
+  const allocatedFixedCents = await safeGetAllocatedFixedCents(shiftId, startedAt, userId);
+  const { netCents: correctedNetCents } = calcGrossNet(payload, allocatedFixedCents);
+  const { error: correctionError } = await supabase
+    .from('shifts')
+    .update({ net_cents: correctedNetCents, allocated_fixed_cents: allocatedFixedCents })
+    .eq('id', shiftId);
+  if (correctionError) {
+    // The shift row itself was already created successfully above -- don't
+    // fail shift creation over the correction write; just leave the
+    // placeholder allocation in place and log for investigation.
+    console.error(`[shifts] failed to persist corrected allocated_fixed_cents for manual shift ${shiftId}`, correctionError);
+  }
+
+  return shiftId;
 }
 
 export async function deleteShift(shiftId: string): Promise<void> {
