@@ -4,7 +4,9 @@
 
 ## Context
 
-Current flow, confirmed by reading each screen: `app/(auth)/register.tsx` (email + password only) → `app/onboarding/locale.tsx` → `app/onboarding/consent.tsx` (LGPD legal docs) → `app/onboarding/vehicle.tsx` (vehicle + today's new rental fields) → `app/onboarding/platforms.tsx` (skippable) → `app/onboarding/goal.tsx` (sets `profiles.onboarding_done = true`, the actual app-access gate). Name, phone, city, state, and country are **not collected anywhere in this sequence today** — they only exist as editable fields in the "Mais" (Settings) profile section, left blank until the driver manually fills them in later, if ever.
+Current flow, confirmed by reading each screen: `app/(auth)/register.tsx` (email + password only) → `app/onboarding/locale.tsx` → `app/onboarding/consent.tsx` (LGPD legal docs) → `app/onboarding/vehicle.tsx` (vehicle + today's new rental fields) → `app/onboarding/platforms.tsx` (skippable) → `app/onboarding/goal.tsx` (sets `profiles.onboarding_done = true`, the actual app-access gate).
+
+**Correction from an earlier pass of this investigation**: name, phone, city, state, country, worker type, currency, and distance/volume units are already fully collected today — by `locale.tsx`, the SECOND screen in the sequence (not missing entirely, as first assumed). It already calls `getAutoLocale()` for the auto-detected defaults, pre-fills the phone dial-code from `COUNTRY_DIAL`, and writes everything via `upsertProfile()`. **The real gap this feature closes is screen-transition friction — 6 separate full-screen steps, each its own abandonment point — not missing data collection.** Every field this design lists already has working collection logic somewhere in the current sequence; the work is consolidating that existing logic into one flow with one submit, not building new field collection from scratch.
 
 Real business context from today's earlier urgent fix: two real drivers (`mtsmotta420@gmail.com`, `feliperzende@gmail.com`) already abandoned signup at the email-confirmation step, which was fixed by disabling Supabase's "Confirm email" project setting. This consolidation is a further, deliberate reduction of signup friction/steps.
 
@@ -16,17 +18,17 @@ Real business context from today's earlier urgent fix: two real drivers (`mtsmot
 
 ## Fields collected, in one flow
 
-1. **Language** — pre-selected via `getAutoLocale()` (already implemented, `src/utils/autoLocale.ts` — device region → language, no new detection logic needed), shown as an editable chip-row at the top rather than a separate screen, matching how `locale.tsx` likely already lets the user override the guess.
-2. **Email** (typed twice, client-side match validation — no server confirmation link).
-3. **Password**.
-4. **Full name.**
-5. **Phone** — pre-fill the country dial-code prefix from `COUNTRY_DIAL` (already exists in `autoLocale.ts`) based on auto-detected country, editable.
-6. **City, state (UF).**
-7. **Country** — auto-detected via `getAutoLocale().country`, editable (a driver on a VPN or with an inaccurate device region shouldn't be stuck with a wrong country).
-8. **Vehicle**: brand, model, year, fuel type, consumption, ownership (own/financed/rented — reusing today's rental-km-allowance conditional fields exactly as built in `app/onboarding/vehicle.tsx`, current odometer.
-9. **Platforms** (Uber/99/custom) — kept as a lightweight, clearly-optional section (matching its current "skip if empty" behavior), not force-completed.
-10. **Monthly goal** — optional (matching current behavior: skippable, only creates a `goals` row if a value was entered).
-11. **LGPD consent** — see the compliance note below; still required, still gates submission, but presented as its own clearly-delineated section within the flow, not diluted among unrelated fields.
+Each group below already has a working implementation in an existing screen — the plan's job is extracting/reusing that logic in one combined flow, not reinventing it.
+
+1. **Language, currency, distance/volume units** — from `locale.tsx`: `getAutoLocale()` pre-fills all of these; `locale.tsx` already lets the user override each via `Select`.
+2. **Email** (typed twice, client-side match validation — no server confirmation link) — NEW behavior; `register.tsx` today only has single-entry email + password.
+3. **Password** — from `register.tsx`, unchanged.
+4. **Full name, phone, city, state, worker type** — from `locale.tsx`, unchanged logic (including the `COUNTRY_DIAL` phone pre-fill), just relocated into the combined flow.
+5. **Country** — auto-detected via `getAutoLocale().country` (already how `locale.tsx` gets it), editable (a driver on a VPN or with an inaccurate device region shouldn't be stuck with a wrong country) — currently NOT user-editable in `locale.tsx` (it's used internally to build `locale`/prefill phone, but has no visible field of its own); add a visible, editable country field as this design's one small net-new piece here.
+6. **Vehicle**: brand, model, year, fuel type, consumption, ownership (own/financed/rented — reusing today's rental-km-allowance conditional fields exactly as built in `app/onboarding/vehicle.tsx`), current odometer — from `vehicle.tsx`, unchanged logic.
+7. **Platforms** (Uber/99/custom) — from `platforms.tsx`, unchanged logic, kept as a lightweight, clearly-optional section (matching its current "skip if empty" behavior).
+8. **Monthly goal** — from `goal.tsx`, unchanged logic (optional, skippable, only creates a `goals` row if a value was entered).
+9. **LGPD consent** — from `consent.tsx`; see the compliance note below — still required, still gates submission, but presented as its own clearly-delineated section within the flow, not diluted among unrelated fields.
 
 ## LGPD compliance note (important, not optional)
 
