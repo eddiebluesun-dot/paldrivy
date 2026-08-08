@@ -8,7 +8,9 @@ Real example from the owner: a weekly car rental of R$660, driver configured to 
 
 Second example, confirming the same rule applies to monthly-frequency expenses: monthly car insurance. The owner's own phrase for the divisor was "dias úteis no mês" (business days in the month) — explicitly confirmed this means the driver's OWN configured `working_days` count within that month (e.g. ~26 days for a Mon-Sat driver), NOT a calendar business-day definition (Mon-Fri excluding holidays, typically 21-23/month). "Dias úteis"/"dias trabalhados" are used interchangeably by the owner throughout — both always resolve to `goal.working_days`, never a generic calendar concept, for both weekly and monthly recurring expenses.
 
-`ShiftCalc.allocated_fixed_cents` already exists in `src/types/index.ts` as a field, but nothing in the codebase currently computes or writes to it — this feature is what finally implements it.
+`ShiftCalc.allocated_fixed_cents` exists in `src/types/index.ts`, but investigation found the ENTIRE `ShiftCalc`/`shifts.calc` jsonb structure is dead code — `fuel_cost_cents`, `net_per_hour_cents`, `net_per_meter_cents` are never written by any of `calcGrossNet`/`endShift`/`updateShift`/`createManualShift` in `src/services/shifts.ts`. The real, actually-used profit calculation is `net_cents` (a plain top-level `shifts` column), computed by `calcGrossNet()`: `grossCents - (tolls_cents + parking_cents + food_cents)` — no fuel cost, no fixed-cost deduction, nothing beyond those three trip-level deductions today.
+
+**Correction from the field's apparent intent**: rather than populating the unused `calc` jsonb blob that nothing reads, this feature adds a genuine new top-level `shifts.allocated_fixed_cents` column (matching the established pattern of `gross_cents`/`net_cents`/`fuel_cost_cents`-if-it-existed being real columns, not jsonb), and folds it into `calcGrossNet`'s `netCents` result as an additional deduction. The pre-existing `ShiftCalc` type/`calc` column are left untouched — out of scope to resurrect unrelated dead code as part of this feature.
 
 ## Data model
 
@@ -33,8 +35,10 @@ For a given user and a given day D (the day a shift occurred):
 
 ## Where this plugs in
 
-- `allocated_fixed_cents` feeds into `ShiftCalc.net_cents`/`net_per_hour_cents`/`net_per_meter_cents` — find wherever `ShiftCalc` is currently computed (likely `src/services/shifts.ts` or the shift-completion edge function referenced in earlier work today, `supabase/functions/calculate-shift/`) and confirm exactly how `net_cents` is derived today, since this feature needs to slot the new fixed-cost deduction into that existing formula without duplicating logic that already handles `fuel_cost_cents`.
-- Per the owner's explicit choice, this ALSO needs to affect a shift's profit calculation directly (not just be shown informationally) — the existing per-shift net-profit numbers shown throughout the app (shift history, "Turnos" tab, etc.) should reflect this deduction once implemented.
+- New column `shifts.allocated_fixed_cents integer not null default 0`.
+- `calcGrossNet()` in `src/services/shifts.ts` (called by `endShift`, `updateShift`, `createManualShift` — all three call sites need the same treatment, they currently duplicate the gross/net computation identically) gains a new parameter/lookup for this shift's allocated fixed cost, and folds it into `netCents`: `netCents = grossCents - deductions - allocatedFixedCents`.
+- The calculation from "Calculation" above (which recurring expenses are active for this shift's day, this driver's `working_days`, split across same-day shifts) needs to run BEFORE `calcGrossNet` so its result can be passed in — likely a new function `getAllocatedFixedCentsForShift(userId, shiftDate)` in a new or existing service, called from `endShift`/`updateShift`/`createManualShift` right before `calcGrossNet`.
+- Per the owner's explicit choice, this needs to affect the shift's PERSISTED `net_cents` (not just a display-time calculation) — the existing per-shift net-profit numbers shown throughout the app (shift history, "Turnos" tab, etc.) already just read `net_cents` directly, so writing the correct value at shift-completion time is sufficient; no other display code needs to change.
 
 ## Retroactive recalculation
 
