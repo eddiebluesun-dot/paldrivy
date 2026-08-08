@@ -18,7 +18,7 @@ import { getActiveShift } from '@/src/services/shifts';
 import { getConsumptionTrend, type ConsumptionTrend } from '@/src/services/fuelConsumption';
 import {
   getActiveGoal, getDayDetail, getMonthlyBuckets, getMonthlyTotals, getMonthMoodStats,
-  getMonthPlatformBreakdown, getPreviousMonthGross,
+  getMonthPlatformBreakdown, getPreviousMonthGross, getPreviousWeekGross,
   getTodaySummary, getWeekBuckets, getWeekTotals, upsertMonthlyGoal,
   type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket,
   type MonthlyTotals, type MonthMoodStats, type PlatformItem,
@@ -680,7 +680,7 @@ function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }
       title: 'Receita',
       value: formatMoney(totals.gross_cents, currencyCode, locale),
       sub: trendPct !== null
-        ? `${trendPct >= 0 ? '+' : ''}${trendPct}% vs mês ant.`
+        ? `${trendPct >= 0 ? '+' : ''}${trendPct}% vs semana ant.`
         : undefined,
       subColor: trendPct !== null && trendPct >= 0 ? Colors.success : Colors.error,
       icon: 'trending-up' as const,
@@ -1215,6 +1215,7 @@ export default function DashboardScreen() {
   const [notifCount, setNotifCount] = useState(0);
   const [moodStats, setMoodStats] = useState<MonthMoodStats | null>(null);
   const [prevMonthGross, setPrevMonthGross] = useState(0);
+  const [prevWeekGross, setPrevWeekGross] = useState(0);
   const [platformBreakdown, setPlatformBreakdown] = useState<PlatformItem[]>([]);
   const [rentalStatus, setRentalStatus] = useState<RentalAllowanceStatus | null>(null);
   const [overageExpenseAdded, setOverageExpenseAdded] = useState(false);
@@ -1266,7 +1267,7 @@ export default function DashboardScreen() {
         return false;
       }
     });
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, platforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -1287,6 +1288,7 @@ export default function DashboardScreen() {
       getStreak(uid).catch(() => 0),
       getMonthMoodStats(uid).catch(() => null),
       getPreviousMonthGross(uid).catch(() => 0),
+      getPreviousWeekGross(uid).catch(() => 0),
       getMonthPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
       rentalStatusP,
       overageAlreadyLoggedP,
@@ -1306,6 +1308,7 @@ export default function DashboardScreen() {
     setStreak(streakCount);
     setMoodStats(mood);
     setPrevMonthGross(prevGross);
+    setPrevWeekGross(prevWeekGrossData);
     setPlatformBreakdown(platforms);
   }, [profile?.vehicle_id]);
 
@@ -1531,16 +1534,9 @@ export default function DashboardScreen() {
 
         <PremiumGate isPremium={isPremium} reason="dashboard_locked">
           <>
-            {/* Kill shot: 4 glassmorphism cards + platform breakdown + equação */}
+            {/* Platform breakdown + equação (month) */}
             {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
               <>
-                <KillShotCards
-                  totals={monthlyTotals}
-                  prevGross={prevMonthGross}
-                  currencyCode={currencyCode}
-                  locale={locale}
-                  distanceUnit={distanceUnit}
-                />
                 <PlatformBreakdownCard
                   platforms={platformBreakdown}
                   currencyCode={currencyCode}
@@ -1553,6 +1549,17 @@ export default function DashboardScreen() {
                   locale={locale}
                 />
               </>
+            )}
+
+            {/* Kill shot: 4 glassmorphism cards — resumo da semana, logo antes do gráfico semanal */}
+            {weekTotals !== null && weekTotals.gross_cents > 0 && (
+              <KillShotCards
+                totals={weekTotals}
+                prevGross={prevWeekGross}
+                currencyCode={currencyCode}
+                locale={locale}
+                distanceUnit={distanceUnit}
+              />
             )}
 
             {weekBuckets.length > 0 && (

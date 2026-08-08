@@ -421,7 +421,7 @@ export async function getWeekTotals(userId: string): Promise<MonthlyTotals> {
   saturday.setHours(23, 59, 59, 999);
 
   const [shiftsRes, expRes, fuelRes] = await Promise.all([
-    supabase.from('shifts').select('gross_cents, net_cents, odometer_start_meters, odometer_end_meters')
+    supabase.from('shifts').select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters')
       .eq('user_id', userId)
       .gte('started_at', sunday.toISOString())
       .lte('started_at', saturday.toISOString())
@@ -438,6 +438,7 @@ export async function getWeekTotals(userId: string): Promise<MonthlyTotals> {
 
   const rows = (shiftsRes.data ?? []) as {
     gross_cents: number | null; net_cents: number | null;
+    duration_seconds: number | null; started_at: string; ended_at: string | null;
     odometer_start_meters: number | null; odometer_end_meters: number | null;
   }[];
   const km_meters = rows.reduce((s, r) =>
@@ -450,6 +451,7 @@ export async function getWeekTotals(userId: string): Promise<MonthlyTotals> {
     expenses_cents: ((expRes.data ?? []) as { amount_cents: number }[]).reduce((s, e) => s + e.amount_cents, 0),
     fuel_cents: ((fuelRes.data ?? []) as { total_cost_cents: number }[]).reduce((s, e) => s + e.total_cost_cents, 0),
     km_meters,
+    duration_seconds: rows.reduce((s, r) => s + durationFromRow(r), 0),
   };
 }
 
@@ -523,6 +525,27 @@ export async function getPreviousMonthGross(userId: string): Promise<number> {
     .eq('user_id', userId)
     .gte('started_at', prevStart.toISOString())
     .lt('started_at', prevEnd.toISOString())
+    .not('ended_at', 'is', null);
+  return ((data ?? []) as { gross_cents: number | null }[]).reduce((s, r) => s + (r.gross_cents ?? 0), 0);
+}
+
+export async function getPreviousWeekGross(userId: string): Promise<number> {
+  const now = new Date();
+  const thisSunday = new Date(now);
+  thisSunday.setDate(now.getDate() - now.getDay());
+  thisSunday.setHours(0, 0, 0, 0);
+  const prevSunday = new Date(thisSunday);
+  prevSunday.setDate(thisSunday.getDate() - 7);
+  const prevSaturday = new Date(thisSunday);
+  prevSaturday.setDate(thisSunday.getDate() - 1);
+  prevSaturday.setHours(23, 59, 59, 999);
+
+  const { data } = await supabase
+    .from('shifts')
+    .select('gross_cents')
+    .eq('user_id', userId)
+    .gte('started_at', prevSunday.toISOString())
+    .lte('started_at', prevSaturday.toISOString())
     .not('ended_at', 'is', null);
   return ((data ?? []) as { gross_cents: number | null }[]).reduce((s, r) => s + (r.gross_cents ?? 0), 0);
 }
