@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, act } from '@testing-library/react-native';
 import { getTourTarget, unregisterTourTarget } from '@/src/tour/tourRegistry';
 
 // TabLayout wraps BiometricGate / EmailVerificationBanner / TourOverlay /
@@ -11,7 +11,13 @@ import { getTourTarget, unregisterTourTarget } from '@/src/tour/tourRegistry';
 jest.mock('@/src/components/BiometricGate', () => ({
   BiometricGate: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('@/src/components/TourOverlay', () => ({ TourOverlay: () => null }));
+// Captures the last props TabLayout passed to TourOverlay (notably
+// `onFinish`) so tests can drive TabLayout's own handleTourFinish behavior
+// without needing the real spotlight overlay to render.
+let mockLastTourOverlayProps: any = null;
+jest.mock('@/src/components/TourOverlay', () => ({
+  TourOverlay: (props: any) => { mockLastTourOverlayProps = props; return null; },
+}));
 jest.mock('@/src/components/QuickAddSheet', () => ({ QuickAddSheet: () => null }));
 jest.mock('@/src/components/EmailVerificationBanner', () => ({ EmailVerificationBanner: () => null }));
 
@@ -77,6 +83,8 @@ jest.mock('expo-router', () => {
 });
 
 import TabLayout from '@/app/(tabs)/_layout';
+import { getProfile, markTourSeen } from '@/src/services/profile';
+import { supabase } from '@/src/lib/supabase';
 
 const TAB_TARGET_IDS = ['tab-shifts', 'tab-community', 'tab-more', 'quickadd-button'];
 
@@ -98,5 +106,69 @@ describe('TabLayout — tab-bar tour targets register after render', () => {
   it('does not register a tour target for the dashboard tab, which has no entry in TAB_TOUR_TARGET_IDS', () => {
     render(<TabLayout />);
     expect(getTourTarget('tab-index')).toBeUndefined();
+  });
+});
+
+describe('TabLayout — guided tour trigger lifecycle', () => {
+  beforeEach(() => {
+    mockLastTourOverlayProps = null;
+    (getProfile as jest.Mock).mockReset().mockResolvedValue(null);
+    (markTourSeen as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (supabase.auth.getUser as jest.Mock).mockReset().mockResolvedValue({ data: { user: null } });
+  });
+  afterEach(() => {
+    TAB_TARGET_IDS.forEach(unregisterTourTarget);
+  });
+
+  it('logs a persist failure instead of swallowing it silently, without throwing', async () => {
+    (supabase.auth.getUser as jest.Mock).mockResolvedValue({ data: { user: { id: 'u1' } } });
+    const persistError = new Error('network down');
+    (markTourSeen as jest.Mock).mockRejectedValue(persistError);
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<TabLayout />);
+    expect(mockLastTourOverlayProps).toBeTruthy();
+
+    await act(async () => {
+      await mockLastTourOverlayProps.onFinish();
+      // let the markTourSeen(...).catch(...) microtask settle
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('clears the pending show-tour timeout on unmount so it cannot fire after teardown', async () => {
+    (supabase.auth.getUser as jest.Mock).mockResolvedValue({ data: { user: { id: 'u1' } } });
+    (getProfile as jest.Mock).mockResolvedValue({ tour_seen: false });
+
+    const realSetTimeout = global.setTimeout;
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+    const setTimeoutSpy = jest
+      .spyOn(global, 'setTimeout')
+      .mockImplementation((handler: any, ms?: number, ...rest: any[]) => {
+        const id = realSetTimeout(handler, ms, ...rest);
+        timeoutIds.push(id);
+        return id as any;
+      });
+    const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
+    const { unmount } = render(<TabLayout />);
+    // flush the getUser().then(...).then(getProfile) chain that schedules the timeout
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(timeoutIds.length).toBeGreaterThan(0);
+    unmount();
+
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(timeoutIds[0]);
+
+    setTimeoutSpy.mockRestore();
+    clearTimeoutSpy.mockRestore();
   });
 });

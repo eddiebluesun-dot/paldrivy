@@ -41,21 +41,30 @@ export default function TabLayout() {
   const [quickAddVisible, setQuickAddVisible] = useState(false);
 
   useEffect(() => {
+    let showTourTimeout: ReturnType<typeof setTimeout> | undefined;
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
       const profile = await getProfile(data.user.id);
       if (profile && !profile.tour_seen) {
         // Delay slightly so the dashboard has painted and TourTarget refs
         // are registered before the first measureInWindow call.
-        setTimeout(() => setTourVisible(true), 500);
+        showTourTimeout = setTimeout(() => setTourVisible(true), 500);
       }
     }).catch(() => {});
+    return () => { if (showTourTimeout) clearTimeout(showTourTimeout); };
   }, []);
 
   async function handleTourFinish() {
     setTourVisible(false);
     const { data } = await supabase.auth.getUser();
-    if (data.user) markTourSeen(data.user.id).catch(() => {});
+    if (data.user) {
+      markTourSeen(data.user.id).catch((err) => {
+        // Fire-and-forget by design (don't block the UI on the persist
+        // call) -- but a failure here means tour_seen never flips, so the
+        // tour would silently re-fire on every future launch. Surface it.
+        console.error('[tour] failed to persist tour_seen', err);
+      });
+    }
   }
 
   return (

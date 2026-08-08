@@ -1,8 +1,9 @@
 import { render, screen, act, fireEvent } from '@testing-library/react-native';
 import { createRef } from 'react';
-import { View } from 'react-native';
+import { View, Dimensions, StyleSheet } from 'react-native';
 import { TourOverlay } from '@/src/components/TourOverlay';
 import { registerTourTarget, unregisterTourTarget } from '@/src/tour/tourRegistry';
+import { Spacing } from '@/src/theme';
 import type { TourStep } from '@/src/tour/steps';
 
 const STEPS: TourStep[] = [
@@ -57,5 +58,55 @@ describe('TourOverlay', () => {
     const skip = await screen.findByRole('button', { name: /pular|skip/i });
     await act(async () => { fireEvent.press(skip); });
     expect(onFinish).toHaveBeenCalled();
+  });
+
+  it('clamps the tooltip within the viewport when the target is measured far below the screen', async () => {
+    const dimSpy = jest.spyOn(Dimensions, 'get').mockReturnValue({ width: 400, height: 800 } as any);
+    try {
+      // Target sits several thousand px down a scrolling dashboard --
+      // measureInWindow legitimately returns a y well beyond screenHeight.
+      const offscreenRef = createRef<View>();
+      (offscreenRef as any).current = { measureInWindow: (cb: any) => cb(10, 5000, 100, 40) };
+      registerTourTarget('target-a', offscreenRef);
+
+      render(<TourOverlay visible steps={STEPS} onFinish={jest.fn()} />);
+      const tooltip = await screen.findByTestId('tour-tooltip');
+
+      // Simulate the tooltip's real rendered height via onLayout, the same
+      // way React Native reports it after the first paint.
+      await act(async () => {
+        fireEvent(tooltip, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 350, height: 220 } } });
+      });
+
+      const style = StyleSheet.flatten(tooltip.props.style);
+      expect(typeof style.top).toBe('number');
+      expect(style.top).toBeGreaterThanOrEqual(Spacing.lg);
+      expect(style.top).toBeLessThanOrEqual(800 - 220 - Spacing.lg);
+    } finally {
+      dimSpy.mockRestore();
+    }
+  });
+
+  it('calls onFinish when the backdrop is pressed, as a defense-in-depth escape hatch', async () => {
+    const onFinish = jest.fn();
+    render(<TourOverlay visible steps={STEPS} onFinish={onFinish} />);
+    const backdrop = await screen.findByTestId('tour-overlay-backdrop');
+    await act(async () => { fireEvent.press(backdrop); });
+    expect(onFinish).toHaveBeenCalled();
+  });
+
+  it('pressing Back onto an unmounted step continues backward instead of bouncing forward', async () => {
+    render(<TourOverlay visible steps={STEPS} onFinish={jest.fn()} />);
+    // advance from "a" -> auto-skip past unregistered "missing" -> lands on "b"
+    const next = await screen.findByRole('button', { name: /next|próximo/i });
+    await act(async () => { fireEvent.press(next); });
+    expect(await screen.findByText('tour.b_title')).toBeTruthy();
+
+    // now go Back: "missing" is still unregistered, so the auto-skip must
+    // continue in the same (backward) direction the user pressed, landing
+    // on "a" -- not bounce forward back to "b".
+    const back = await screen.findByRole('button', { name: /back|voltar/i });
+    await act(async () => { fireEvent.press(back); });
+    expect(await screen.findByText('tour.a_title')).toBeTruthy();
   });
 });

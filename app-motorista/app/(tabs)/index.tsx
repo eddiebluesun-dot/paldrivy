@@ -1555,20 +1555,31 @@ export default function DashboardScreen() {
                 />
               </>
             )}
+          </>
+        </PremiumGate>
 
-            {/* Kill shot: 4 glassmorphism cards — resumo da semana, logo antes do gráfico semanal */}
-            {weekTotals !== null && weekTotals.gross_cents > 0 && (
-              <TourTarget id="summary-cards">
-                <KillShotCards
-                  totals={weekTotals}
-                  prevGross={prevWeekGross}
-                  currencyCode={currencyCode}
-                  locale={locale}
-                  distanceUnit={distanceUnit}
-                />
-              </TourTarget>
-            )}
+        {/* Kill shot: 4 glassmorphism cards — resumo da semana, logo antes do gráfico semanal.
+            Wrapped in its own PremiumGate (rather than nested inside the block above) so the
+            TourTarget below always registers, even for free-plan users -- otherwise the
+            "summary-cards" tour step silently skips for every non-premium user, since a
+            TourTarget nested inside an unmet PremiumGate never mounts. Spotlighting the
+            locked-card placeholder for free users is an intentional upsell moment here. */}
+        {weekTotals !== null && weekTotals.gross_cents > 0 && (
+          <TourTarget id="summary-cards">
+            <PremiumGate isPremium={isPremium} reason="dashboard_locked">
+              <KillShotCards
+                totals={weekTotals}
+                prevGross={prevWeekGross}
+                currencyCode={currencyCode}
+                locale={locale}
+                distanceUnit={distanceUnit}
+              />
+            </PremiumGate>
+          </TourTarget>
+        )}
 
+        <PremiumGate isPremium={isPremium} reason="dashboard_locked">
+          <>
             {weekBuckets.length > 0 && (
               <WeekBarChart buckets={weekBuckets} weekTotals={weekTotals} currencyCode={currencyCode} locale={locale} language={i18n.language} distanceUnit={distanceUnit} onPress={setSelectedDay} />
             )}
