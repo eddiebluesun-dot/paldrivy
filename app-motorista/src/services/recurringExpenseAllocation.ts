@@ -17,14 +17,26 @@ export async function getAllocatedFixedCentsForShift(
   shiftDate: string,
   shiftId: string,
 ): Promise<number> {
+  // NOTE: shiftDate is assumed to already be in UTC-midnight convention (see
+  // dayStart/dayEnd below), matching Task 2. Shift-day bucketing elsewhere in
+  // this codebase (dashboard.ts's toLocalDateString) uses the LOCAL calendar
+  // day instead -- callers (Task 4) must convert consistently before calling,
+  // not pass a locally-bucketed date string through unchanged.
   const dayStart = `${shiftDate}T00:00:00.000Z`;
   const dayEnd = new Date(new Date(dayStart).getTime() + 24 * 60 * 60 * 1000).toISOString();
 
   const [{ data: expenseRows }, { data: goal }, { data: sameDayShifts }] = await Promise.all([
     supabase.from('expenses').select('amount_cents, expense_date, recurring_frequency')
       .eq('user_id', userId).eq('recurring', true),
+    // Most recent goal that was already active as of shiftDate (not any goal
+    // created after it). This matters for backdated manual shifts
+    // (createManualShift lets a driver log a shift for a past date) so a
+    // newer goal's working_days doesn't get applied retroactively to a
+    // historical shift's allocation. Mirrors the fallback step of
+    // getActiveGoal (dashboard.ts), bounded to shiftDate instead of "now".
     supabase.from('goals').select('working_days')
       .eq('user_id', userId).eq('type', 'monthly')
+      .lte('starts_at', shiftDate)
       .order('starts_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('shifts').select('id, started_at')
       .eq('user_id', userId).gte('started_at', dayStart).lt('started_at', dayEnd)

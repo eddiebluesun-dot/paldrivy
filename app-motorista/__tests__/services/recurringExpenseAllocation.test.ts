@@ -25,6 +25,10 @@ function makeQueryBuilder(rows: Record<string, unknown>[]) {
       filtered = filtered.filter(r => (r[field] as string) < (value as string));
       return builder;
     },
+    lte: (field: string, value: unknown) => {
+      filtered = filtered.filter(r => (r[field] as string) <= (value as string));
+      return builder;
+    },
     order: (field: string, opts?: { ascending?: boolean }) => {
       const ascending = opts?.ascending !== false;
       filtered = [...filtered].sort((a, b) => {
@@ -50,12 +54,14 @@ function makeQueryBuilder(rows: Record<string, unknown>[]) {
 function mockTables(opts: {
   expenses?: Record<string, unknown>[];
   goal?: Record<string, unknown> | null;
+  goals?: Record<string, unknown>[];
   shifts?: Record<string, unknown>[];
 }) {
-  const { expenses = [], goal = null, shifts = [] } = opts;
+  const { expenses = [], goal = null, goals, shifts = [] } = opts;
+  const goalRows = goals ?? (goal ? [goal] : []);
   (supabase.from as jest.Mock).mockImplementation((table: string) => {
     if (table === 'expenses') return makeQueryBuilder(expenses);
-    if (table === 'goals') return makeQueryBuilder(goal ? [goal] : []);
+    if (table === 'goals') return makeQueryBuilder(goalRows);
     if (table === 'shifts') return makeQueryBuilder(shifts);
     throw new Error(`unexpected table ${table}`);
   });
@@ -98,6 +104,30 @@ describe('getAllocatedFixedCentsForShift', () => {
     });
     const result = await getAllocatedFixedCentsForShift('user-1', '2026-08-05', 's1');
     expect(result).toBe(0);
+  });
+
+  // Regression test for the code-review fix: the goal lookup must be scoped
+  // to shiftDate (.lte('starts_at', shiftDate)), not just "most recent goal
+  // overall". createManualShift lets a driver log a backdated shift, and if
+  // a newer goal (different working_days) has since been created, applying
+  // that newer goal's working_days to the historical shift would silently
+  // mis-allocate. Before the fix, this test would pick the 2026-08-01 goal
+  // (5 working days -> dailyTotal 13200) instead of the 2026-07-01 goal that
+  // was actually active on the backdated shiftDate (6 working days ->
+  // dailyTotal 11000).
+  it('scopes the goal lookup to shiftDate, using the goal active back then rather than a newer one', async () => {
+    mockTables({
+      expenses: [{ user_id: 'user-1', amount_cents: 66000, expense_date: '2026-07-07', recurring: true, recurring_frequency: 'weekly' }],
+      goals: [
+        { user_id: 'user-1', type: 'monthly', starts_at: '2026-07-01', working_days: [1, 2, 3, 4, 5, 6] },
+        // Created after the backdated shiftDate below -- must NOT be picked.
+        { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5] },
+      ],
+      shifts: [{ id: 's1', user_id: 'user-1', started_at: '2026-07-08T08:00:00.000Z' }],
+    });
+
+    const result = await getAllocatedFixedCentsForShift('user-1', '2026-07-08', 's1');
+    expect(result).toBe(11000);
   });
 
   // This is the test that proves the remainder-assignment gap (flagged in the
