@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import * as SecureStore from 'expo-secure-store';
 import { Pressable, View } from 'react-native';
 import { Colors } from '@/src/theme';
 import { BiometricGate } from '@/src/components/BiometricGate';
-import { TutorialModal } from '@/src/components/TutorialModal';
+import { TourOverlay } from '@/src/components/TourOverlay';
+import { TOUR_STEPS } from '@/src/tour/steps';
+import { markTourSeen, getProfile } from '@/src/services/profile';
+import { supabase } from '@/src/lib/supabase';
 import { QuickAddSheet } from '@/src/components/QuickAddSheet';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { TourTarget } from '@/src/tour/TourTarget';
@@ -33,22 +35,27 @@ const TAB_TOUR_TARGET_IDS: Record<string, string> = {
   more:      'tab-more',
 };
 
-const TUTORIAL_KEY = 'paldrivy_tutorial_done';
-
 export default function TabLayout() {
   const { t } = useTranslation();
-  const [tutorialVisible, setTutorialVisible] = useState(false);
+  const [tourVisible, setTourVisible] = useState(false);
   const [quickAddVisible, setQuickAddVisible] = useState(false);
 
   useEffect(() => {
-    SecureStore.getItemAsync(TUTORIAL_KEY).then(done => {
-      if (!done) setTutorialVisible(true);
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const profile = await getProfile(data.user.id);
+      if (profile && !profile.tour_seen) {
+        // Delay slightly so the dashboard has painted and TourTarget refs
+        // are registered before the first measureInWindow call.
+        setTimeout(() => setTourVisible(true), 500);
+      }
     }).catch(() => {});
   }, []);
 
-  function handleTutorialClose() {
-    setTutorialVisible(false);
-    SecureStore.setItemAsync(TUTORIAL_KEY, '1').catch(() => {});
+  async function handleTourFinish() {
+    setTourVisible(false);
+    const { data } = await supabase.auth.getUser();
+    if (data.user) markTourSeen(data.user.id).catch(() => {});
   }
 
   return (
@@ -103,7 +110,7 @@ export default function TabLayout() {
         <Tabs.Screen name="expenses"  options={{ href: null }} />
         <Tabs.Screen name="two"       options={{ href: null }} />
       </Tabs>
-      <TutorialModal visible={tutorialVisible} onClose={handleTutorialClose} />
+      <TourOverlay visible={tourVisible} steps={TOUR_STEPS} onFinish={handleTourFinish} />
       <QuickAddSheet visible={quickAddVisible} onClose={() => setQuickAddVisible(false)} />
     </BiometricGate>
   );

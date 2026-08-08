@@ -2,22 +2,34 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { getTourTarget, unregisterTourTarget } from '@/src/tour/tourRegistry';
 
-// TabLayout wraps BiometricGate / EmailVerificationBanner / TutorialModal /
+// TabLayout wraps BiometricGate / EmailVerificationBanner / TourOverlay /
 // QuickAddSheet around the tab navigator. None of their internal behavior
-// (biometric prompts, AsyncStorage, Supabase auth) is relevant to what this
+// (biometric prompts, Supabase auth) is relevant to what this
 // test checks — only that the tab-bar tour targets register — so they're
 // replaced with inert passthroughs/no-ops to keep the render surface small
 // and avoid bootstrapping unrelated native modules.
 jest.mock('@/src/components/BiometricGate', () => ({
   BiometricGate: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('@/src/components/TutorialModal', () => ({ TutorialModal: () => null }));
+jest.mock('@/src/components/TourOverlay', () => ({ TourOverlay: () => null }));
 jest.mock('@/src/components/QuickAddSheet', () => ({ QuickAddSheet: () => null }));
 jest.mock('@/src/components/EmailVerificationBanner', () => ({ EmailVerificationBanner: () => null }));
 
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn().mockResolvedValue('1'),
-  setItemAsync: jest.fn().mockResolvedValue(undefined),
+jest.mock('@/src/tour/steps', () => ({
+  TOUR_STEPS: [],
+}));
+
+jest.mock('@/src/services/profile', () => ({
+  getProfile: jest.fn().mockResolvedValue(null),
+  markTourSeen: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/src/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getUser: jest.fn().mockResolvedValue({ data: { user: null } }),
+    },
+  },
 }));
 
 jest.mock('react-i18next', () => ({
