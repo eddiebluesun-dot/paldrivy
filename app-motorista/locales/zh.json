@@ -260,6 +260,7 @@
     "recent": "最近7天",
     "rides_count_label": "完成单量",
     "rides_deliveries_header": "行程/配送",
+    "earnings_column_header": "收入",
     "odometer_start_hint": "开始工作前记录当前里程",
     "start_confirm": "开始",
     "edit": "编辑行程",

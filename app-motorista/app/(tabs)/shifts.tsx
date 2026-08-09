@@ -347,7 +347,7 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
           <View style={styles.platformHeaderRow}>
             <View style={styles.platformName} />
             <Text style={[styles.platformColumnHeader, styles.platformRides]}>{t('shift.rides_deliveries_header')}</Text>
-            <Text style={[styles.platformColumnHeader, styles.platformAmount]}>{t('shift.earnings')}</Text>
+            <Text style={[styles.platformColumnHeader, styles.platformAmount]}>{t('shift.earnings_column_header')}</Text>
           </View>
           {platforms.map((row, i) => (
             <View key={i} style={styles.platformRow}>
@@ -881,12 +881,12 @@ const styles = StyleSheet.create({
   platformRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
   platformHeaderRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: 4 },
   platformColumnHeader: {
-    color: Colors.textSecondary, fontSize: 9, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center',
+    color: Colors.textSecondary, fontSize: 10, fontWeight: '700',
+    letterSpacing: 0.2, textAlign: 'center',
   },
   platformName: { flex: 1, marginBottom: 0 },
   platformAmount: { width: 90, marginBottom: 0 },
-  platformRides: { width: 64, marginBottom: 0, textAlign: 'center' },
+  platformRides: { width: 76, marginBottom: 0, textAlign: 'center' },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
   addRowText: { color: Colors.accent, fontSize: 14, fontWeight: '600' },
   cumulativeToggleBox: {

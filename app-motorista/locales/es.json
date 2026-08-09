@@ -303,6 +303,7 @@
                   "recent":  "ÚLTIMOS 7 DÍAS",
                   "rides_count_label":  "Viajes realizados",
                   "rides_deliveries_header":  "Viajes/Entregas",
+                  "earnings_column_header":  "Ganancias",
                   "odometer_start_hint":  "Registra el km actual del odómetro antes de salir a trabajar",
                   "start_confirm":  "Iniciar turno",
                   "edit":  "Editar turno",

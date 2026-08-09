@@ -303,6 +303,7 @@
                   "recent":  "LAST 7 DAYS",
                   "rides_count_label":  "Rides completed",
                   "rides_deliveries_header":  "Rides/Deliveries",
+                  "earnings_column_header":  "Earnings",
                   "odometer_start_hint":  "Record your current odometer reading before starting work",
                   "start_confirm":  "Start shift",
                   "edit":  "Edit shift",
