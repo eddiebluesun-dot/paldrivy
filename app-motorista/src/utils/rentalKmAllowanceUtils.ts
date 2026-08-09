@@ -29,11 +29,14 @@ function addMonthClamped(base: Date, monthsToAdd: number): Date {
   return new Date(Date.UTC(y, m + monthsToAdd, Math.min(day, lastDayOfTargetMonth)));
 }
 
-// Weekly: 7-day windows counted forward from contractStartDate. Monthly:
-// calendar-month-length windows anchored to the day-of-month of
-// contractStartDate (e.g. started the 5th -> periods run 5th-to-5th),
-// clamped to the last valid day of the target month for start days that
-// don't exist in every month (29th-31st).
+// Weekly: calendar weeks, Monday-Sunday, resetting every Monday regardless
+// of the contract's own start date's day-of-week (app-standard week
+// definition -- matches the dashboard's week widgets, see
+// getWeekBuckets/getWeekTotals in dashboard.ts). Monthly: calendar-month-
+// length windows anchored to the day-of-month of contractStartDate (e.g.
+// started the 5th -> periods run 5th-to-5th), clamped to the last valid day
+// of the target month for start days that don't exist in every month
+// (29th-31st).
 export function getPeriodBounds(
   contractStartDate: string,
   allowancePeriod: RentalAllowancePeriod,
@@ -44,10 +47,10 @@ export function getPeriodBounds(
   const start = new Date(`${contractStartDate}T00:00:00.000Z`);
 
   if (allowancePeriod === 'weekly') {
-    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-    const elapsedWeeks = Math.floor((now.getTime() - start.getTime()) / msPerWeek);
-    const periodStart = new Date(start.getTime() + elapsedWeeks * msPerWeek);
-    const periodEnd = new Date(periodStart.getTime() + msPerWeek);
+    const dow = now.getUTCDay(); // 0=Sun..6=Sat
+    const daysSinceMonday = (dow + 6) % 7;
+    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday));
+    const periodEnd = new Date(periodStart.getTime() + 7 * 24 * 60 * 60 * 1000);
     return { periodStart, periodEnd };
   }
 
@@ -104,7 +107,14 @@ export function computeRentalAllowanceStatus(params: {
   });
   if (inPeriod.length === 0) return null;
 
-  const isFirstPeriod = periodStart.getTime() === new Date(`${contractStartDate}T00:00:00.000Z`).getTime();
+  // "First period" = the period that CONTAINS the contract's start date, not
+  // "periodStart exactly equals contractStartDate" -- that equality only
+  // ever held for monthly periods (still contract-day-anchored) or a weekly
+  // contract that happened to start on a Monday. Weekly periods are now
+  // calendar-aligned (see getPeriodBounds), so a contract starting mid-week
+  // has its first periodStart fall BEFORE contractStartDate, not equal to it.
+  const contractStart = new Date(`${contractStartDate}T00:00:00.000Z`);
+  const isFirstPeriod = contractStart >= periodStart && contractStart < periodEnd;
   const hasExplicitBaseline = isFirstPeriod && contractStartOdometerMeters != null;
   const baselineMeters = hasExplicitBaseline
     ? (contractStartOdometerMeters as number)

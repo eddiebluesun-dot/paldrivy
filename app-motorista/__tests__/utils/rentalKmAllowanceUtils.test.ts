@@ -5,13 +5,26 @@ describe('getPeriodBounds', () => {
     expect(getPeriodBounds('2026-08-05', 'unlimited', new Date('2026-08-20'))).toBeNull();
   });
 
-  it('computes the current weekly period from the contract start date', () => {
-    // contract started Wed 2026-08-05; "now" is 10 days later (2026-08-15,
-    // a Saturday) -> period 2 is [2026-08-12, 2026-08-19)
+  it('computes the current weekly period as the calendar week (Mon-Sun) containing "now", regardless of the contract start date\'s weekday', () => {
+    // Weekly periods are calendar-aligned (Mon-Sun), not floating 7-day
+    // windows anchored to the contract's own start weekday. Contract started
+    // Wed 2026-08-05; "now" is 2026-08-15 (a Saturday) -> the calendar week
+    // containing it is [2026-08-10 Mon, 2026-08-17 Mon), independent of the
+    // fact the contract itself started on a Wednesday.
     const bounds = getPeriodBounds('2026-08-05', 'weekly', new Date('2026-08-15T12:00:00Z'));
     expect(bounds).toEqual({
-      periodStart: new Date('2026-08-12T00:00:00.000Z'),
-      periodEnd: new Date('2026-08-19T00:00:00.000Z'),
+      periodStart: new Date('2026-08-10T00:00:00.000Z'),
+      periodEnd: new Date('2026-08-17T00:00:00.000Z'),
+    });
+  });
+
+  it('weekly period resets every Monday regardless of contract start weekday (Sunday still counts in the PRIOR week)', () => {
+    // "now" is a Sunday -- must resolve to the week that already started the
+    // preceding Monday, not roll into the next one.
+    const bounds = getPeriodBounds('2026-08-05', 'weekly', new Date('2026-08-16T12:00:00Z')); // Sunday
+    expect(bounds).toEqual({
+      periodStart: new Date('2026-08-10T00:00:00.000Z'),
+      periodEnd: new Date('2026-08-17T00:00:00.000Z'),
     });
   });
 
@@ -109,6 +122,34 @@ describe('computeRentalAllowanceStatus', () => {
     expect(status?.isOverLimit).toBe(true);
     expect(status?.overageKm).toBe(20);
     expect(status?.overageCostCents).toBe(20 * 150);
+  });
+
+  it('weekly allowance resets every Monday: a later calendar week is NOT treated as the "first period" even for a mid-week-started contract', () => {
+    // Contract started Wed 2026-08-05 with an explicit baseline odometer.
+    // The following calendar week (2026-08-10 Mon - 2026-08-17) is a
+    // DIFFERENT period -- it must NOT reuse the original contract-start
+    // odometer as its baseline (that would let unused allowance from week 1
+    // carry over, or double-count already-driven km). It falls back to the
+    // first reading actually logged inside week 2.
+    const week2Readings: OdometerReading[] = [
+      { odometerMeters: 19000000, at: '2026-08-11T09:00:00Z' }, // first reading of the new week
+      { odometerMeters: 19100000, at: '2026-08-12T18:00:00Z' },
+    ];
+    const status = computeRentalAllowanceStatus({
+      contractStartDate: '2026-08-05',
+      contractStartOdometerMeters: 18332000, // week 1's explicit baseline -- must NOT be reused here
+      allowancePeriod: 'weekly',
+      allowanceAmountKm: 500,
+      excessRateCents: 150,
+      readings: week2Readings,
+      now: new Date('2026-08-12T19:00:00Z'),
+    });
+    expect(status?.periodStart).toEqual(new Date('2026-08-10T00:00:00.000Z'));
+    expect(status?.periodEnd).toEqual(new Date('2026-08-17T00:00:00.000Z'));
+    expect(status?.baselineIsEstimated).toBe(true);
+    // baseline = first reading of week 2 (19000000) -> usage = 19100000-19000000 = 100km,
+    // NOT 19100000-18332000 = 768km (which would happen if week 1's baseline leaked in)
+    expect(status?.usageKm).toBe(100);
   });
 
   it('returns null for unlimited allowance (no tracking)', () => {

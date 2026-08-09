@@ -103,20 +103,20 @@ export async function getTodaySummary(userId: string): Promise<DailySummary> {
 
 export async function getWeekBuckets(userId: string): Promise<DayBucket[]> {
   const now = new Date();
-  // Sunday of the current week
-  const sunday = new Date(now);
-  sunday.setDate(now.getDate() - now.getDay());
-  sunday.setHours(0, 0, 0, 0);
-  const saturday = new Date(sunday);
-  saturday.setDate(sunday.getDate() + 6);
-  saturday.setHours(23, 59, 59, 999);
+  // Monday of the current week (app-standard week: Mon-Sun, not Sun-Sat).
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const sundayEnd = new Date(monday);
+  sundayEnd.setDate(monday.getDate() + 6);
+  sundayEnd.setHours(23, 59, 59, 999);
 
   const { data, error } = await supabase
     .from('shifts')
     .select('started_at, net_cents')
     .eq('user_id', userId)
-    .gte('started_at', sunday.toISOString())
-    .lte('started_at', saturday.toISOString())
+    .gte('started_at', monday.toISOString())
+    .lte('started_at', sundayEnd.toISOString())
     .not('ended_at', 'is', null)
     .order('started_at', { ascending: true });
 
@@ -126,8 +126,8 @@ export async function getWeekBuckets(userId: string): Promise<DayBucket[]> {
 
   const bucketMap = new Map<string, number>();
   for (let i = 0; i < 7; i++) {
-    const d = new Date(sunday);
-    d.setDate(sunday.getDate() + i);
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
     bucketMap.set(toLocalDateString(d), 0);
   }
 
@@ -438,27 +438,28 @@ export async function getMonthlyTotals(userId: string): Promise<MonthlyTotals> {
 
 export async function getWeekTotals(userId: string): Promise<MonthlyTotals> {
   const now = new Date();
-  const sunday = new Date(now);
-  sunday.setDate(now.getDate() - now.getDay());
-  sunday.setHours(0, 0, 0, 0);
-  const saturday = new Date(sunday);
-  saturday.setDate(sunday.getDate() + 6);
-  saturday.setHours(23, 59, 59, 999);
+  // Monday of the current week (app-standard week: Mon-Sun, not Sun-Sat).
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const sundayEnd = new Date(monday);
+  sundayEnd.setDate(monday.getDate() + 6);
+  sundayEnd.setHours(23, 59, 59, 999);
 
   const [shiftsRes, expRes, fuelRes] = await Promise.all([
     supabase.from('shifts').select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters')
       .eq('user_id', userId)
-      .gte('started_at', sunday.toISOString())
-      .lte('started_at', saturday.toISOString())
+      .gte('started_at', monday.toISOString())
+      .lte('started_at', sundayEnd.toISOString())
       .not('ended_at', 'is', null),
     supabase.from('expenses').select('amount_cents')
       .eq('user_id', userId)
-      .gte('expense_date', toLocalDateString(sunday))
-      .lte('expense_date', toLocalDateString(saturday)),
+      .gte('expense_date', toLocalDateString(monday))
+      .lte('expense_date', toLocalDateString(sundayEnd)),
     supabase.from('fuel_entries').select('total_cost_cents')
       .eq('user_id', userId)
-      .gte('filled_at', sunday.toISOString())
-      .lte('filled_at', saturday.toISOString()),
+      .gte('filled_at', monday.toISOString())
+      .lte('filled_at', sundayEnd.toISOString()),
   ]);
 
   const rows = (shiftsRes.data ?? []) as {
@@ -556,21 +557,22 @@ export async function getPreviousMonthGross(userId: string): Promise<number> {
 
 export async function getPreviousWeekGross(userId: string): Promise<number> {
   const now = new Date();
-  const thisSunday = new Date(now);
-  thisSunday.setDate(now.getDate() - now.getDay());
-  thisSunday.setHours(0, 0, 0, 0);
-  const prevSunday = new Date(thisSunday);
-  prevSunday.setDate(thisSunday.getDate() - 7);
-  const prevSaturday = new Date(thisSunday);
-  prevSaturday.setDate(thisSunday.getDate() - 1);
-  prevSaturday.setHours(23, 59, 59, 999);
+  // Monday of the current week (app-standard week: Mon-Sun, not Sun-Sat).
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  thisMonday.setHours(0, 0, 0, 0);
+  const prevMonday = new Date(thisMonday);
+  prevMonday.setDate(thisMonday.getDate() - 7);
+  const prevSundayEnd = new Date(thisMonday);
+  prevSundayEnd.setDate(thisMonday.getDate() - 1);
+  prevSundayEnd.setHours(23, 59, 59, 999);
 
   const { data } = await supabase
     .from('shifts')
     .select('gross_cents')
     .eq('user_id', userId)
-    .gte('started_at', prevSunday.toISOString())
-    .lte('started_at', prevSaturday.toISOString())
+    .gte('started_at', prevMonday.toISOString())
+    .lte('started_at', prevSundayEnd.toISOString())
     .not('ended_at', 'is', null);
   return ((data ?? []) as { gross_cents: number | null }[]).reduce((s, r) => s + (r.gross_cents ?? 0), 0);
 }
