@@ -278,7 +278,6 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
   const [model, setModel]           = useState('');
   const [year, setYear]             = useState('');
   const [fuel, setFuel]             = useState<FuelType>('gasoline');
-  const [consumption, setConsumption] = useState('');
   const [ownership, setOwnership]   = useState<OwnershipType>('own');
   const [rentalStartDate, setRentalStartDate]         = useState('');
   const [rentalStartOdometer, setRentalStartOdometer] = useState('');
@@ -292,8 +291,6 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
     if (visible && vehicle) {
       setBrand(vehicle.brand); setModel(vehicle.model);
       setYear(String(vehicle.year)); setFuel(vehicle.fuel_type);
-      const kmPerL = vehicle.avg_consumption_per_100 > 0 ? (100000 / vehicle.avg_consumption_per_100).toFixed(1) : '';
-      setConsumption(kmPerL);
       setOwnership(vehicle.ownership_type);
       setRentalStartDate(vehicle.rental_contract_start_date ?? '');
       setRentalStartOdometer(
@@ -306,7 +303,7 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
       setExcessRate(vehicle.rental_km_excess_rate_cents != null ? String(centsToDecimal(vehicle.rental_km_excess_rate_cents)) : '');
     } else if (visible && !vehicle) {
       setBrand(''); setModel(''); setYear(String(new Date().getFullYear()));
-      setFuel('gasoline'); setConsumption('');
+      setFuel('gasoline');
       setOwnership('own');
       setRentalStartDate(''); setRentalStartOdometer('');
       setAllowancePeriod('unlimited'); setAllowanceAmount(''); setExcessRate('');
@@ -316,8 +313,6 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
   async function handleSave() {
     if (!userId || !brand.trim() || !model.trim()) { setError(t('more.vehicle_required')); return; }
     if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !rentalStartDate.trim()) { setError(t('more.vehicle_required')); return; }
-    const kmPerLiter = parseFloat(consumption.replace(',', '.')) || 0;
-    const mlPer100km = kmPerLiter > 0 ? Math.round((100 / kmPerLiter) * 1000) : 0;
     const rentalFields = {
       ownership_type: ownership,
       rental_contract_start_date: ownership === 'rent' && rentalStartDate ? rentalStartDate : null,
@@ -332,9 +327,13 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
     setSaving(true); setError('');
     try {
       if (vehicle) {
-        await updateVehicle(vehicle.id, { brand: brand.trim(), model: model.trim(), year: parseInt(year) || vehicle.year, fuel_type: fuel, avg_consumption_per_100: mlPer100km, ...rentalFields });
+        // avg_consumption_per_100 is deliberately omitted here — the manual
+        // override was removed in favor of the automatic km+fuel-up
+        // calculation, and a partial update leaves whatever's already
+        // stored untouched rather than resetting it.
+        await updateVehicle(vehicle.id, { brand: brand.trim(), model: model.trim(), year: parseInt(year) || vehicle.year, fuel_type: fuel, ...rentalFields });
       } else {
-        const newVehicle = await createVehicle({ user_id: userId, name: `${brand.trim()} ${model.trim()}`, brand: brand.trim(), model: model.trim(), year: parseInt(year) || new Date().getFullYear(), fuel_type: fuel, avg_consumption_per_100: mlPer100km, monthly_cost_cents: 0, monthly_insurance_cents: 0, current_odometer: 0, is_taxi: false, taxi_license_monthly_cents: 0, ...rentalFields });
+        const newVehicle = await createVehicle({ user_id: userId, name: `${brand.trim()} ${model.trim()}`, brand: brand.trim(), model: model.trim(), year: parseInt(year) || new Date().getFullYear(), fuel_type: fuel, avg_consumption_per_100: 0, monthly_cost_cents: 0, monthly_insurance_cents: 0, current_odometer: 0, is_taxi: false, taxi_license_monthly_cents: 0, ...rentalFields });
         await upsertProfile({ id: userId, vehicle_id: newVehicle.id });
       }
       onSaved();
@@ -362,9 +361,6 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={s.fieldLabel}>{t('more.vehicle_consumption')}</Text>
-          <TextInput style={s.fieldInput} value={consumption} onChangeText={setConsumption} keyboardType="decimal-pad" placeholderTextColor={Colors.textSecondary} placeholder="Ex: 12,5" />
-
           <Text style={s.fieldLabel}>{t('onboarding.ownership')}</Text>
           <View style={s.fuelGrid}>
             {OWNERSHIP_TYPES.map(o => (
@@ -1150,7 +1146,7 @@ export default function MoreScreen() {
                 <View>
                   <Text style={s.rowLabel}>{vehicle.brand} {vehicle.model} • {vehicle.year}</Text>
                   <Text style={[s.rowValue, { fontSize: 12 }]}>
-                    {t(`onboarding.fuel_${vehicle.fuel_type}`)}{vehicle.avg_consumption_per_100 > 0 ? ` • ${(100000 / vehicle.avg_consumption_per_100).toFixed(1)} km/L` : ''}
+                    {t(`onboarding.fuel_${vehicle.fuel_type}`)}
                   </Text>
                 </View>
               </View>
