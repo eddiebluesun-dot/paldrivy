@@ -18,7 +18,7 @@ import { getActiveShift } from '@/src/services/shifts';
 import { getConsumptionTrend, type ConsumptionTrend } from '@/src/services/fuelConsumption';
 import {
   getActiveGoal, getDayDetail, getMonthlyBuckets, getMonthlyTotals, getMonthMoodStats,
-  getMonthPlatformBreakdown, getPreviousMonthGross, getPreviousWeekGross,
+  getMonthPlatformBreakdown, getWeekPlatformBreakdown, getPreviousMonthGross, getPreviousWeekGross,
   getTodaySummary, getWeekBuckets, getWeekTotals, upsertMonthlyGoal,
   type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket,
   type MonthlyTotals, type MonthMoodStats, type PlatformItem,
@@ -753,14 +753,14 @@ function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }
 
 // ─── platform breakdown ───────────────────────────────────────────────────────
 
-function PlatformBreakdownCard({ platforms, currencyCode, locale }: {
-  platforms: PlatformItem[]; currencyCode: string; locale: string;
+function PlatformBreakdownCard({ platforms, currencyCode, locale, title }: {
+  platforms: PlatformItem[]; currencyCode: string; locale: string; title: string;
 }) {
   if (platforms.length === 0) return null;
   const topN = platforms.slice(0, 5);
   return (
     <View style={[styles.card, { gap: 10 }]}>
-      <Text style={styles.cardTitle}>RECEITA POR PLATAFORMA</Text>
+      <Text style={styles.cardTitle}>{title}</Text>
       {topN.map(p => {
         const color = getPlatformColor(p.name);
         const isLight = color === '#FFD700';
@@ -1264,6 +1264,7 @@ export default function DashboardScreen() {
   const [prevMonthGross, setPrevMonthGross] = useState(0);
   const [prevWeekGross, setPrevWeekGross] = useState(0);
   const [platformBreakdown, setPlatformBreakdown] = useState<PlatformItem[]>([]);
+  const [weekPlatformBreakdown, setWeekPlatformBreakdown] = useState<PlatformItem[]>([]);
   const [rentalStatus, setRentalStatus] = useState<RentalAllowanceStatus | null>(null);
   const [overageExpenseAdded, setOverageExpenseAdded] = useState(false);
   const [overageAlreadyLogged, setOverageAlreadyLogged] = useState(false);
@@ -1330,7 +1331,7 @@ export default function DashboardScreen() {
         return null;
       }
     })();
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, weekPlatforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -1353,6 +1354,7 @@ export default function DashboardScreen() {
       getPreviousMonthGross(uid).catch(() => 0),
       getPreviousWeekGross(uid).catch(() => 0),
       getMonthPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
+      getWeekPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
       rentalStatusP,
       overageAlreadyLoggedP,
     ]);
@@ -1376,6 +1378,7 @@ export default function DashboardScreen() {
     setPrevMonthGross(prevGross);
     setPrevWeekGross(prevWeekGrossData);
     setPlatformBreakdown(platforms);
+    setWeekPlatformBreakdown(weekPlatforms);
   }, [profile?.vehicle_id]);
 
   useEffect(() => {
@@ -1616,10 +1619,20 @@ export default function DashboardScreen() {
 
         <PremiumGate isPremium={isPremium} reason="dashboard_locked">
           <>
-            {/* Platform breakdown + equação (month) */}
+            {/* Platform breakdown, each card scoped to its own period so it's
+                never confused with the "HOJE" card just above it. */}
+            {weekTotals !== null && weekTotals.gross_cents > 0 && (
+              <PlatformBreakdownCard
+                title="RECEITA POR PLATAFORMA — SEMANA"
+                platforms={weekPlatformBreakdown}
+                currencyCode={currencyCode}
+                locale={locale}
+              />
+            )}
             {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
               <>
                 <PlatformBreakdownCard
+                  title="RECEITA POR PLATAFORMA — MÊS"
                   platforms={platformBreakdown}
                   currencyCode={currencyCode}
                   locale={locale}

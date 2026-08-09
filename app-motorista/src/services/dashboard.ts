@@ -577,23 +577,12 @@ export async function getPreviousWeekGross(userId: string): Promise<number> {
   return ((data ?? []) as { gross_cents: number | null }[]).reduce((s, r) => s + (r.gross_cents ?? 0), 0);
 }
 
-export async function getMonthPlatformBreakdown(userId: string): Promise<PlatformItem[]> {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const { data } = await supabase
-    .from('shifts')
-    .select('platforms, gross_cents')
-    .eq('user_id', userId)
-    .gte('started_at', monthStart.toISOString())
-    .lt('started_at', monthEnd.toISOString())
-    .not('ended_at', 'is', null);
+type PlatformRow = {
+  gross_cents: number | null;
+  platforms: Array<{ platform_name: string; amount_cents: number }> | null;
+};
 
-  const rows = (data ?? []) as {
-    gross_cents: number | null;
-    platforms: Array<{ platform_name: string; amount_cents: number }> | null;
-  }[];
-
+function aggregatePlatformRows(rows: PlatformRow[]): PlatformItem[] {
   const map = new Map<string, number>();
   let total = 0;
   for (const row of rows) {
@@ -612,6 +601,42 @@ export async function getMonthPlatformBreakdown(userId: string): Promise<Platfor
   return Array.from(map.entries())
     .map(([name, gross_cents]) => ({ name, gross_cents, pct: total > 0 ? Math.round((gross_cents / total) * 100) : 0 }))
     .sort((a, b) => b.gross_cents - a.gross_cents);
+}
+
+export async function getWeekPlatformBreakdown(userId: string): Promise<PlatformItem[]> {
+  const now = new Date();
+  // Monday of the current week (app-standard week: Mon-Sun, not Sun-Sat).
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const sundayEnd = new Date(monday);
+  sundayEnd.setDate(monday.getDate() + 6);
+  sundayEnd.setHours(23, 59, 59, 999);
+
+  const { data } = await supabase
+    .from('shifts')
+    .select('platforms, gross_cents')
+    .eq('user_id', userId)
+    .gte('started_at', monday.toISOString())
+    .lte('started_at', sundayEnd.toISOString())
+    .not('ended_at', 'is', null);
+
+  return aggregatePlatformRows((data ?? []) as PlatformRow[]);
+}
+
+export async function getMonthPlatformBreakdown(userId: string): Promise<PlatformItem[]> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const { data } = await supabase
+    .from('shifts')
+    .select('platforms, gross_cents')
+    .eq('user_id', userId)
+    .gte('started_at', monthStart.toISOString())
+    .lt('started_at', monthEnd.toISOString())
+    .not('ended_at', 'is', null);
+
+  return aggregatePlatformRows((data ?? []) as PlatformRow[]);
 }
 
 export interface MonthMoodStats {
