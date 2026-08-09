@@ -7,10 +7,10 @@ import { formatMoney } from '../utils/currency';
 import { metersToDisplay } from '../utils/units';
 import { useTranslation } from 'react-i18next';
 
-const DONUT_SIZE = 130;
+const DONUT_SIZE = 112;
 const CX = DONUT_SIZE / 2;
 const CY = DONUT_SIZE / 2;
-const R = 52;
+const R = 44;
 const CIRC = 2 * Math.PI * R;
 const OFFSET = CIRC * 0.25;
 
@@ -147,7 +147,7 @@ export function CockpitCard({
           )}
 
           <Text style={[styles.earningsValue, metGoal && { color: Colors.success }]}
-            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
             {formatMoney(todayGrossCents, currencyCode, locale)}
           </Text>
 
@@ -181,7 +181,7 @@ export function CockpitCard({
         <View style={styles.expensesCol}>
           <View style={styles.expensesCard}>
             <Ionicons name="receipt-outline" size={18} color={Colors.error} style={{ marginBottom: 6 }} />
-            <Text style={styles.expensesValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
+            <Text style={styles.expensesValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
               {formatMoney(expensesTodayCents, currencyCode, locale)}
             </Text>
             <Text style={styles.expensesLabel} numberOfLines={1}>DESPESAS</Text>
@@ -267,15 +267,15 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: Colors.textSecondary,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
     marginBottom: 4,
   },
   earningsValue: {
     color: Colors.textPrimary,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   expensesCol: {
-    width: 90,
+    width: 76,
     alignItems: 'stretch',
   },
   expensesCard: {
@@ -318,10 +318,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: 'rgba(239,68,68,0.30)',
-    padding: 10,
+    padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 110,
+    minHeight: 98,
     ...Platform.select({
       ios: { shadowColor: Colors.error, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.25, shadowRadius: 8 },
       android: { elevation: 3 },
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   },
   expensesValue: {
     color: Colors.error,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
