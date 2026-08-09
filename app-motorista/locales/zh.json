@@ -279,6 +279,7 @@
     "title": "加油记录",
     "add": "记录加油",
     "odometer": "当前里程",
+    "full_tank": "是否加满油箱？",
     "liters": "升数",
     "total": "总金额",
     "price_per_liter": "单价/升",

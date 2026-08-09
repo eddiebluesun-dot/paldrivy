@@ -11,6 +11,9 @@ export interface FuelEntryForConsumption {
   // are grouped together (null/undefined normalized to the same bucket) —
   // see statsFromEntries for why this is a known limitation, not a fix.
   vehicle_id?: string | null;
+  // Whether this fill topped the tank off to full. Required at both ends of
+  // a measured segment — see statsFromEntries for why.
+  full_tank?: boolean | null;
 }
 
 export interface ConsumptionStats {
@@ -27,20 +30,28 @@ export interface ConsumptionTrend {
   change_pct: number | null;
 }
 
-// Skip-first method: km = last odometer − first odometer in the set;
-// liters = sum of fills after the first (the first fill's liters paid for
-// km driven *before* the set, so it's excluded).
+// Full-tank method: a measured segment must start AND end on a fill that
+// topped the tank off to full. Between two full-tank fills, every drop of
+// fuel put in — whether that fill was itself full or partial — was burned
+// over that same odometer range (fuel added = fuel burned, since the tank
+// holds the same "full" level at both ends). km = last full-tank odometer −
+// first full-tank odometer; liters = sum of every fill strictly after the
+// first (skip-first: the first fill's liters paid for km driven *before*
+// the segment, so it's excluded; the closing full-tank fill's own liters
+// ARE included, since it's the fill that finally topped back up to full).
+// A fill that's never followed by a later full-tank fill measures nothing
+// yet — its liters can't be attributed to a closed km range.
 //
 // A delta must never bridge two different vehicles: if a driver swaps cars,
 // the new vehicle's odometer starts far lower than the old one's, so a naive
 // last-minus-first across the boundary produces a nonsensical (or, after
 // chronological sorting, negative) figure. `entries` is expected to already
 // be sorted chronologically by the caller (computeConsumptionTrend); this
-// function further splits it into contiguous runs that share the same
-// vehicle_id (null/undefined normalized together) and applies the skip-first
-// method independently within each run, then sums the valid runs. A run of
-// length < 2, or whose delta is non-positive (e.g. an odometer typo/reset),
-// contributes nothing.
+// function first splits it into contiguous runs that share the same
+// vehicle_id (null/undefined normalized together), then within each run
+// trims to the span between its first and last full-tank fill and applies
+// the method above. A trimmed span of length < 2, or whose delta is
+// non-positive (e.g. an odometer typo/reset), contributes nothing.
 //
 // Known limitation: legacy fuel entries with no vehicle_id at all can't be
 // told apart this way — a swap between two such entries still isn't
@@ -69,16 +80,21 @@ function statsFromEntries(entries: FuelEntryForConsumption[]): ConsumptionStats 
   let segments = 0;
 
   for (const run of runs) {
-    if (run.length < 2) continue;
+    const fullIdxs = run.reduce<number[]>((acc, e, i) => { if (e.full_tank === true) acc.push(i); return acc; }, []);
+    if (fullIdxs.length < 2) continue;
+    const firstFullIdx = fullIdxs[0];
+    const lastFullIdx = fullIdxs[fullIdxs.length - 1];
 
-    const run_km = (run[run.length - 1].odometer_meters - run[0].odometer_meters) / 1000;
-    const run_liters = run.slice(1).reduce((s, e) => s + e.volume_ml / 1000, 0);
+    const span = run.slice(firstFullIdx, lastFullIdx + 1);
+
+    const run_km = (span[span.length - 1].odometer_meters - span[0].odometer_meters) / 1000;
+    const run_liters = span.slice(1).reduce((s, e) => s + e.volume_ml / 1000, 0);
 
     if (run_km <= 0 || run_liters <= 0) continue;
 
     total_km += run_km;
     total_liters += run_liters;
-    segments += run.length - 1;
+    segments += span.length - 1;
   }
 
   if (total_km <= 0 || total_liters <= 0) return null;

@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -89,6 +90,11 @@ function FuelForm({
     const iso = initialValues?.filled_at ?? new Date().toISOString();
     return iso.slice(0, 10); // YYYY-MM-DD
   });
+  // The automatic consumption calculation only measures between two
+  // full-tank fills (fuel added between them = fuel burned over that km
+  // range). Defaults to false rather than assuming every fill tops off —
+  // mislabeling a partial fill as full silently corrupts the calculation.
+  const [fullTank, setFullTank] = useState(initialValues?.full_tank ?? false);
 
   const isElectric = fuelType === 'electric';
   const qtyLabel = isElectric
@@ -125,7 +131,7 @@ function FuelForm({
       volume_ml: volumeMl,
       total_cost_cents: decimalToCents(totalNum),
       price_per_unit_cents: decimalToCents(unitPriceNum),
-      full_tank: false,
+      full_tank: fullTank,
       station: station.trim() !== '' ? station.trim() : null,
       filled_at: dateStr.trim().match(/^\d{4}-\d{2}-\d{2}$/)
         ? new Date(dateStr.trim() + 'T12:00:00').toISOString()
@@ -161,6 +167,16 @@ function FuelForm({
           placeholder={distanceUnit === 'km' ? 'km' : 'mi'}
           placeholderTextColor={Colors.textSecondary}
         />
+
+        <View style={styles.switchRow}>
+          <Text style={[styles.label, styles.switchLabel]}>{t('fuel.full_tank')}</Text>
+          <Switch
+            value={fullTank}
+            onValueChange={setFullTank}
+            trackColor={{ false: Colors.border, true: Colors.accent }}
+            thumbColor={Colors.onBrand}
+          />
+        </View>
 
         <Text style={styles.label}>{t('fuel.total')}</Text>
         <TextInput
@@ -748,6 +764,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   readonlyText: { color: Colors.textSecondary, fontSize: 15 },
+  switchRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: Spacing.md,
+  },
+  switchLabel: { marginTop: 0, marginBottom: 0 },
   primaryButton: {
     backgroundColor: Colors.accent,
     borderRadius: Radius.button,

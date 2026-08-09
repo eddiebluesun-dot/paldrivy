@@ -322,6 +322,7 @@
                  "title":  "Combustible",
                  "add":  "Registrar carga",
                  "odometer":  "Km actual",
+                 "full_tank":  "¿Tanque lleno?",
                  "liters":  "Litros",
                  "total":  "Monto total",
                  "price_per_liter":  "Precio por litro",

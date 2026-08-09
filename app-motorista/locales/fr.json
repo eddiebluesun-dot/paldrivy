@@ -279,6 +279,7 @@
     "title": "Pleins",
     "add": "Enregistrer un plein",
     "odometer": "Km actuel",
+    "full_tank": "Plein effectué ?",
     "liters": "Litres",
     "total": "Montant total",
     "price_per_liter": "Prix par litre",

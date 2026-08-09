@@ -322,6 +322,7 @@
                  "title":  "Abastecimentos",
                  "add":  "Registrar abastecimento",
                  "odometer":  "Km atual",
+                 "full_tank":  "Tanque cheio?",
                  "liters":  "Litros",
                  "total":  "Valor total",
                  "price_per_liter":  "Preço por litro",

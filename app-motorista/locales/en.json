@@ -322,6 +322,7 @@
                  "title":  "Fuel log",
                  "add":  "Log fill-up",
                  "odometer":  "Current odometer",
+                 "full_tank":  "Filled to full?",
                  "liters":  "Gallons",
                  "total":  "Total amount",
                  "price_per_liter":  "Price per gallon",
