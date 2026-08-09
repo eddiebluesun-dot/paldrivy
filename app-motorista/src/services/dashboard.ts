@@ -603,6 +603,23 @@ function aggregatePlatformRows(rows: PlatformRow[]): PlatformItem[] {
     .sort((a, b) => b.gross_cents - a.gross_cents);
 }
 
+export async function getDayPlatformBreakdown(userId: string): Promise<PlatformItem[]> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+  const { data } = await supabase
+    .from('shifts')
+    .select('platforms, gross_cents')
+    .eq('user_id', userId)
+    .gte('started_at', todayStart.toISOString())
+    .lt('started_at', tomorrowStart.toISOString())
+    .not('ended_at', 'is', null);
+
+  return aggregatePlatformRows((data ?? []) as PlatformRow[]);
+}
+
 export async function getWeekPlatformBreakdown(userId: string): Promise<PlatformItem[]> {
   const now = new Date();
   // Monday of the current week (app-standard week: Mon-Sun, not Sun-Sat).

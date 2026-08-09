@@ -18,7 +18,7 @@ import { getActiveShift } from '@/src/services/shifts';
 import { getConsumptionTrend, type ConsumptionTrend } from '@/src/services/fuelConsumption';
 import {
   getActiveGoal, getDayDetail, getMonthlyBuckets, getMonthlyTotals, getMonthMoodStats,
-  getMonthPlatformBreakdown, getWeekPlatformBreakdown, getPreviousMonthGross, getPreviousWeekGross,
+  getMonthPlatformBreakdown, getWeekPlatformBreakdown, getDayPlatformBreakdown, getPreviousMonthGross, getPreviousWeekGross,
   getTodaySummary, getWeekBuckets, getWeekTotals, upsertMonthlyGoal,
   type ActiveGoal, type DailySummary, type DayBucket, type DayDetail, type MonthBucket,
   type MonthlyTotals, type MonthMoodStats, type PlatformItem,
@@ -1265,6 +1265,7 @@ export default function DashboardScreen() {
   const [prevWeekGross, setPrevWeekGross] = useState(0);
   const [platformBreakdown, setPlatformBreakdown] = useState<PlatformItem[]>([]);
   const [weekPlatformBreakdown, setWeekPlatformBreakdown] = useState<PlatformItem[]>([]);
+  const [dayPlatformBreakdown, setDayPlatformBreakdown] = useState<PlatformItem[]>([]);
   const [rentalStatus, setRentalStatus] = useState<RentalAllowanceStatus | null>(null);
   const [overageExpenseAdded, setOverageExpenseAdded] = useState(false);
   const [overageAlreadyLogged, setOverageAlreadyLogged] = useState(false);
@@ -1331,7 +1332,7 @@ export default function DashboardScreen() {
         return null;
       }
     })();
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, weekPlatforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, weekPlatforms, dayPlatforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -1355,6 +1356,7 @@ export default function DashboardScreen() {
       getPreviousWeekGross(uid).catch(() => 0),
       getMonthPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
       getWeekPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
+      getDayPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
       rentalStatusP,
       overageAlreadyLoggedP,
     ]);
@@ -1379,6 +1381,7 @@ export default function DashboardScreen() {
     setPrevWeekGross(prevWeekGrossData);
     setPlatformBreakdown(platforms);
     setWeekPlatformBreakdown(weekPlatforms);
+    setDayPlatformBreakdown(dayPlatforms);
   }, [profile?.vehicle_id]);
 
   useEffect(() => {
@@ -1617,33 +1620,26 @@ export default function DashboardScreen() {
           />
         </TourTarget>
 
+        {/* Platform breakdown for "hoje" lives right under its own card, not
+            floating among the week/month cards further down. */}
+        {dayPlatformBreakdown.length > 0 && (
+          <PlatformBreakdownCard
+            title="RECEITA POR PLATAFORMA — HOJE"
+            platforms={dayPlatformBreakdown}
+            currencyCode={currencyCode}
+            locale={locale}
+          />
+        )}
+
         <PremiumGate isPremium={isPremium} reason="dashboard_locked">
           <>
-            {/* Platform breakdown, each card scoped to its own period so it's
-                never confused with the "HOJE" card just above it. */}
-            {weekTotals !== null && weekTotals.gross_cents > 0 && (
-              <PlatformBreakdownCard
-                title="RECEITA POR PLATAFORMA — SEMANA"
-                platforms={weekPlatformBreakdown}
+            {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
+              <EquacaoCard
+                totals={monthlyTotals}
+                distanceUnit={distanceUnit}
                 currencyCode={currencyCode}
                 locale={locale}
               />
-            )}
-            {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
-              <>
-                <PlatformBreakdownCard
-                  title="RECEITA POR PLATAFORMA — MÊS"
-                  platforms={platformBreakdown}
-                  currencyCode={currencyCode}
-                  locale={locale}
-                />
-                <EquacaoCard
-                  totals={monthlyTotals}
-                  distanceUnit={distanceUnit}
-                  currencyCode={currencyCode}
-                  locale={locale}
-                />
-              </>
             )}
           </>
         </PremiumGate>
@@ -1681,6 +1677,14 @@ export default function DashboardScreen() {
             {weekBuckets.length > 0 && (
               <WeekBarChart buckets={weekBuckets} weekTotals={weekTotals} currencyCode={currencyCode} locale={locale} language={i18n.language} distanceUnit={distanceUnit} onPress={setSelectedDay} />
             )}
+            {weekTotals !== null && weekTotals.gross_cents > 0 && (
+              <PlatformBreakdownCard
+                title="RECEITA POR PLATAFORMA — SEMANA"
+                platforms={weekPlatformBreakdown}
+                currencyCode={currencyCode}
+                locale={locale}
+              />
+            )}
 
             {/* "Resumo do mês" rendered before "Ganhos x Despesas (mês)" per Eddie's
                 explicit ordering request -- was previously below it. */}
@@ -1694,6 +1698,14 @@ export default function DashboardScreen() {
                 selectedDay={selectedMonthDay}
                 consumptionTrend={consumptionTrend}
                 onEditGoal={() => setGoalModalVisible(true)}
+              />
+            )}
+            {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
+              <PlatformBreakdownCard
+                title="RECEITA POR PLATAFORMA — MÊS"
+                platforms={platformBreakdown}
+                currencyCode={currencyCode}
+                locale={locale}
               />
             )}
             {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
