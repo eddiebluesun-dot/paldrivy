@@ -1416,21 +1416,27 @@ export default function DashboardScreen() {
     }
   }
 
+  // Tapping a day in "Resumo do mês" opens the same full day-detail modal
+  // that tapping a day in the week bar chart / MonthDetailSheet does --
+  // was previously only updating the "Hoje" cockpit card's preview state
+  // in place, with no way to see that day's full breakdown. Restored to
+  // match the other two day-tap entry points.
   const handleMonthlyDayPress = useCallback((day: number) => {
     const todayDay = new Date().getDate();
+    const n = new Date();
+    const d = new Date(n.getFullYear(), n.getMonth(), day);
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     if (day === todayDay) {
       setCockpitDateStr(null);
       setCockpitDetail(null);
       setSelectedMonthDay(null);
-      return;
+    } else {
+      setSelectedMonthDay(day);
+      setCockpitDateStr(ds);
+      setCockpitDetail(null);
+      if (userId) getDayDetail(userId, ds).then(setCockpitDetail).catch(() => {});
     }
-    const n = new Date();
-    const d = new Date(n.getFullYear(), n.getMonth(), day);
-    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    setSelectedMonthDay(day);
-    setCockpitDateStr(ds);
-    setCockpitDetail(null);
-    if (userId) getDayDetail(userId, ds).then(setCockpitDetail).catch(() => {});
+    setSelectedDay(ds);
   }, [userId]);
 
   const currencyCode = profile?.currency_code ?? 'BRL';
