@@ -10,6 +10,7 @@ import { getUserPosts, deletePost, type CommunityPost } from '@/src/services/com
 import { getOrCreateConversation } from '@/src/services/communityChat';
 import { getProfile } from '@/src/services/profile';
 import { PostCard } from '@/src/components/community/PostCard';
+import { RoleBadge } from '@/src/components/community/RoleBadge';
 
 export default function UserProfileScreen() {
   const { t } = useTranslation();
@@ -98,7 +99,10 @@ export default function UserProfileScreen() {
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback]}><Text style={styles.avatarInitial}>{profile.name.charAt(0).toUpperCase()}</Text></View>
               )}
-              <Text style={styles.name}>{profile.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.name}>{profile.name}</Text>
+                <RoleBadge role={profile.role} />
+              </View>
               <Text style={styles.location}>{[profile.city, profile.state, profile.country].filter(Boolean).join(' · ')}</Text>
               <View style={styles.countsRow}>
                 <Text style={styles.count}>{profile.followers_count} {t('community.followers')}</Text>

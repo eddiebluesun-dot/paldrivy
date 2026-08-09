@@ -94,7 +94,7 @@ export interface CommunityPost {
   comments_count: number;
   views_count: number;
   created_at: string;
-  author: { name: string; avatar_url: string | null; city: string | null; state: string | null; country: string | null; locale: string };
+  author: { name: string; avatar_url: string | null; city: string | null; state: string | null; country: string | null; locale: string; role: 'member' | 'founder' };
   liked_by_me: boolean;
 }
 
@@ -104,23 +104,25 @@ async function hydratePosts(viewerId: string, rows: any[]): Promise<CommunityPos
 
   const [{ data: profiles }, { data: communities }, { data: myLikes }] = await Promise.all([
     supabase.from('profiles').select('id, name, city, state, country, locale').in('id', userIds),
-    supabase.from('community_profiles').select('user_id, avatar_url').in('user_id', userIds),
+    supabase.from('community_profiles').select('user_id, avatar_url, role').in('user_id', userIds),
     supabase.from('post_likes').select('post_id').eq('user_id', viewerId).in('post_id', rows.map(r => r.id)),
   ]);
   const profileById = new Map((profiles ?? []).map(p => [p.id, p]));
-  const avatarById = new Map((communities ?? []).map(c => [c.user_id, c.avatar_url]));
+  const communityById = new Map((communities ?? []).map(c => [c.user_id, c]));
   const likedSet = new Set((myLikes ?? []).map(l => l.post_id));
 
   return rows.map(r => {
     const p = profileById.get(r.user_id);
+    const c = communityById.get(r.user_id);
     return {
       id: r.id, user_id: r.user_id, caption: r.caption, photo_url: r.photo_url,
       stats_snapshot: r.stats_snapshot, likes_count: r.likes_count, comments_count: r.comments_count,
       views_count: r.views_count, created_at: r.created_at,
       author: {
-        name: p?.name ?? '', avatar_url: avatarById.get(r.user_id) ?? null,
+        name: p?.name ?? '', avatar_url: c?.avatar_url ?? null,
         city: p?.city ?? null, state: p?.state ?? null, country: p?.country ?? null,
         locale: p?.locale ?? 'pt-BR',
+        role: (c?.role as 'member' | 'founder') ?? 'member',
       },
       liked_by_me: likedSet.has(r.id),
     };

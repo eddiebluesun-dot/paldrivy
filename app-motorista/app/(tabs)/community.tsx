@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, SafeAreaView, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { FlatList, Image, SafeAreaView, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { getFeed, deletePost, type CommunityPost } from '@/src/services/communityPosts';
-import { searchUsers, type CommunityProfile } from '@/src/services/community';
+import { searchUsers, getCommunityProfile, type CommunityProfile } from '@/src/services/community';
 import { getProfile } from '@/src/services/profile';
 import { PostCard } from '@/src/components/community/PostCard';
 
@@ -16,6 +16,7 @@ export default function CommunityScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [locale, setLocale] = useState('pt-BR');
   const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [myAvatarUrl, setMyAvatarUrl] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CommunityProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,7 @@ export default function CommunityScreen() {
     const feed = await getFeed(uid);
     setPosts(feed);
     setLoading(false);
+    getCommunityProfile(uid).then(cp => setMyAvatarUrl(cp?.avatar_url ?? null)).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -55,7 +57,11 @@ export default function CommunityScreen() {
         <Text style={styles.title}>{t('community.feed_title')}</Text>
         <View style={{ flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }}>
           <TouchableOpacity onPress={() => router.push(`/community/${userId}`)}>
-            <Ionicons name="person-circle-outline" size={24} color={Colors.textPrimary} />
+            {myAvatarUrl ? (
+              <Image source={{ uri: myAvatarUrl }} style={styles.myAvatar} />
+            ) : (
+              <Ionicons name="person-circle-outline" size={24} color={Colors.textPrimary} />
+            )}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/community/chats')}>
             <Ionicons name="paper-plane-outline" size={22} color={Colors.textPrimary} />
@@ -119,6 +125,7 @@ export default function CommunityScreen() {
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
+  myAvatar: { width: 24, height: 24, borderRadius: 12 },
   title: { color: Colors.textPrimary, fontSize: 24, fontWeight: '800' },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.surfaceAlt,

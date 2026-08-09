@@ -172,7 +172,9 @@
       "edit_post": "Editar post",
       "delete_post": "Borrar post",
       "confirm_delete_post_title": "¿Borrar post?",
-      "confirm_delete_post_body": "Esta acción no se puede deshacer."
+      "confirm_delete_post_body": "Esta acción no se puede deshacer.",
+      "role_founder": "Fundador",
+      "role_member": "Miembro"
     },
     "dashboard":  {
                       "today":  "Hoy",

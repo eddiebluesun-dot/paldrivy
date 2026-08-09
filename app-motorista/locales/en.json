@@ -172,7 +172,9 @@
       "edit_post": "Edit post",
       "delete_post": "Delete post",
       "confirm_delete_post_title": "Delete post?",
-      "confirm_delete_post_body": "This action cannot be undone."
+      "confirm_delete_post_body": "This action cannot be undone.",
+      "role_founder": "Founder",
+      "role_member": "Member"
     },
     "dashboard":  {
                       "today":  "Today",

@@ -172,7 +172,9 @@
       "edit_post": "Editar post",
       "delete_post": "Apagar post",
       "confirm_delete_post_title": "Apagar post?",
-      "confirm_delete_post_body": "Essa ação não pode ser desfeita."
+      "confirm_delete_post_body": "Essa ação não pode ser desfeita.",
+      "role_founder": "Fundador",
+      "role_member": "Membro"
     },
     "dashboard":  {
                       "today":  "Hoje",
