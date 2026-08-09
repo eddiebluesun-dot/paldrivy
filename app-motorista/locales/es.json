@@ -302,7 +302,6 @@
                   "discard_confirm":  "El turno actual se eliminará sin guardar. Esta acción no se puede deshacer.",
                   "recent":  "ÚLTIMOS 7 DÍAS",
                   "rides_count_label":  "Viajes realizados",
-                  "rides_count_short":  "viajes",
                   "odometer_start_hint":  "Registra el km actual del odómetro antes de salir a trabajar",
                   "start_confirm":  "Iniciar turno",
                   "edit":  "Editar turno",

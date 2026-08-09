@@ -302,7 +302,6 @@
                   "discard_confirm":  "The current shift will be deleted without saving. This cannot be undone.",
                   "recent":  "LAST 7 DAYS",
                   "rides_count_label":  "Rides completed",
-                  "rides_count_short":  "rides",
                   "odometer_start_hint":  "Record your current odometer reading before starting work",
                   "start_confirm":  "Start shift",
                   "edit":  "Edit shift",

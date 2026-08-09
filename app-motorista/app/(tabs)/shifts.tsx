@@ -352,14 +352,14 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
                 value={row.name} onChangeText={(v) => updatePlatform(i, 'name', v)}
               />
               <TextInput
+                style={[styles.input, styles.platformRides]}
+                keyboardType="number-pad" placeholder="0" placeholderTextColor={Colors.textSecondary}
+                value={row.rides} onChangeText={(v) => updatePlatform(i, 'rides', v)}
+              />
+              <TextInput
                 style={[styles.input, styles.platformAmount]}
                 keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={Colors.textSecondary}
                 value={row.amount} onChangeText={(v) => updatePlatform(i, 'amount', v)}
-              />
-              <TextInput
-                style={[styles.input, styles.platformRides]}
-                keyboardType="number-pad" placeholder={t('shift.rides_count_short')} placeholderTextColor={Colors.textSecondary}
-                value={row.rides} onChangeText={(v) => updatePlatform(i, 'rides', v)}
               />
             </View>
           ))}
@@ -876,7 +876,7 @@ const styles = StyleSheet.create({
   platformRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
   platformName: { flex: 1, marginBottom: 0 },
   platformAmount: { width: 90, marginBottom: 0 },
-  platformRides: { width: 56, marginBottom: 0, textAlign: 'center' },
+  platformRides: { width: 64, marginBottom: 0, textAlign: 'center' },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
   addRowText: { color: Colors.accent, fontSize: 14, fontWeight: '600' },
   cumulativeToggleBox: {
