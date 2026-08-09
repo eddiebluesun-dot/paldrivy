@@ -18,6 +18,7 @@
 export interface ShiftPlatformEntry {
   platform_name: string;
   amount_cents: number;
+  rides_count?: number;
 }
 
 export interface ShiftForReconciliation {
@@ -80,6 +81,12 @@ export function getPriorSameDayPlatforms(
 // through untouched. Reconciled amounts are floored at 0 — a same-named
 // platform total that comes in lower than what's already logged means bad
 // input, not negative earnings.
+//
+// rides_count is reconciled by the exact same rule as amount_cents, for the
+// exact same reason: the platform app's ride counter is also a day-running
+// total, not a per-shift one. Only reconciled when the entered row actually
+// carries a rides_count (older callers/tests that never set it are
+// untouched — `undefined` in, `undefined` out).
 export function reconcileShiftPlatforms(
   enteredPlatforms: ShiftPlatformEntry[],
   priorPlatformsSameDay: ShiftPlatformEntry[],
@@ -89,13 +96,20 @@ export function reconcileShiftPlatforms(
     return enteredPlatforms;
   }
 
-  const priorTotals = new Map<string, number>();
+  const priorAmountTotals = new Map<string, number>();
+  const priorRidesTotals = new Map<string, number>();
   for (const p of priorPlatformsSameDay) {
-    priorTotals.set(p.platform_name, (priorTotals.get(p.platform_name) ?? 0) + p.amount_cents);
+    priorAmountTotals.set(p.platform_name, (priorAmountTotals.get(p.platform_name) ?? 0) + p.amount_cents);
+    priorRidesTotals.set(p.platform_name, (priorRidesTotals.get(p.platform_name) ?? 0) + (p.rides_count ?? 0));
   }
 
   return enteredPlatforms.map((p) => {
-    const prior = priorTotals.get(p.platform_name) ?? 0;
-    return { ...p, amount_cents: Math.max(p.amount_cents - prior, 0) };
+    const priorAmount = priorAmountTotals.get(p.platform_name) ?? 0;
+    const reconciled: ShiftPlatformEntry = { ...p, amount_cents: Math.max(p.amount_cents - priorAmount, 0) };
+    if (p.rides_count !== undefined) {
+      const priorRides = priorRidesTotals.get(p.platform_name) ?? 0;
+      reconciled.rides_count = Math.max(p.rides_count - priorRides, 0);
+    }
+    return reconciled;
   });
 }

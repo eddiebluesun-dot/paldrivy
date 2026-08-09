@@ -147,10 +147,9 @@ interface ShiftFormModalProps {
 function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, distanceUnit, pauses, otherShifts, onClose, onSaved }: ShiftFormModalProps) {
   const { t } = useTranslation();
   const [odometer, setOdometer] = useState('');
-  const [platforms, setPlatforms] = useState<{ name: string; amount: string }[]>([{ name: '', amount: '' }]);
+  const [platforms, setPlatforms] = useState<{ name: string; amount: string; rides: string }[]>([{ name: '', amount: '', rides: '' }]);
   const [tips, setTips] = useState('');
   const [bonuses, setBonuses] = useState('');
-  const [ridesCount, setRidesCount] = useState('');
   const [mood, setMood] = useState<MoodRating | null>(null);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -175,7 +174,7 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       if (!data.user) return;
       getUserPlatforms(data.user.id).then(saved => {
         if (saved.length > 0) {
-          setPlatforms(saved.map(p => ({ name: p.platform_name, amount: '' })));
+          setPlatforms(saved.map(p => ({ name: p.platform_name, amount: '', rides: '' })));
         }
       }).catch(() => {});
     });
@@ -204,22 +203,24 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       setOdometer(existingShift.odometer_end_meters != null ? (existingShift.odometer_end_meters / div).toFixed(0) : '');
       setPlatforms(
         existingShift.platforms?.length
-          ? existingShift.platforms.map((p) => ({ name: p.platform_name, amount: (p.amount_cents / 100).toFixed(2) }))
-          : [{ name: '', amount: '' }]
+          ? existingShift.platforms.map((p) => ({
+              name: p.platform_name,
+              amount: (p.amount_cents / 100).toFixed(2),
+              rides: p.rides_count != null ? String(p.rides_count) : '',
+            }))
+          : [{ name: '', amount: '', rides: '' }]
       );
       setTips(existingShift.tips_cents ? (existingShift.tips_cents / 100).toFixed(2) : '');
       setBonuses(existingShift.bonuses_cents ? (existingShift.bonuses_cents / 100).toFixed(2) : '');
-      setRidesCount(existingShift.rides_count?.toString() ?? '');
       setMood(existingShift.mood_rating ?? null);
       setNotes(existingShift.notes ?? '');
       setEditStartedAt(isoToDisplay(existingShift.started_at));
       setEditEndedAt(isoToDisplay(existingShift.ended_at));
     } else {
       setOdometer('');
-      setPlatforms([{ name: '', amount: '' }]);
+      setPlatforms([{ name: '', amount: '', rides: '' }]);
       setTips('');
       setBonuses('');
-      setRidesCount('');
       setMood(null);
       setNotes('');
       setEditStartedAt('');
@@ -229,7 +230,7 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
     setError(null);
   }, [visible, shiftId, mode, distanceUnit, cumulativeDayTotalDefault]);
 
-  function updatePlatform(index: number, field: 'name' | 'amount', value: string) {
+  function updatePlatform(index: number, field: 'name' | 'amount' | 'rides', value: string) {
     setPlatforms((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   }
 
@@ -245,7 +246,7 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
         setError(t('shift.validation_platform_required'));
         return;
       }
-      if (!ridesCount.trim() || parseInt(ridesCount, 10) <= 0) {
+      if (validPlatforms.some(p => !p.rides.trim() || parseInt(p.rides, 10) <= 0)) {
         setError(t('shift.validation_rides_required'));
         return;
       }
@@ -255,12 +256,21 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       const odometerMeters = odometer.trim() ? displayToMeters(parse(odometer), distanceUnit) : null;
       const rawPlatformRows: ShiftPlatform[] = platforms
         .filter((p) => p.name.trim() !== '' || p.amount.trim() !== '')
-        .map((p) => ({ platform_name: p.name.trim(), amount_cents: decimalToCents(parse(p.amount)) }));
+        .map((p) => ({
+          platform_name: p.name.trim(),
+          amount_cents: decimalToCents(parse(p.amount)),
+          rides_count: p.rides.trim() ? parseInt(p.rides, 10) : undefined,
+        }));
       // If the driver confirmed these amounts are the platform's cumulative
       // total for the day (not this shift alone), subtract what's already
-      // logged earlier the same day per platform. See
+      // logged earlier the same day per platform -- rides_count included,
+      // same reconciliation rule as amount_cents. See
       // shiftReconciliationUtils.ts for the full rationale.
       const platformRows = reconcileShiftPlatforms(rawPlatformRows, priorSameDayPlatforms, isCumulativeDayTotal);
+      // Shift-level rides_count is derived from the per-platform rows rather
+      // than typed separately, so there's a single source of truth (matches
+      // gross_cents, which is likewise derived from platforms elsewhere).
+      const totalRides = platformRows.reduce((s, p) => s + (p.rides_count ?? 0), 0);
       const payload: EndShiftData = {
         odometer_end_meters: odometerMeters,
         platforms: platformRows,
@@ -269,7 +279,7 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
         food_cents: 0,
         tips_cents: decimalToCents(parse(tips)),
         bonuses_cents: decimalToCents(parse(bonuses)),
-        rides_count: ridesCount.trim() ? parseInt(ridesCount, 10) : null,
+        rides_count: totalRides > 0 ? totalRides : null,
         mood_rating: mood,
         notes: notes.trim() || null,
       };
@@ -346,9 +356,14 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
                 keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={Colors.textSecondary}
                 value={row.amount} onChangeText={(v) => updatePlatform(i, 'amount', v)}
               />
+              <TextInput
+                style={[styles.input, styles.platformRides]}
+                keyboardType="number-pad" placeholder={t('shift.rides_count_short')} placeholderTextColor={Colors.textSecondary}
+                value={row.rides} onChangeText={(v) => updatePlatform(i, 'rides', v)}
+              />
             </View>
           ))}
-          <Pressable onPress={() => setPlatforms((prev) => [...prev, { name: '', amount: '' }])} style={styles.addRow}>
+          <Pressable onPress={() => setPlatforms((prev) => [...prev, { name: '', amount: '', rides: '' }])} style={styles.addRow}>
             <Ionicons name="add-circle-outline" size={16} color={Colors.accent} />
             <Text style={styles.addRowText}>{t('shift.add_platform')}</Text>
           </Pressable>
@@ -367,13 +382,6 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
               <Text style={styles.cumulativeToggleHint}>{t('shift.cumulative_day_total_hint')}</Text>
             </View>
           )}
-
-          <Text style={styles.fieldLabel}>{t('shift.rides_count_label')}</Text>
-          <TextInput
-            style={styles.input} keyboardType="number-pad"
-            value={ridesCount} onChangeText={setRidesCount}
-            placeholder="0" placeholderTextColor={Colors.textSecondary}
-          />
 
           <View style={styles.costRow}>
             <Text style={styles.costLabel}>{t('shift.tips')}</Text>
@@ -867,7 +875,8 @@ const styles = StyleSheet.create({
   },
   platformRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
   platformName: { flex: 1, marginBottom: 0 },
-  platformAmount: { width: 100, marginBottom: 0 },
+  platformAmount: { width: 90, marginBottom: 0 },
+  platformRides: { width: 56, marginBottom: 0, textAlign: 'center' },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
   addRowText: { color: Colors.accent, fontSize: 14, fontWeight: '600' },
   cumulativeToggleBox: {

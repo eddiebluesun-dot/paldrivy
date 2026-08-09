@@ -173,4 +173,30 @@ describe('reconcileShiftPlatforms', () => {
       { platform_name: 'Uber', amount_cents: 23000 }, // 480 - (100+150) = 230
     ]);
   });
+
+  // rides_count reconciles by the exact same day-cumulative rule as
+  // amount_cents (the platform's ride counter is also a running day total).
+  test('reconciles rides_count the same way as amount_cents (owner request: apply the same logic used for ganhos)', () => {
+    const shift1Platforms: ShiftPlatformEntry[] = [{ platform_name: 'Uber', amount_cents: 20000, rides_count: 5 }];
+    const shift2Entered: ShiftPlatformEntry[] = [{ platform_name: 'Uber', amount_cents: 49223, rides_count: 11 }];
+
+    const reconciled = reconcileShiftPlatforms(shift2Entered, shift1Platforms, true);
+    expect(reconciled).toEqual([{ platform_name: 'Uber', amount_cents: 29223, rides_count: 6 }]);
+  });
+
+  test('rides_count floors at 0 instead of going negative', () => {
+    const entered: ShiftPlatformEntry[] = [{ platform_name: 'Uber', amount_cents: 5000, rides_count: 2 }];
+    const prior: ShiftPlatformEntry[] = [{ platform_name: 'Uber', amount_cents: 20000, rides_count: 9 }];
+    expect(reconcileShiftPlatforms(entered, prior, true)).toEqual([
+      { platform_name: 'Uber', amount_cents: 0, rides_count: 0 },
+    ]);
+  });
+
+  test('rows without rides_count are left untouched (older callers, no rides data to reconcile)', () => {
+    const entered: ShiftPlatformEntry[] = [{ platform_name: 'Uber', amount_cents: 49223 }];
+    const prior: ShiftPlatformEntry[] = [{ platform_name: 'Uber', amount_cents: 20000, rides_count: 5 }];
+    expect(reconcileShiftPlatforms(entered, prior, true)).toEqual([
+      { platform_name: 'Uber', amount_cents: 29223 },
+    ]);
+  });
 });

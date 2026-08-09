@@ -73,6 +73,7 @@ export interface ShiftCalc {
 export interface ShiftPlatform {
   platform_name: string;
   amount_cents: number;
+  rides_count?: number;
 }
 
 export type MoodRating = 'good' | 'ok' | 'bad';

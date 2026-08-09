@@ -259,6 +259,7 @@
     "discard_confirm": "当前行程将被删除且不保存。",
     "recent": "最近7天",
     "rides_count_label": "完成单量",
+    "rides_count_short": "单量",
     "odometer_start_hint": "开始工作前记录当前里程",
     "start_confirm": "开始",
     "edit": "编辑行程",

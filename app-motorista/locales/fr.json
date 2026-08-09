@@ -259,6 +259,7 @@
     "discard_confirm": "Le trajet en cours sera supprimé sans enregistrement.",
     "recent": "7 DERNIERS JOURS",
     "rides_count_label": "Courses effectuées",
+    "rides_count_short": "courses",
     "odometer_start_hint": "Notez le km actuel avant de commencer à travailler",
     "start_confirm": "Démarrer",
     "edit": "Modifier le trajet",
