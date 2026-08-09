@@ -240,7 +240,7 @@ export async function getDayDetail(userId: string, dateStr: string): Promise<Day
       .not('ended_at', 'is', null),
     supabase
       .from('expenses')
-      .select('category, amount_cents')
+      .select('category, amount_cents, recurring, recurring_frequency')
       .eq('user_id', userId)
       .eq('expense_date', dateStr),
     supabase
@@ -254,7 +254,21 @@ export async function getDayDetail(userId: string, dateStr: string): Promise<Day
   if (shiftsRes.error) throw shiftsRes.error;
   if (expensesRes.error) throw expensesRes.error;
 
-  const expenseRows = (expensesRes.data ?? []) as { category: string; amount_cents: number }[];
+  // A weekly/monthly recurring expense's own row (dated on its expense_date,
+  // e.g. "next rent due 8/10") is NOT what actually happened on this specific
+  // day -- it's the anchor for the recurring cycle, which the daily-allocation
+  // feature already dilutes across working days via shifts.allocated_fixed_cents
+  // (see getRecurringExpenseBreakdownForDay, surfaced separately as "(rateio)"
+  // in the day-detail UI). Including the raw row here as well would double-
+  // count it (full weekly amount + that day's diluted share, on the one day
+  // that happens to be its expense_date). Quarterly/semiannual/annual
+  // recurring expenses are out of the allocation feature's scope, so they
+  // still show as a normal lump sum on their date, unaffected.
+  const allExpenseRows = (expensesRes.data ?? []) as
+    { category: string; amount_cents: number; recurring: boolean; recurring_frequency: string | null }[];
+  const expenseRows = allExpenseRows.filter(
+    e => !(e.recurring && (e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly'))
+  );
   const expenses_cents = expenseRows.reduce((s, e) => s + e.amount_cents, 0);
   const fuel_cents = ((fuelRes.data ?? []) as { total_cost_cents: number }[])
     .reduce((s, e) => s + e.total_cost_cents, 0);
