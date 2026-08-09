@@ -1314,6 +1314,22 @@ export default function DashboardScreen() {
         return false;
       }
     });
+    // getConsumptionTrend needs the RESOLVED vehicle id, not raw
+    // profile?.vehicle_id -- when that's null (no vehicle explicitly picked,
+    // the common case for a single-vehicle driver), passing null skips the
+    // query's vehicle filter entirely, mixing fuel_entries across every
+    // vehicle the account has ever had into one bogus consumption average.
+    // Wait on the same vehicleP already being fetched for the dashboard pill
+    // rather than re-querying.
+    const consumptionP: Promise<ConsumptionTrend | null> = (async () => {
+      const v = await vehicleP;
+      if (!v) return null;
+      try {
+        return await getConsumptionTrend(uid, (v as { id: string }).id);
+      } catch {
+        return null;
+      }
+    })();
     const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
@@ -1327,7 +1343,7 @@ export default function DashboardScreen() {
       // dailyGoalCents and every other card on this screen stay frozen on
       // stale data with only a barely-visible error banner as a clue.
       getActiveGoal(uid).catch(() => null),
-      getConsumptionTrend(uid, profile?.vehicle_id ?? null).catch(() => null),
+      consumptionP,
       vehicleP,
       getMonthlyTotals(uid).catch(() => null),
       getWeekTotals(uid).catch(() => null),

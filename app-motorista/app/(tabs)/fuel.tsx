@@ -465,7 +465,7 @@ export default function FuelScreen() {
     try {
       const [data, weekly] = await Promise.all([
         getFuelEntries(userId, 30),
-        getWeeklyConsumption(userId, profile?.vehicle_id),
+        getWeeklyConsumption(userId, effectiveVehicleId),
       ]);
       setEntries(data);
       setWeeklyStats(weekly);
@@ -476,7 +476,7 @@ export default function FuelScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userId, t, profile?.vehicle_id]);
+  }, [userId, t, effectiveVehicleId]);
 
   useEffect(() => {
     if (userId) loadEntries();

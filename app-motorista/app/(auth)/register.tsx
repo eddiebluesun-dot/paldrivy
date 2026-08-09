@@ -141,8 +141,6 @@ export default function RegisterScreen() {
   const [model, setModel] = useState('');
   const [year, setYear] = useState('2020');
   const [fuelType, setFuelType] = useState<FuelType>('gasoline');
-  const [consumption, setConsumption] = useState('12');
-  const [consumptionTouched, setConsumptionTouched] = useState(false);
   const [ownership, setOwnership] = useState<OwnershipType>('own');
   const [monthlyCost, setMonthlyCost] = useState('0');
   const [insurance, setInsurance] = useState('0');
@@ -187,14 +185,6 @@ export default function RegisterScreen() {
   useEffect(() => {
     i18n.changeLanguage(lang);
   }, [lang, i18n]);
-
-  // vehicle.tsx read worker_type back from the DB to default a motoboy's
-  // consumption to 30 km/L. Here worker type is chosen in the same form, so it
-  // is wired directly — but never clobbers a value the driver already typed.
-  useEffect(() => {
-    if (consumptionTouched) return;
-    setConsumption(workerType === 'motoboy' ? '30' : '12');
-  }, [workerType, consumptionTouched]);
 
   // Deliberately NOT dependent on `t`/`i18n` — the language Select re-renders
   // this screen, and refetching here would reset the acceptance checkboxes.
@@ -279,7 +269,7 @@ export default function RegisterScreen() {
     ? true
     : !!rentalStartDate.trim() && !!allowanceAmount.trim() && !!excessRate.trim();
   const vehicleOk     = !!brand.trim() && !!model.trim() && !!year.trim()
-    && !!fuelType && !!consumption.trim() && !!ownership && rentalOk;
+    && !!fuelType && !!ownership && rentalOk;
   // LGPD: every active legal document must be individually accepted. This is
   // the gate that guarantees `legalDocs` is neither empty nor partial by the
   // time completeRegistration() runs (its own consent step is skippable on an
@@ -301,8 +291,6 @@ export default function RegisterScreen() {
   function buildInput(): RegistrationInput {
     // Parsing below is copied verbatim from vehicle.tsx / goal.tsx, including
     // which fields do (and do not) accept a comma decimal separator.
-    const kmPerLiter = parseFloat(consumption) || 1;
-    const mlPer100km = Math.round((100 / kmPerLiter) * 1000);
     const parsedGoal = parseFloat(goal);
     const countryCode = country.trim().toUpperCase();
 
@@ -327,7 +315,11 @@ export default function RegisterScreen() {
         model: model.trim(),
         year: parseInt(year, 10) || new Date().getFullYear(),
         fuel_type: fuelType,
-        avg_consumption_per_100: mlPer100km,
+        // Left unset (0) at registration — the app now computes real average
+        // consumption automatically from odometer readings + fuel-ups, so
+        // there's no manual value to send here (see VehicleCard, which
+        // already treats 0 as "not yet known" and shows nothing).
+        avg_consumption_per_100: 0,
         ownership_type: ownership,
         monthly_cost_cents: decimalToCents(parseFloat(monthlyCost) || 0),
         monthly_insurance_cents: decimalToCents(parseFloat(insurance) || 0),
@@ -649,16 +641,6 @@ export default function RegisterScreen() {
                 { label: t('onboarding.fuel_electric'), value: 'electric' },
                 { label: t('onboarding.fuel_hybrid'), value: 'hybrid' },
               ]}
-            />
-
-            <Text style={s.label}>{t('onboarding.consumption')}<Text style={s.required}> *</Text></Text>
-            <TextInput
-              style={inp}
-              value={consumption}
-              onChangeText={v => { setConsumptionTouched(true); setConsumption(v); }}
-              keyboardType="decimal-pad"
-              placeholderTextColor={Colors.textSecondary}
-              accessibilityLabel={t('onboarding.consumption')}
             />
 
             <Text style={s.label}>{t('onboarding.ownership')}<Text style={s.required}> *</Text></Text>
