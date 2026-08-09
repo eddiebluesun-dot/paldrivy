@@ -38,6 +38,8 @@ import { CockpitCard } from '@/src/components/CockpitCard';
 import { MonthHistoryCard } from '@/src/components/MonthHistoryCard';
 import { MonthDetailSheet } from '@/src/components/MonthDetailSheet';
 import { RentalAllowanceBanner } from '@/src/components/RentalAllowanceBanner';
+import { RentalAllowanceExtractCard } from '@/src/components/RentalAllowanceExtractCard';
+import { fireRentalAllowanceNearLimitNotification } from '@/src/services/notifications';
 import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
 import { addExpense, hasExpenseSince } from '@/src/services/expenses';
 import type { RentalAllowanceStatus } from '@/src/utils/rentalKmAllowanceUtils';
@@ -1035,8 +1037,10 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
   const weekKm = weekTotals ? (weekTotals.km_meters / 1000).toFixed(1) : null;
   const distScale = distanceUnit === 'km' ? 1000 : 1609.344;
   const distTotal = weekTotals ? weekTotals.km_meters / distScale : 0;
-  const profit = weekTotals ? weekTotals.gross_cents - weekTotals.fuel_cents - weekTotals.expenses_cents : 0;
-  const netKm = distTotal > 0 && profit > 0 ? Math.round(profit / distTotal) : null;
+  // Bruto/km here, not líquido/km -- líquido/km is already shown in "Impacto
+  // no seu dia a dia" above (month-scoped), so repeating it here (week-scoped)
+  // read as redundant; gross/km gives a genuinely different, week-specific figure.
+  const grossKm = distTotal > 0 && weekTotals && weekTotals.gross_cents > 0 ? Math.round(weekTotals.gross_cents / distTotal) : null;
 
   return (
     <View style={styles.card}>
@@ -1103,12 +1107,12 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
                 {formatMoney(weekTotal, currencyCode, locale)}
               </Text>
             </View>
-            {netKm !== null && (
+            {grossKm !== null && (
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ color: Colors.success, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
-                  ~ {formatMoney(netKm, currencyCode, locale)}/{distanceUnit}
+                <Text style={{ color: Colors.accent, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+                  ~ {formatMoney(grossKm, currencyCode, locale)}/{distanceUnit}
                 </Text>
-                <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 }}>{t('dashboard.net_per_km')}</Text>
+                <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 }}>{t('dashboard.gross_per_km')}</Text>
               </View>
             )}
           </View>
@@ -1307,6 +1311,9 @@ export default function DashboardScreen() {
     setConsumptionTrend(consumption);
     setVehicleInfo(vehicleData as VehicleInfo | null);
     setRentalStatus(rentalStatusData);
+    if (rentalStatusData?.isNearLimit) {
+      fireRentalAllowanceNearLimitNotification(i18n.language, rentalStatusData.periodStart.toISOString().slice(0, 10)).catch(() => {});
+    }
     setOverageAlreadyLogged(overageAlreadyLoggedData);
     setMonthlyTotals(mTotals);
     setWeekTotals(wTotals);
@@ -1487,6 +1494,12 @@ export default function DashboardScreen() {
 
         {fetchError && <Text style={styles.errorBanner}>{t('common.error')}</Text>}
 
+        {/* Always-visible usage extract, distinct from the banner below it --
+            that one stays silent until 90% used (a warning), this one is a
+            standing statement so a rental driver can see their usage at any
+            level, not just when close to the limit. */}
+        <RentalAllowanceExtractCard status={rentalStatus} />
+
         <RentalAllowanceBanner
           status={rentalStatus}
           onAddExpense={handleAddOverageExpense}
@@ -1568,7 +1581,7 @@ export default function DashboardScreen() {
             only rendered inside WeekBarChart's own card, making it look like only the chart
             (not the summary grid above it) was week-scoped. */}
         {weekTotals !== null && weekTotals.gross_cents > 0 && (
-          <Text style={[styles.cardTitle, { marginTop: Spacing.md, marginBottom: -Spacing.xs }]}>{t('dashboard.weekly_title')}</Text>
+          <Text style={[styles.cardTitle, { marginTop: Spacing.md }]}>{t('dashboard.weekly_title')}</Text>
         )}
 
         {/* Kill shot: 4 glassmorphism cards — resumo da semana, logo antes do gráfico semanal.
@@ -1597,9 +1610,8 @@ export default function DashboardScreen() {
               <WeekBarChart buckets={weekBuckets} weekTotals={weekTotals} currencyCode={currencyCode} locale={locale} language={i18n.language} distanceUnit={distanceUnit} onPress={setSelectedDay} />
             )}
 
-            {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
-              <ProfitCard totals={monthlyTotals} currencyCode={currencyCode} locale={locale} distanceUnit={distanceUnit} />
-            )}
+            {/* "Resumo do mês" rendered before "Ganhos x Despesas (mês)" per Eddie's
+                explicit ordering request -- was previously below it. */}
             {monthlyBuckets.length > 0 && (
               <MonthlyChart
                 buckets={monthlyBuckets}
@@ -1611,6 +1623,9 @@ export default function DashboardScreen() {
                 consumptionTrend={consumptionTrend}
                 onEditGoal={() => setGoalModalVisible(true)}
               />
+            )}
+            {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
+              <ProfitCard totals={monthlyTotals} currencyCode={currencyCode} locale={locale} distanceUnit={distanceUnit} />
             )}
 
             {moodStats !== null && <MoodStatsCard stats={moodStats} />}

@@ -69,6 +69,8 @@ export function getPeriodBounds(
 export interface RentalAllowanceStatus {
   periodStart: Date;
   periodEnd: Date;
+  allowanceAmountKm: number;
+  allowancePeriod: RentalAllowancePeriod;
   baselineMeters: number;
   baselineIsEstimated: boolean; // true when baselineMeters came from the fallback (first in-period reading) rather than an explicit contract odometer
   currentOdometerMeters: number;
@@ -120,6 +122,8 @@ export function computeRentalAllowanceStatus(params: {
   return {
     periodStart,
     periodEnd,
+    allowanceAmountKm,
+    allowancePeriod,
     baselineMeters,
     baselineIsEstimated,
     currentOdometerMeters,

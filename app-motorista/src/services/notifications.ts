@@ -155,6 +155,12 @@ const CONTENT = {
     'en-GB': { title: 'PalDrivy — Goal reached! 🏆', body: "Congratulations! You've hit your monthly goal. Keep it up!" },
     es:    { title: 'PalDrivy — ¡Meta alcanzada! 🏆', body: '¡Felicitaciones! Alcanzaste tu meta mensual. ¡Sigue así!' },
   },
+  rentalNearLimit: {
+    pt:    { title: 'PalDrivy — Franquia de km quase no limite ⚠️', body: 'Você já usou 90% da franquia de km do seu veículo alugado neste período.' },
+    en:    { title: 'PalDrivy — Km allowance almost used up ⚠️',    body: "You've used 90% of your rental vehicle's km allowance for this period." },
+    'en-GB': { title: 'PalDrivy — Mileage allowance almost used up ⚠️', body: "You've used 90% of your rental vehicle's mileage allowance for this period." },
+    es:    { title: 'PalDrivy — Franquicia de km casi al límite ⚠️', body: 'Ya usaste el 90% de la franquicia de km de tu vehículo alquilado en este período.' },
+  },
 };
 
 // ─── Schedule helpers ─────────────────────────────────────────────────────────
@@ -235,6 +241,27 @@ export async function fireGoalReachedNotification(lang: string): Promise<void> {
   if (!(await getNotificationPermission())) return;
   const l = normLang(lang);
   const { title, body } = CONTENT.goalReached[l];
+
+  await Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: null,
+  });
+}
+
+// Fires once per rental allowance period when usage first crosses 90% --
+// periodStartIso (the period's own start date, e.g. "2026-08-05") keys the
+// "already notified" flag, so a fresh period (new week/month) is free to
+// notify again, but re-computing status on every dashboard load within the
+// SAME period doesn't spam the driver with a duplicate notification every
+// time they open the app.
+export async function fireRentalAllowanceNearLimitNotification(lang: string, periodStartIso: string): Promise<void> {
+  const key = `notif_rental_near_limit_${periodStartIso}`;
+  if (await AsyncStorage.getItem(key)) return;
+  await AsyncStorage.setItem(key, 'true');
+
+  if (!(await getNotificationPermission())) return;
+  const l = normLang(lang);
+  const { title, body } = CONTENT.rentalNearLimit[l];
 
   await Notifications.scheduleNotificationAsync({
     content: { title, body },

@@ -182,6 +182,7 @@
                       "km":  "km",
                       "net_per_hour":  "Líquido/hora",
                       "net_per_km":  "Líquido/km",
+                      "gross_per_km":  "Bruto/km",
                       "best_platform":  "Melhor app",
                       "goal_progress":  "Meta do mês",
                       "active_shift":  "Turno em andamento",
@@ -384,6 +385,10 @@
                              "km_excedente":  "Km excedente (locação)"
                          },
     "rental_allowance":  {
+                             "extract_title":  "Franquia de km",
+                             "extract_usage":  "{{used}} / {{total}} km usados",
+                             "period_weekly":  "semanal",
+                             "period_monthly":  "mensal",
                              "near_limit":  "Você já usou {{percent}}% da franquia de km deste período.",
                              "over_limit":  "Você excedeu a franquia em {{km}} km (~{{cost}} de custo extra).",
                              "add_expense":  "Adicionar como despesa",

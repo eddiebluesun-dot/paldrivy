@@ -182,6 +182,7 @@
                       "km":  "miles",
                       "net_per_hour":  "Net/hour",
                       "net_per_km":  "Net/mile",
+                      "gross_per_km":  "Gross/mile",
                       "best_platform":  "Best app",
                       "goal_progress":  "Monthly goal",
                       "active_shift":  "Shift in progress",
@@ -384,6 +385,10 @@
                              "km_excedente":  "Excess mileage (rental)"
                          },
     "rental_allowance":  {
+                             "extract_title":  "Km allowance",
+                             "extract_usage":  "{{used}} / {{total}} km used",
+                             "period_weekly":  "weekly",
+                             "period_monthly":  "monthly",
                              "near_limit":  "You've used {{percent}}% of this period's km allowance.",
                              "over_limit":  "You've exceeded the allowance by {{km}} km (~{{cost}} extra cost).",
                              "add_expense":  "Add as expense",

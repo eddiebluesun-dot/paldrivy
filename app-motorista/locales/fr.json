@@ -139,6 +139,7 @@
     "km": "km",
     "net_per_hour": "Net/heure",
     "net_per_km": "Net/km",
+    "gross_per_km": "Brut/km",
     "best_platform": "Meilleure appli",
     "goal_progress": "Objectif du mois",
     "active_shift": "Trajet en cours",
@@ -341,6 +342,10 @@
     "km_excedente": "Kilométrage excédentaire (location)"
   },
   "rental_allowance": {
+    "extract_title": "Forfait km",
+    "extract_usage": "{{used}} / {{total}} km utilisés",
+    "period_weekly": "hebdomadaire",
+    "period_monthly": "mensuel",
     "near_limit": "Vous avez déjà utilisé {{percent}} % du forfait km de cette période.",
     "over_limit": "Vous avez dépassé le forfait de {{km}} km (~{{cost}} de coût supplémentaire).",
     "add_expense": "Ajouter comme dépense",
