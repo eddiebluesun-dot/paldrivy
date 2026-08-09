@@ -140,6 +140,7 @@
     "net_per_hour": "净收/小时",
     "net_per_km": "净收/公里",
     "gross_per_km": "毛收/公里",
+    "week_total": "本周",
     "best_platform": "最佳平台",
     "goal_progress": "本月目标",
     "active_shift": "进行中的行程",

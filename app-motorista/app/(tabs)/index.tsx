@@ -1056,68 +1056,72 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
         )}
       </View>
 
-      {/* 2-column body: bars + right summary */}
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        {/* Bars — minWidth: 0 is required on web: without it, a flex:1 row's children
-            default to a content-based minimum width and refuse to shrink, so a wide day
-            value (e.g. today's "R$ 395,17") pushes past its own column and visually
-            overlaps the "SEMANA" summary column to the right instead of wrapping/shrinking
-            the way it does natively (React Native Web flexbox quirk). */}
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', gap: 4 }}>
-          {buckets.map(b => {
-            const isToday = b.date === today;
-            const hasData = b.net_cents > 0;
-            const barPct = hasData ? Math.max(b.net_cents / maxVal, 0.06) : 0.04;
-            const barColor = isToday ? Colors.accent : Colors.success;
-            const dayLabel = new Date(b.date + 'T12:00:00').toLocaleDateString(language, { weekday: 'short' }).replace('.', '').toUpperCase().slice(0, 3);
-            const dayNum = new Date(b.date + 'T12:00:00').getDate();
-            return (
-              <TouchableOpacity key={b.date} onPress={() => onPress(b.date)} style={{ flex: 1, minWidth: 0, alignItems: 'center' }} activeOpacity={0.7}>
-                <Text style={{ fontSize: 7, color: isToday ? Colors.accent : Colors.textSecondary, fontVariant: ['tabular-nums'], fontWeight: isToday ? '700' : '400', marginBottom: 3, minHeight: 11, textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
-                  {hasData ? formatMoney(b.net_cents, currencyCode, locale) : ''}
-                </Text>
-                <View style={{ width: '100%', height: WBAR_H, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, justifyContent: 'flex-end' }}>
-                  {hasData ? (
-                    <View style={{
-                      width: '100%', height: WBAR_H * barPct,
-                      borderRadius: 6, backgroundColor: barColor,
-                      ...Platform.select({
-                        ios: { shadowColor: barColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.80, shadowRadius: 8 },
-                        android: { elevation: 4 },
-                      }),
-                    }} />
-                  ) : (
-                    <View style={{ width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)' }} />
-                  )}
-                </View>
-                <Text style={{ fontSize: 9, color: isToday ? Colors.accent : Colors.textSecondary, fontWeight: isToday ? '700' : '500', marginTop: 5 }}>{dayLabel}</Text>
-                <Text style={{ fontSize: 11, color: isToday ? Colors.accent : Colors.textPrimary, fontWeight: isToday ? '800' : '600', marginTop: 1 }}>{dayNum}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+      {/* Bars — full width, centered; no longer sharing the row with a squeezed
+          side column (that column's text was overlapping the chart at narrower
+          widths). "Semana"/"Bruto/km" moved below as their own boxes, in the
+          same style as the Abastec/Despesas/Líquido-km row further down. */}
+      <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'center' }}>
+        {buckets.map(b => {
+          const isToday = b.date === today;
+          const hasData = b.net_cents > 0;
+          const barPct = hasData ? Math.max(b.net_cents / maxVal, 0.06) : 0.04;
+          const barColor = isToday ? Colors.accent : Colors.success;
+          const dayLabel = new Date(b.date + 'T12:00:00').toLocaleDateString(language, { weekday: 'short' }).replace('.', '').toUpperCase().slice(0, 3);
+          const dayNum = new Date(b.date + 'T12:00:00').getDate();
+          return (
+            <TouchableOpacity key={b.date} onPress={() => onPress(b.date)} style={{ flex: 1, minWidth: 0, alignItems: 'center' }} activeOpacity={0.7}>
+              <Text style={{ fontSize: 7, color: isToday ? Colors.accent : Colors.textSecondary, fontVariant: ['tabular-nums'], fontWeight: isToday ? '700' : '400', marginBottom: 3, minHeight: 11, textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
+                {hasData ? formatMoney(b.net_cents, currencyCode, locale) : ''}
+              </Text>
+              <View style={{ width: '100%', height: WBAR_H, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, justifyContent: 'flex-end' }}>
+                {hasData ? (
+                  <View style={{
+                    width: '100%', height: WBAR_H * barPct,
+                    borderRadius: 6, backgroundColor: barColor,
+                    ...Platform.select({
+                      ios: { shadowColor: barColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.80, shadowRadius: 8 },
+                      android: { elevation: 4 },
+                    }),
+                  }} />
+                ) : (
+                  <View style={{ width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                )}
+              </View>
+              <Text style={{ fontSize: 9, color: isToday ? Colors.accent : Colors.textSecondary, fontWeight: isToday ? '700' : '500', marginTop: 5 }}>{dayLabel}</Text>
+              <Text style={{ fontSize: 11, color: isToday ? Colors.accent : Colors.textPrimary, fontWeight: isToday ? '800' : '600', marginTop: 1 }}>{dayNum}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-        {/* Right summary column */}
-        {weekTotal > 0 && (
-          <View style={{ width: 84, alignItems: 'flex-end', justifyContent: 'center', gap: 6 }}>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>SEMANA</Text>
-              <Text style={{ color: Colors.accent, fontSize: 18, fontWeight: '900', fontVariant: ['tabular-nums'] }}
-                numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(weekTotal, currencyCode, locale)}
+      {/* "Semana" + "Bruto/km", same boxed style as the Abastec/Despesas/
+          Líquido-km row below, instead of a cramped text column beside the chart. */}
+      {weekTotal > 0 && (
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+          <View style={{
+            flex: 1, borderRadius: 12, padding: 8, alignItems: 'center', gap: 3,
+            backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1.5, borderColor: 'rgba(245,158,11,0.35)',
+            ...Platform.select({ ios: { shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.30, shadowRadius: 6 }, android: { elevation: 3 } }),
+          }}>
+            <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>{t('dashboard.week_total')}</Text>
+            <Text style={{ color: Colors.accent, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'], textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
+              {formatMoney(weekTotal, currencyCode, locale)}
+            </Text>
+          </View>
+          {grossKm !== null && (
+            <View style={{
+              flex: 1, borderRadius: 12, padding: 8, alignItems: 'center', gap: 3,
+              backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1.5, borderColor: 'rgba(245,158,11,0.35)',
+              ...Platform.select({ ios: { shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.30, shadowRadius: 6 }, android: { elevation: 3 } }),
+            }}>
+              <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>{t('dashboard.gross_per_km')}</Text>
+              <Text style={{ color: Colors.accent, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'], textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
+                ~ {formatMoney(grossKm, currencyCode, locale)}/{distanceUnit}
               </Text>
             </View>
-            {grossKm !== null && (
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ color: Colors.accent, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
-                  ~ {formatMoney(grossKm, currencyCode, locale)}/{distanceUnit}
-                </Text>
-                <Text style={{ color: Colors.textSecondary, fontSize: 9, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 }}>{t('dashboard.gross_per_km')}</Text>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
+          )}
+        </View>
+      )}
 
       {weekTotals !== null && <WeekNeonBoxes totals={weekTotals} currencyCode={currencyCode} locale={locale} distanceUnit={distanceUnit} />}
     </View>

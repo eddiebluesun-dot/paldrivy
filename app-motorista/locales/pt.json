@@ -183,6 +183,7 @@
                       "net_per_hour":  "Líquido/hora",
                       "net_per_km":  "Líquido/km",
                       "gross_per_km":  "Bruto/km",
+                      "week_total":  "Semana",
                       "best_platform":  "Melhor app",
                       "goal_progress":  "Meta do mês",
                       "active_shift":  "Turno em andamento",

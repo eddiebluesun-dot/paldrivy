@@ -183,6 +183,7 @@
                       "net_per_hour":  "Neto/hora",
                       "net_per_km":  "Neto/km",
                       "gross_per_km":  "Bruto/km",
+                      "week_total":  "Semana",
                       "best_platform":  "Mejor app",
                       "goal_progress":  "Meta del mes",
                       "active_shift":  "Turno en curso",

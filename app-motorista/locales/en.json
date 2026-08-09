@@ -183,6 +183,7 @@
                       "net_per_hour":  "Net/hour",
                       "net_per_km":  "Net/mile",
                       "gross_per_km":  "Gross/mile",
+                      "week_total":  "Week",
                       "best_platform":  "Best app",
                       "goal_progress":  "Monthly goal",
                       "active_shift":  "Shift in progress",
