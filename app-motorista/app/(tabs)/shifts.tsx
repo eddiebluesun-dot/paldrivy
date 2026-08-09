@@ -344,6 +344,11 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
           />
 
           <Text style={styles.fieldLabel}>{t('shift.earnings')}</Text>
+          <View style={styles.platformHeaderRow}>
+            <View style={styles.platformName} />
+            <Text style={[styles.platformColumnHeader, styles.platformRides]}>{t('shift.rides_deliveries_header')}</Text>
+            <Text style={[styles.platformColumnHeader, styles.platformAmount]}>{t('shift.earnings')}</Text>
+          </View>
           {platforms.map((row, i) => (
             <View key={i} style={styles.platformRow}>
               <TextInput
@@ -874,6 +879,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm + 2, fontSize: 15, marginBottom: Spacing.xs, minHeight: 48,
   },
   platformRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
+  platformHeaderRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: 4 },
+  platformColumnHeader: {
+    color: Colors.textSecondary, fontSize: 9, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center',
+  },
   platformName: { flex: 1, marginBottom: 0 },
   platformAmount: { width: 90, marginBottom: 0 },
   platformRides: { width: 64, marginBottom: 0, textAlign: 'center' },
