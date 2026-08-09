@@ -230,14 +230,27 @@ export function MonthDetailSheet({
               </View>
             )}
 
-            {/* Net per km pill */}
-            {item.km_meters > 0 && net > 0 && (
-              <View style={styles.netKmRow}>
-                <Ionicons name="trending-up" size={13} color={Colors.success} />
-                <Text style={styles.netKmLabel}>Líquido/km</Text>
-                <Text style={styles.netKmValue}>
-                  {formatMoney(Math.round(net / (item.km_meters / 1000)), currencyCode, locale)}/km
-                </Text>
+            {/* Gross/km + Net/km pills */}
+            {item.km_meters > 0 && (item.gross_cents > 0 || net > 0) && (
+              <View style={{ flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg }}>
+                {item.gross_cents > 0 && (
+                  <View style={[styles.netKmRow, { flex: 1, marginBottom: 0, borderColor: 'rgba(245,158,11,0.30)' }]}>
+                    <Ionicons name="trending-up" size={13} color={Colors.accent} />
+                    <Text style={styles.netKmLabel}>Bruto/km</Text>
+                    <Text style={[styles.netKmValue, { color: Colors.accent }]}>
+                      {formatMoney(Math.round(item.gross_cents / (item.km_meters / 1000)), currencyCode, locale)}/km
+                    </Text>
+                  </View>
+                )}
+                {net > 0 && (
+                  <View style={[styles.netKmRow, { flex: 1, marginBottom: 0 }]}>
+                    <Ionicons name="trending-up" size={13} color={Colors.success} />
+                    <Text style={styles.netKmLabel}>Líquido/km</Text>
+                    <Text style={styles.netKmValue}>
+                      {formatMoney(Math.round(net / (item.km_meters / 1000)), currencyCode, locale)}/km
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 

@@ -216,9 +216,14 @@ export interface DayDetail {
     ended_at: string | null;
     odometer_start_meters: number | null;
     odometer_end_meters: number | null;
+    allocated_fixed_cents: number | null;
   }>;
   expenses_cents: number;
   fuel_cents: number;
+  // Directly-logged expenses (tolls/parking/food already live on the shift
+  // row itself, not here), grouped by category -- for an itemized "audit"
+  // breakdown rather than one lump "outras despesas" figure.
+  expensesByCategory: Array<{ category: string; amount_cents: number }>;
 }
 
 export async function getDayDetail(userId: string, dateStr: string): Promise<DayDetail> {
@@ -228,14 +233,14 @@ export async function getDayDetail(userId: string, dateStr: string): Promise<Day
   const [shiftsRes, expensesRes, fuelRes] = await Promise.all([
     supabase
       .from('shifts')
-      .select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters')
+      .select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters, allocated_fixed_cents')
       .eq('user_id', userId)
       .gte('started_at', start)
       .lte('started_at', end)
       .not('ended_at', 'is', null),
     supabase
       .from('expenses')
-      .select('amount_cents')
+      .select('category, amount_cents')
       .eq('user_id', userId)
       .eq('expense_date', dateStr),
     supabase
@@ -249,12 +254,18 @@ export async function getDayDetail(userId: string, dateStr: string): Promise<Day
   if (shiftsRes.error) throw shiftsRes.error;
   if (expensesRes.error) throw expensesRes.error;
 
-  const expenses_cents = ((expensesRes.data ?? []) as { amount_cents: number }[])
-    .reduce((s, e) => s + e.amount_cents, 0);
+  const expenseRows = (expensesRes.data ?? []) as { category: string; amount_cents: number }[];
+  const expenses_cents = expenseRows.reduce((s, e) => s + e.amount_cents, 0);
   const fuel_cents = ((fuelRes.data ?? []) as { total_cost_cents: number }[])
     .reduce((s, e) => s + e.total_cost_cents, 0);
 
-  return { shifts: (shiftsRes.data ?? []) as DayDetail['shifts'], expenses_cents, fuel_cents };
+  const catMap = new Map<string, number>();
+  for (const e of expenseRows) catMap.set(e.category, (catMap.get(e.category) ?? 0) + e.amount_cents);
+  const expensesByCategory = Array.from(catMap.entries())
+    .map(([category, amount_cents]) => ({ category, amount_cents }))
+    .sort((a, b) => b.amount_cents - a.amount_cents);
+
+  return { shifts: (shiftsRes.data ?? []) as DayDetail['shifts'], expenses_cents, fuel_cents, expensesByCategory };
 }
 
 export interface MonthlyTotals {

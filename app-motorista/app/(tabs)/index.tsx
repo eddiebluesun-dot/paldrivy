@@ -40,6 +40,7 @@ import { MonthDetailSheet } from '@/src/components/MonthDetailSheet';
 import { RentalAllowanceBanner } from '@/src/components/RentalAllowanceBanner';
 import { RentalAllowanceExtractCard } from '@/src/components/RentalAllowanceExtractCard';
 import { fireRentalAllowanceNearLimitNotification } from '@/src/services/notifications';
+import { getRecurringExpenseBreakdownForDay } from '@/src/services/recurringExpenseAllocation';
 import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
 import { addExpense, hasExpenseSince } from '@/src/services/expenses';
 import type { RentalAllowanceStatus } from '@/src/utils/rentalKmAllowanceUtils';
@@ -853,12 +854,18 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
 }) {
   const { t } = useTranslation();
   const [detail, setDetail] = useState<DayDetail | null>(null);
+  const [recurringBreakdown, setRecurringBreakdown] = useState<Array<{ category: string; amountCents: number }>>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!visible || !dateStr || !userId) return;
-    setLoading(true); setDetail(null);
-    getDayDetail(userId, dateStr).then(setDetail).catch(() => setDetail(null)).finally(() => setLoading(false));
+    setLoading(true); setDetail(null); setRecurringBreakdown([]);
+    Promise.all([
+      getDayDetail(userId, dateStr),
+      getRecurringExpenseBreakdownForDay(userId, dateStr).catch(() => []),
+    ]).then(([d, breakdown]) => { setDetail(d); setRecurringBreakdown(breakdown); })
+      .catch(() => setDetail(null))
+      .finally(() => setLoading(false));
   }, [visible, dateStr, userId]);
 
   const label = dateStr ? (() => {
@@ -880,8 +887,18 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
     if (sh.odometer_end_meters == null) return max;
     return max == null ? sh.odometer_end_meters : Math.max(max, sh.odometer_end_meters);
   }, null);
-  const totalExpensesCents = (detail?.expenses_cents ?? 0) + (detail?.fuel_cents ?? 0);
-  const realNet = totalNet - totalExpensesCents;
+  // Direct, logged-that-day costs (fuel + expenses table rows) -- what
+  // realNet subtracts, since totalNet (from shifts.net_cents) already has
+  // trip-level deductions AND the recurring-expense allocation folded in.
+  const directExpensesCents = (detail?.expenses_cents ?? 0) + (detail?.fuel_cents ?? 0);
+  const recurringShareCents = recurringBreakdown.reduce((s, e) => s + e.amountCents, 0);
+  // Display-only subtotal for the itemized "DESPESAS" list (fuel + each
+  // direct category + each recurring category's daily share) -- NOT the same
+  // as what realNet subtracts, since totalNet already accounts for the
+  // recurring share once; adding it again here would double-count the
+  // bottom line while still being the correct total of what's ITEMIZED above.
+  const totalExpensesCents = directExpensesCents + recurringShareCents;
+  const realNet = totalNet - directExpensesCents;
 
   function Row({ label: l, value, color }: { label: string; value: string; color?: string }) {
     return (
@@ -910,8 +927,22 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
             </View>
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>{t('dashboard.day_expenses_section')}</Text>
+              {/* Itemized by category, not a single "outras despesas" lump --
+                  PalDrivy is meant to work as a full audit trail, so each
+                  category (including the day's own share of a recurring
+                  weekly/monthly expense like rent) gets its own visible line. */}
               {(detail?.fuel_cents ?? 0) > 0 && <Row label={t('dashboard.day_fuel')} value={formatMoney(detail!.fuel_cents, currencyCode, locale)} color={Colors.error} />}
-              {(detail?.expenses_cents ?? 0) > 0 && <Row label={t('dashboard.day_other_expenses')} value={formatMoney(detail!.expenses_cents, currencyCode, locale)} color={Colors.error} />}
+              {(detail?.expensesByCategory ?? []).map(e => (
+                <Row key={e.category} label={t(`expense_category.${e.category}`)} value={formatMoney(e.amount_cents, currencyCode, locale)} color={Colors.error} />
+              ))}
+              {recurringBreakdown.map(e => (
+                <Row
+                  key={`recurring-${e.category}`}
+                  label={`${t(`expense_category.${e.category}`)} (${t('dashboard.day_recurring_share')})`}
+                  value={formatMoney(e.amountCents, currencyCode, locale)}
+                  color={Colors.error}
+                />
+              ))}
               <Row label={t('dashboard.day_total_expenses')} value={formatMoney(totalExpensesCents, currencyCode, locale)} color={Colors.error} />
               <Row label={t('dashboard.day_net_real')} value={formatMoney(realNet, currencyCode, locale)} color={realNet >= 0 ? Colors.success : Colors.error} />
               {totalGross > 0 && totalExpensesCents > 0 && (() => {
@@ -949,6 +980,8 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
               <Row label={t('dashboard.day_shifts')} value={String(shifts.length)} />
               {totalDur > 0 && totalGross > 0 && <Row label={t('dashboard.day_gross_per_hour')} value={formatMoney(Math.round((totalGross / totalDur) * 3600), currencyCode, locale)} />}
               {totalDur > 0 && realNet > 0 && <Row label={t('dashboard.day_net_real_per_hour')} value={formatMoney(Math.round((realNet / totalDur) * 3600), currencyCode, locale)} />}
+              {totalKm > 0 && totalGross > 0 && <Row label={t('dashboard.day_gross_per_km')} value={`${formatMoney(Math.round(totalGross / metersToDisplay(totalKm, distanceUnit)), currencyCode, locale)}/${distanceUnit}`} />}
+              {totalKm > 0 && <Row label={t('dashboard.day_net_per_km')} value={`${formatMoney(Math.round(realNet / metersToDisplay(totalKm, distanceUnit)), currencyCode, locale)}/${distanceUnit}`} color={realNet >= 0 ? Colors.success : Colors.error} />}
             </View>
             {shifts.length === 0 && totalExpensesCents === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: Spacing.xl }}>

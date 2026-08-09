@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
-import { getFeed, type CommunityPost } from '@/src/services/communityPosts';
+import { getFeed, deletePost, type CommunityPost } from '@/src/services/communityPosts';
 import { searchUsers, type CommunityProfile } from '@/src/services/community';
 import { getProfile } from '@/src/services/profile';
 import { PostCard } from '@/src/components/community/PostCard';
@@ -33,6 +33,11 @@ export default function CommunityScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleDeletePost(postId: string) {
+    await deletePost(postId);
+    await load();
+  }
 
   useEffect(() => {
     if (!userId || query.trim().length < 2) { setResults([]); return; }
@@ -103,6 +108,8 @@ export default function CommunityScreen() {
             viewerLocale={locale}
             onPress={() => router.push(`/community/post/${item.id}`)}
             onAuthorPress={() => router.push(`/community/${item.user_id}`)}
+            onEdit={item.user_id === userId ? () => router.push(`/community/edit-post/${item.id}`) : undefined}
+            onDelete={item.user_id === userId ? () => handleDeletePost(item.id) : undefined}
           />
         )}
       />

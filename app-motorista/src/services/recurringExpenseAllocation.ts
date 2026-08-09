@@ -73,3 +73,49 @@ export async function getAllocatedFixedCentsForShift(
   }
   return shares[index];
 }
+
+// Per-category breakdown of the day's recurring-expense allocation (e.g.
+// "rent: R$134.05"), for display in an audit-style day/week/month detail
+// view -- distinct from getAllocatedFixedCentsForShift, which returns one
+// summed, per-shift-split number for folding into net_cents. Each active
+// recurring expense's own daily share is computed independently (matching
+// the design's "no shared denominator" rule from computeDailyAllocationCents),
+// then grouped by category since a user could have more than one recurring
+// expense in the same category. Categories with a zero share (inactive that
+// day) are omitted. Not shift-split -- this is a whole-day total, since a
+// detail view spans however many shifts happened that day, not one shift.
+export async function getRecurringExpenseBreakdownForDay(
+  userId: string,
+  dateStr: string,
+): Promise<Array<{ category: string; amountCents: number }>> {
+  const dayStart = `${dateStr}T00:00:00.000Z`;
+
+  const [{ data: expenseRows }, { data: goal }] = await Promise.all([
+    supabase.from('expenses').select('category, amount_cents, expense_date, recurring_frequency')
+      .eq('user_id', userId).eq('recurring', true),
+    supabase.from('goals').select('working_days')
+      .eq('user_id', userId).eq('type', 'monthly')
+      .lte('starts_at', dateStr)
+      .order('starts_at', { ascending: false }).limit(1).maybeSingle(),
+  ]);
+
+  const workingDays = goal?.working_days ?? [];
+  if (workingDays.length === 0) return [];
+
+  const recurring = (expenseRows ?? []).filter(
+    (e): e is typeof e & { recurring_frequency: 'weekly' | 'monthly' } =>
+      e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly'
+  );
+
+  const byCategory = new Map<string, number>();
+  for (const e of recurring) {
+    const share = computeDailyAllocationCents(
+      [{ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency }],
+      workingDays,
+      new Date(dayStart),
+    );
+    if (share > 0) byCategory.set(e.category, (byCategory.get(e.category) ?? 0) + share);
+  }
+
+  return Array.from(byCategory.entries()).map(([category, amountCents]) => ({ category, amountCents }));
+}
