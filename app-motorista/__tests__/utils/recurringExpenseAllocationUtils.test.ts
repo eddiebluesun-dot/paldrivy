@@ -63,6 +63,37 @@ describe('computeDailyAllocationCents', () => {
     const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-01-01T12:00:00Z'));
     expect(result).toBe(0);
   });
+
+  it('returns 0 for a day off (not a configured working day) even though it falls inside an active period', () => {
+    // Real bug: a Mon-Sat driver's day off (Sunday) was getting charged the
+    // same daily share as a worked day, because period-membership alone was
+    // treated as sufficient. 2026-08-09 is a Sunday, inside the weekly
+    // period [2026-08-03, 2026-08-10) anchored to 2026-08-04.
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 66000, expenseDate: '2026-08-04', frequency: 'weekly' },
+    ];
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-09T12:00:00Z'));
+    expect(result).toBe(0);
+  });
+
+  it('summing the daily share across every day of the period reconciles to the total expense, not more', () => {
+    // The exact scenario reported: R$804.31/week, driver works Mon-Sat.
+    // Every working day in the period should get an equal share that sums
+    // back to 80431 -- NOT 7 days x that share (which overshoots to 93835,
+    // the bug's symptom).
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 80431, expenseDate: '2026-08-10', frequency: 'weekly' },
+    ];
+    const workingDays = [1, 2, 3, 4, 5, 6];
+    let total = 0;
+    for (let d = 10; d <= 16; d++) {
+      total += computeDailyAllocationCents(expenses, workingDays, new Date(`2026-08-${d}T12:00:00Z`));
+    }
+    // 80431 / 6 = 13405 (rounded) per working day x 6 working days = 80430 --
+    // off by 1 cent from 80431 purely due to per-day rounding, not the bug.
+    expect(total).toBeGreaterThanOrEqual(80425);
+    expect(total).toBeLessThanOrEqual(80431);
+  });
 });
 
 describe('splitAcrossShifts', () => {

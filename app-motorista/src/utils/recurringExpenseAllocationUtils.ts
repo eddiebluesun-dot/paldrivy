@@ -35,6 +35,17 @@ export function computeDailyAllocationCents(
   workingDays: number[],
   targetDate: Date,
 ): number {
+  // targetDate must itself be a configured working day -- membership in the
+  // expense's PERIOD alone isn't enough. Without this check, a day off within
+  // an active period (e.g. Sunday, for a Mon-Sat driver) still got charged
+  // the same daily share as a worked day, inflating the period's total well
+  // past the actual expense amount (e.g. 6 working-day shares correctly sum
+  // to the R$804.31 rent, but applying that share to all 7 days of the week
+  // sums to R$938.35 instead).
+  const targetDow = targetDate.getUTCDay();
+  const targetIso = targetDow === 0 ? 7 : targetDow;
+  if (!workingDays.includes(targetIso)) return 0;
+
   let total = 0;
   for (const expense of expenses) {
     if (expense.frequency !== 'weekly' && expense.frequency !== 'monthly') continue;
