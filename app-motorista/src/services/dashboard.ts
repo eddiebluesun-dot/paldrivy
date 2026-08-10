@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Goal } from '../types';
+import { getRecurringExpenseBreakdownForDay } from './recurringExpenseAllocation';
 
 export interface DailySummary {
   gross_cents: number;
@@ -44,7 +45,7 @@ export async function getTodaySummary(userId: string): Promise<DailySummary> {
 
   const { data, error } = await supabase
     .from('shifts')
-    .select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters, allocated_fixed_cents')
+    .select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters')
     .eq('user_id', userId)
     .gte('started_at', todayStart.toISOString())
     .lt('started_at', tomorrowStart.toISOString())
@@ -60,7 +61,6 @@ export async function getTodaySummary(userId: string): Promise<DailySummary> {
     ended_at: string | null;
     odometer_start_meters: number | null;
     odometer_end_meters: number | null;
-    allocated_fixed_cents: number | null;
   }>;
 
   const shiftTotals = rows.reduce<Omit<DailySummary, 'expenses_cents' | 'fuel_cents'>>(
@@ -88,25 +88,31 @@ export async function getTodaySummary(userId: string): Promise<DailySummary> {
 
   const todayStr = toLocalDateString(todayStart);
 
-  const [expRes, fuelRes] = await Promise.all([
+  const [expRes, fuelRes, recurringBreakdown] = await Promise.all([
     supabase.from('expenses').select('amount_cents, recurring, recurring_frequency')
       .eq('user_id', userId).eq('expense_date', todayStr),
     supabase.from('fuel_entries').select('total_cost_cents')
       .eq('user_id', userId)
       .gte('filled_at', todayStart.toISOString())
       .lt('filled_at', tomorrowStart.toISOString()),
+    getRecurringExpenseBreakdownForDay(userId, todayStr),
   ]);
 
   // Same exclusion as getDayDetail: a weekly/monthly recurring expense's own
   // row (dated on its expense_date anchor) is not what actually happened
-  // today -- it's already diluted across working days via shifts'
-  // allocated_fixed_cents (summed below). Including the raw row here too
-  // would double-count it on the one day that happens to be its anchor date.
+  // today -- it's already diluted across working days (see
+  // getRecurringExpenseBreakdownForDay below). Including the raw row here
+  // too would double-count it on the one day that happens to be its anchor
+  // date. The daily share accrues by calendar working day, independent of
+  // whether a shift has actually been logged yet today (matching the
+  // DayDetailModal's "(rateio)" figure, which the driver already sees for
+  // past days -- this keeps today consistent with that, rather than
+  // silently hiding the obligation until the first shift completes).
   const expenseRows = ((expRes.data ?? []) as
     { amount_cents: number; recurring: boolean; recurring_frequency: string | null }[])
     .filter(e => !(e.recurring && (e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')));
-  const allocated_fixed_cents = rows.reduce((s, r) => s + (r.allocated_fixed_cents ?? 0), 0);
-  const expenses_cents = expenseRows.reduce((s, e) => s + e.amount_cents, 0) + allocated_fixed_cents;
+  const recurringShareCents = recurringBreakdown.reduce((s, r) => s + r.amountCents, 0);
+  const expenses_cents = expenseRows.reduce((s, e) => s + e.amount_cents, 0) + recurringShareCents;
   const fuel_cents = ((fuelRes.data ?? []) as { total_cost_cents: number }[]).reduce((s, e) => s + e.total_cost_cents, 0);
 
   return { ...shiftTotals, expenses_cents, fuel_cents, shifts_count: rows.length };
