@@ -2,7 +2,7 @@
   "expo": {
     "name": "PalDrivy",
     "slug": "paldrivy",
-    "version": "2.1.1",
+    "version": "2.2.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "paldrivy",
