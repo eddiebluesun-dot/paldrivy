@@ -8,6 +8,7 @@ export interface CommunityStatsSnapshot {
   date: string;
   platforms: PlatformBreakdownItem[];
   expenses_cents: number;
+  expenses_by_category: Array<{ category: string; amount_cents: number }>;
   metrics: CommunityMetrics;
 }
 
@@ -36,9 +37,15 @@ export async function buildStatsSnapshotForDate(userId: string, dateStr: string)
   );
   const rides_count = rows.reduce((s, r) => s + (r.rides_count ?? 0), 0);
 
-  const metrics = computeCommunityMetrics({ gross_cents, net_cents, duration_seconds, km_meters, rides_count });
+  const metrics = computeCommunityMetrics({
+    gross_cents, net_cents, duration_seconds, km_meters, rides_count,
+    shifts_count: rows.length,
+  });
 
-  return { date: dateStr, platforms, expenses_cents: detail.expenses_cents, metrics };
+  return {
+    date: dateStr, platforms, expenses_cents: detail.expenses_cents,
+    expenses_by_category: detail.expensesByCategory, metrics,
+  };
 }
 
 export async function createPost(

@@ -27,6 +27,7 @@ describe('computeCommunityMetrics', () => {
       duration_seconds: 33821, // 9h23m41s
       km_meters: 139800,
       rides_count: 20,
+      shifts_count: 2,
     });
     expect(result).toEqual({
       earnings_today_cents: 30592,
@@ -37,15 +38,18 @@ describe('computeCommunityMetrics', () => {
       total_km_meters: 139800,
       rides_count: 20,
       avg_per_ride_cents: 1530, // 30592 / 20
+      shifts_count: 2,
+      avg_duration_per_shift_seconds: 16911, // 33821 / 2, rounded
     });
   });
 
-  test('zero duration/km/rides never divides by zero', () => {
+  test('zero duration/km/rides/shifts never divides by zero', () => {
     const result = computeCommunityMetrics({
-      gross_cents: 0, net_cents: 0, duration_seconds: 0, km_meters: 0, rides_count: 0,
+      gross_cents: 0, net_cents: 0, duration_seconds: 0, km_meters: 0, rides_count: 0, shifts_count: 0,
     });
     expect(result.avg_per_hour_cents).toBe(0);
     expect(result.avg_per_km_cents).toBe(0);
     expect(result.avg_per_ride_cents).toBe(0);
+    expect(result.avg_duration_per_shift_seconds).toBe(0);
   });
 });

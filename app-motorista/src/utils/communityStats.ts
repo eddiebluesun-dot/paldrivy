@@ -30,6 +30,8 @@ export interface CommunityMetrics {
   total_km_meters: number;
   rides_count: number;
   avg_per_ride_cents: number;
+  shifts_count: number;
+  avg_duration_per_shift_seconds: number;
 }
 
 export function computeCommunityMetrics(input: {
@@ -38,6 +40,7 @@ export function computeCommunityMetrics(input: {
   duration_seconds: number;
   km_meters: number;
   rides_count: number;
+  shifts_count: number;
 }): CommunityMetrics {
   const hours = input.duration_seconds / 3600;
   const km = input.km_meters / 1000;
@@ -50,5 +53,7 @@ export function computeCommunityMetrics(input: {
     total_km_meters: input.km_meters,
     rides_count: input.rides_count,
     avg_per_ride_cents: input.rides_count > 0 ? Math.round(input.gross_cents / input.rides_count) : 0,
+    shifts_count: input.shifts_count,
+    avg_duration_per_shift_seconds: input.shifts_count > 0 ? Math.round(input.duration_seconds / input.shifts_count) : 0,
   };
 }

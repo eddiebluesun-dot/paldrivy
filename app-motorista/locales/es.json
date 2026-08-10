@@ -174,7 +174,16 @@
       "confirm_delete_post_title": "¿Borrar post?",
       "confirm_delete_post_body": "Esta acción no se puede deshacer.",
       "role_founder": "Fundador",
-      "role_member": "Miembro"
+      "role_member": "Miembro",
+      "earnings_today": "Ganancia del Día",
+      "total_gross": "total bruto",
+      "expenses_by_category": "Gastos por Categoría",
+      "performance_metrics": "Métricas de Rendimiento",
+      "total_hours": "Total de Horas",
+      "avg_hours": "Media de Horas",
+      "total_km": "Total de Km",
+      "rides_deliveries": "Viajes/Entregas",
+      "avg_per_ride": "Media por Viaje/Entrega"
     },
     "dashboard":  {
                       "today":  "Hoy",

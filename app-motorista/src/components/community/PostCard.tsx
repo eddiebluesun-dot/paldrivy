@@ -7,6 +7,37 @@ import { toggleLike, recordView, getTranslatedCaption, type CommunityPost } from
 import { pickTranslationTargetLang } from '../../utils/communityTranslation';
 import { RoleBadge } from './RoleBadge';
 
+// No shared category->icon mapping exists elsewhere in the app (expense
+// screens use plain i18n labels only) -- this is the first one, scoped to
+// the community post's "Despesas por Categoria" section.
+const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  rent: 'home-outline',
+  financing: 'trending-up-outline',
+  insurance: 'shield-checkmark-outline',
+  internet: 'wifi-outline',
+  tracker: 'navigate-outline',
+  licensing: 'document-text-outline',
+  taxi_license: 'id-card-outline',
+  fuel: 'flash-outline',
+  car_wash: 'water-outline',
+  maintenance: 'construct-outline',
+  tires: 'ellipse-outline',
+  oil_change: 'flask-outline',
+  tolls: 'swap-horizontal-outline',
+  parking: 'car-outline',
+  food: 'restaurant-outline',
+  taxes: 'receipt-outline',
+  health_insurance: 'medkit-outline',
+  km_excedente: 'speedometer-outline',
+  other: 'pricetag-outline',
+};
+
+function formatHM(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return `${h}h${String(m).padStart(2, '0')}`;
+}
+
 export function PostCard({
   post, viewerId, viewerLocale, onPress, onAuthorPress, onEdit, onDelete,
 }: {
@@ -83,7 +114,11 @@ export function PostCard({
     setShowingTranslation((v) => !v);
   }
 
-  const { platforms, metrics } = post.stats_snapshot;
+  const { platforms, metrics, expenses_cents } = post.stats_snapshot;
+  // Legacy posts (created before expense-category tracking shipped) won't
+  // have this field in their stored JSONB snapshot even though the type
+  // says it's required — fall back rather than crash on old data.
+  const expensesByCategory = post.stats_snapshot.expenses_by_category ?? [];
   const displayedCaption = showingTranslation && translated !== null ? translated : post.caption;
 
   return (
@@ -159,6 +194,11 @@ export function PostCard({
 
         {post.photo_url && <Image source={{ uri: post.photo_url }} style={styles.photo} />}
 
+        <Text style={styles.sectionHeader}>{t('community.earnings_today')}</Text>
+        <View style={styles.totalEarningsBox}>
+          <Text style={styles.totalEarningsValue}>{(metrics.earnings_today_cents / 100).toFixed(2)}</Text>
+          <Text style={styles.totalEarningsLabel}>{t('community.total_gross')}</Text>
+        </View>
         <View style={styles.statsRow}>
           {platforms.map((p) => (
             <View key={p.name} style={styles.statBox}>
@@ -169,10 +209,33 @@ export function PostCard({
           ))}
         </View>
 
+        {expensesByCategory.length > 0 && (
+          <>
+            <Text style={styles.sectionHeader}>{t('community.expenses_by_category')}</Text>
+            {expensesByCategory.map((e) => (
+              <View key={e.category} style={styles.categoryRow}>
+                <Ionicons name={CATEGORY_ICONS[e.category] ?? 'pricetag-outline'} size={16} color={Colors.error} />
+                <Text style={styles.categoryLabel}>{t(`expense_category.${e.category}`)}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.categoryValue}>{(e.amount_cents / 100).toFixed(2)}</Text>
+                  <Text style={styles.categoryPct}>
+                    {expenses_cents > 0 ? `${((e.amount_cents / expenses_cents) * 100).toFixed(2)}%` : '—'}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+
+        <Text style={styles.sectionHeader}>{t('community.performance_metrics')}</Text>
         <View style={styles.metricsGrid}>
-          <Metric label="R$/h" value={(metrics.avg_per_hour_cents / 100).toFixed(2)} />
-          <Metric label="R$/km" value={(metrics.avg_per_km_cents / 100).toFixed(2)} />
-          <Metric label="Corridas" value={String(metrics.rides_count)} />
+          <Metric label="R$/h" value={(metrics.avg_per_hour_cents / 100).toFixed(2)} color="money" />
+          <Metric label="R$/km" value={(metrics.avg_per_km_cents / 100).toFixed(2)} color="money" />
+          <Metric label={t('community.total_hours')} value={formatHM(metrics.total_duration_seconds)} color="time" />
+          <Metric label={t('community.avg_hours')} value={formatHM(metrics.avg_duration_per_shift_seconds)} color="time" />
+          <Metric label={t('community.total_km')} value={`${(metrics.total_km_meters / 1000).toFixed(1)}km`} color="time" />
+          <Metric label={t('community.rides_deliveries')} value={String(metrics.rides_count)} color="rides" />
+          <Metric label={t('community.avg_per_ride')} value={(metrics.avg_per_ride_cents / 100).toFixed(2)} color="rides" span />
         </View>
       </TouchableOpacity>
 
@@ -194,9 +257,17 @@ export function PostCard({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+const METRIC_TINTS = {
+  money: { backgroundColor: 'rgba(16,185,129,0.12)' },
+  time: { backgroundColor: 'rgba(59,130,246,0.12)' },
+  rides: { backgroundColor: 'rgba(245,158,11,0.12)' },
+};
+
+function Metric({ label, value, color, span }: {
+  label: string; value: string; color: keyof typeof METRIC_TINTS; span?: boolean;
+}) {
   return (
-    <View style={styles.metricBox}>
+    <View style={[styles.metricBox, METRIC_TINTS[color], span && styles.metricBoxSpan]}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={styles.statValue}>{value}</Text>
     </View>
@@ -216,10 +287,32 @@ const styles = StyleSheet.create({
   caption: { color: Colors.textPrimary, fontSize: 14, marginBottom: Spacing.xs },
   translateLink: { color: Colors.brandBlue, fontSize: 12, marginBottom: Spacing.sm },
   photo: { width: '100%', height: 200, borderRadius: Radius.input, marginBottom: Spacing.sm },
+  sectionHeader: {
+    color: Colors.textSecondary, fontSize: 10, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6,
+  },
+  totalEarningsBox: {
+    backgroundColor: 'rgba(16,185,129,0.10)', borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)',
+    borderRadius: Radius.input, padding: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
+  },
+  totalEarningsValue: { color: Colors.success, fontSize: 20, fontWeight: '900' },
+  totalEarningsLabel: { color: Colors.textSecondary, fontSize: 9 },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
   statBox: { backgroundColor: Colors.surfaceAlt, borderRadius: Radius.input, padding: Spacing.sm, minWidth: 90 },
-  metricsGrid: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
-  metricBox: { flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: Radius.input, padding: Spacing.sm, alignItems: 'center' },
+  categoryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.35)', borderRadius: Radius.input,
+    padding: Spacing.sm, marginBottom: 6,
+  },
+  categoryLabel: { flex: 1, color: Colors.error, fontSize: 12, fontWeight: '700' },
+  categoryValue: { color: Colors.textPrimary, fontSize: 13, fontWeight: '800' },
+  categoryPct: { color: Colors.error, fontSize: 10 },
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
+  metricBox: {
+    width: '31%', backgroundColor: Colors.surfaceAlt, borderRadius: Radius.input,
+    padding: Spacing.sm, alignItems: 'center',
+  },
+  metricBoxSpan: { width: '100%' },
   statLabel: { color: Colors.textSecondary, fontSize: 11 },
   statValue: { color: Colors.textPrimary, fontSize: 15, fontWeight: '700' },
   statPct: { color: Colors.success, fontSize: 11 },

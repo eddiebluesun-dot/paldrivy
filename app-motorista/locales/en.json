@@ -174,7 +174,16 @@
       "confirm_delete_post_title": "Delete post?",
       "confirm_delete_post_body": "This action cannot be undone.",
       "role_founder": "Founder",
-      "role_member": "Member"
+      "role_member": "Member",
+      "earnings_today": "Today's Earnings",
+      "total_gross": "total gross",
+      "expenses_by_category": "Expenses by Category",
+      "performance_metrics": "Performance Metrics",
+      "total_hours": "Total Hours",
+      "avg_hours": "Avg. Hours",
+      "total_km": "Total Km",
+      "rides_deliveries": "Rides/Deliveries",
+      "avg_per_ride": "Avg. per Ride/Delivery"
     },
     "dashboard":  {
                       "today":  "Today",
