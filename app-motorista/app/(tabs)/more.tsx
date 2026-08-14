@@ -9,11 +9,12 @@ import { useTranslation } from 'react-i18next';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/src/lib/supabase';
+import { Select } from '@/src/components/Select';
 import { authSignOut } from '@/src/hooks/useAuth';
 import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
 import { upsertProfile } from '@/src/services/profile';
-import { createVehicle, updateVehicle } from '@/src/services/vehicles';
+import { createVehicle, updateVehicle, getVehicleRecurringCost, syncVehicleRecurringCost, endVehicleRecurringCost, type VehicleRecurringCost } from '@/src/services/vehicles';
 import { createStripeCheckout } from '@/src/services/stripe';
 import { centsToDecimal, decimalToCents } from '@/src/utils/currency';
 import { displayToMeters, metersToDisplay } from '@/src/utils/units';
@@ -289,6 +290,10 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
   const [year, setYear]             = useState('');
   const [fuel, setFuel]             = useState<FuelType>('gasoline');
   const [ownership, setOwnership]   = useState<OwnershipType>('own');
+  const [rentalCostFrequency, setRentalCostFrequency] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const [costAmount, setCostAmount] = useState('0');
+  const [linkedCost, setLinkedCost] = useState<VehicleRecurringCost | null>(null);
+  const [endingCost, setEndingCost] = useState(false);
   const [rentalStartDate, setRentalStartDate]         = useState('');
   const [rentalStartOdometer, setRentalStartOdometer] = useState('');
   const [allowancePeriod, setAllowancePeriod]         = useState<RentalAllowancePeriod>('unlimited');
@@ -311,12 +316,24 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
       setAllowancePeriod(vehicle.rental_km_allowance_period ?? 'unlimited');
       setAllowanceAmount(vehicle.rental_km_allowance_amount != null ? String(vehicle.rental_km_allowance_amount) : '');
       setExcessRate(vehicle.rental_km_excess_rate_cents != null ? String(centsToDecimal(vehicle.rental_km_excess_rate_cents)) : '');
+      getVehicleRecurringCost(vehicle.id).then(cost => {
+        setLinkedCost(cost);
+        if (cost) {
+          setCostAmount((cost.amountCents / 100).toFixed(2));
+          if (cost.frequency === 'daily' || cost.frequency === 'weekly' || cost.frequency === 'monthly') {
+            setRentalCostFrequency(cost.frequency);
+          }
+        } else {
+          setCostAmount('0');
+        }
+      }).catch(() => { setLinkedCost(null); setCostAmount('0'); });
     } else if (visible && !vehicle) {
       setBrand(''); setModel(''); setYear(String(new Date().getFullYear()));
       setFuel('gasoline');
       setOwnership('own');
       setRentalStartDate(''); setRentalStartOdometer('');
       setAllowancePeriod('unlimited'); setAllowanceAmount(''); setExcessRate('');
+      setRentalCostFrequency('monthly'); setCostAmount('0'); setLinkedCost(null);
     }
   }, [visible, vehicle]);
 
@@ -336,12 +353,14 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
     };
     setSaving(true); setError('');
     try {
+      let targetVehicleId: string;
       if (vehicle) {
         // avg_consumption_per_100 is deliberately omitted here — the manual
         // override was removed in favor of the automatic km+fuel-up
         // calculation, and a partial update leaves whatever's already
         // stored untouched rather than resetting it.
         await updateVehicle(vehicle.id, { brand: brand.trim(), model: model.trim(), year: parseInt(year) || vehicle.year, fuel_type: fuel, ...rentalFields });
+        targetVehicleId = vehicle.id;
       } else {
         const newVehicle = await createVehicle({ user_id: userId, name: `${brand.trim()} ${model.trim()}`, brand: brand.trim(), model: model.trim(), year: parseInt(year) || new Date().getFullYear(), fuel_type: fuel, avg_consumption_per_100: 0, monthly_cost_cents: 0, monthly_insurance_cents: 0, current_odometer: 0, is_taxi: false, taxi_license_monthly_cents: 0, ...rentalFields });
         // Plain update, not upsertProfile()/.upsert() — see the identical
@@ -355,7 +374,15 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
           .update({ vehicle_id: newVehicle.id })
           .eq('id', userId);
         if (linkError) throw linkError;
+        targetVehicleId = newVehicle.id;
       }
+      await syncVehicleRecurringCost({
+        vehicleId: targetVehicleId,
+        userId,
+        ownershipType: ownership,
+        amountCents: decimalToCents(parseFloat(costAmount.replace(',', '.')) || 0),
+        frequency: ownership === 'rent' ? rentalCostFrequency : 'monthly',
+      });
       onSaved();
     } catch { setError(t('more.vehicle_error')); }
     finally { setSaving(false); }
@@ -389,6 +416,65 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
               </TouchableOpacity>
             ))}
           </View>
+
+          {ownership !== 'own' && (
+            <>
+              {ownership === 'rent' && (
+                <>
+                  <Text style={s.fieldLabel}>{t('onboarding.rental_cost_frequency')}</Text>
+                  <Select
+                    value={rentalCostFrequency}
+                    onValueChange={(v) => setRentalCostFrequency(v as 'daily' | 'weekly' | 'monthly')}
+                    items={[
+                      { label: t('onboarding.rental_cost_daily'), value: 'daily' },
+                      { label: t('onboarding.rental_cost_weekly'), value: 'weekly' },
+                      { label: t('onboarding.rental_cost_monthly'), value: 'monthly' },
+                    ]}
+                  />
+                </>
+              )}
+              <Text style={s.fieldLabel}>{ownership === 'rent' ? t('onboarding.rental_cost_amount') : t('onboarding.monthly_cost')}</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={costAmount}
+                onChangeText={setCostAmount}
+                keyboardType="decimal-pad"
+                placeholderTextColor={Colors.textSecondary}
+              />
+              {linkedCost && !linkedCost.endsAt && (
+                <TouchableOpacity
+                  style={s.cancelBtn}
+                  disabled={endingCost}
+                  onPress={() => {
+                    Alert.alert(
+                      t('more.vehicle_end_recurring_cost'),
+                      t('more.vehicle_end_recurring_cost_confirm'),
+                      [
+                        { text: t('common.cancel'), style: 'cancel' },
+                        {
+                          text: t('more.vehicle_end_recurring_cost'),
+                          style: 'destructive',
+                          onPress: async () => {
+                            if (!vehicle) return;
+                            setEndingCost(true);
+                            try {
+                              await endVehicleRecurringCost(vehicle.id);
+                              const refreshed = await getVehicleRecurringCost(vehicle.id);
+                              setLinkedCost(refreshed);
+                            } finally {
+                              setEndingCost(false);
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <Text style={s.cancelBtnText}>{t('more.vehicle_end_recurring_cost')}</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
 
           {ownership === 'rent' ? (
             <>
