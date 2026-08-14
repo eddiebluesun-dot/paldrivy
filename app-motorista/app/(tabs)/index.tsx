@@ -434,7 +434,14 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
 }) {
   const { t } = useTranslation();
   const today = new Date().getDate();
-  const monthlyTotal = buckets.reduce((s, b) => s + b.net_cents, 0);
+  // "Cumprido" is compared against `goalCents` (the monthly goal, always
+  // gross/bruto -- set from the driver's earnings target, not a profit
+  // target), so it must be summed from gross_cents too. Summing net_cents
+  // here compared a net figure against a gross goal, which is why "Cumprido"
+  // in the goal donut could show a smaller number than "Faturamento" in the
+  // Ganhos x Despesas card just below it even though both cover the exact
+  // same month/shifts -- they were never the same quantity to begin with.
+  const monthlyTotal = buckets.reduce((s, b) => s + b.gross_cents, 0);
   const hasGoal = goalCents != null && goalCents > 0;
   const pct = hasGoal ? Math.min(monthlyTotal / goalCents!, 1) : 0;
   const remaining = hasGoal ? Math.max(goalCents! - monthlyTotal, 0) : 0;
@@ -887,18 +894,26 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
     if (sh.odometer_end_meters == null) return max;
     return max == null ? sh.odometer_end_meters : Math.max(max, sh.odometer_end_meters);
   }, null);
-  // Direct, logged-that-day costs (fuel + expenses table rows) -- what
-  // realNet subtracts, since totalNet (from shifts.net_cents) already has
-  // trip-level deductions AND the recurring-expense allocation folded in.
+  // Direct, logged-that-day costs (fuel + expenses table rows), plus this
+  // day's share of active recurring weekly/monthly costs (rent/insurance
+  // rateio) -- the FULL expense total for the day, matching what
+  // "Total despesas" itemizes below line by line.
   const directExpensesCents = (detail?.expenses_cents ?? 0) + (detail?.fuel_cents ?? 0);
   const recurringShareCents = recurringBreakdown.reduce((s, e) => s + e.amountCents, 0);
-  // Display-only subtotal for the itemized "DESPESAS" list (fuel + each
-  // direct category + each recurring category's daily share) -- NOT the same
-  // as what realNet subtracts, since totalNet already accounts for the
-  // recurring share once; adding it again here would double-count the
-  // bottom line while still being the correct total of what's ITEMIZED above.
   const totalExpensesCents = directExpensesCents + recurringShareCents;
-  const realNet = totalNet - directExpensesCents;
+  // realNet is derived straight from totalGross - totalExpensesCents (NOT
+  // totalGross - totalNet's-implied-deductions) so it is, by construction,
+  // always exactly "Bruto minus everything itemized in Total despesas" --
+  // including the rateio. Deliberately does NOT read totalNet (sum of
+  // shifts.net_cents): that column is computed once at shift-completion time
+  // and never retroactively corrected, so it silently drifts from the
+  // driver's actual recurring-expense config (edited afterwards) and, prior
+  // to the fix removing the legacy `calculate-shift` edge-function call
+  // (which overwrote net_cents with allocated_fixed_cents hardcoded to 0),
+  // was flat-out wrong for every shift saved while that call was still
+  // wired in. Recomputing from gross + the same two live queries "Total
+  // despesas" already uses keeps the two figures impossible to disagree.
+  const realNet = totalGross - totalExpensesCents;
 
   function Row({ label: l, value, color }: { label: string; value: string; color?: string }) {
     return (

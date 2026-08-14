@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { Shift, EndShiftData, ShiftPause } from '../types';
 import { hasReachedShiftLimit } from '../utils/freeLimits';
-import { getAllocatedFixedCentsForShift } from './recurringExpenseAllocation';
+import { getAllocatedFixedCentsForShift, syncAllocatedFixedCentsForDay } from './recurringExpenseAllocation';
 
 function totalPausedSeconds(pauses: ShiftPause[]): number {
   return pauses.reduce((sum, p) => {
@@ -169,6 +169,19 @@ export async function endShift(shiftId: string, payload: EndShiftData, startedAt
   if (durationSeconds !== null) updateData.duration_seconds = durationSeconds;
   const { error } = await supabase.from('shifts').update(updateData).eq('id', shiftId);
   if (error) throw error;
+
+  // This shift's own allocation is correct (computed above from however many
+  // same-day shifts existed at this instant), but if an EARLIER shift on the
+  // same day was completed before this one existed, that earlier shift is
+  // still holding the full-day share it got back when it was the day's only
+  // shift. Re-split the whole day now that this shift is part of it -- see
+  // syncAllocatedFixedCentsForDay for why this can't be skipped.
+  if (startedAt) {
+    const { data: shiftRow } = await supabase.from('shifts').select('user_id').eq('id', shiftId).maybeSingle();
+    if (shiftRow) {
+      await syncAllocatedFixedCentsForDay((shiftRow as { user_id: string }).user_id, toUtcShiftDate(startedAt));
+    }
+  }
 }
 
 export async function updateShift(
@@ -224,6 +237,17 @@ export async function updateShift(
     // the edit over the correction write; just leave the placeholder
     // allocation in place and log for investigation.
     console.error(`[shifts] failed to persist corrected allocated_fixed_cents for shift ${shiftId}`, correctionError);
+  }
+
+  // Re-split the day's allocation across every shift now on it -- see
+  // syncAllocatedFixedCentsForDay. Relevant here too: editing a shift's
+  // started_at can move it onto a day that already has other shifts.
+  const effectiveStartedAt = startedAt ?? (await supabase.from('shifts').select('started_at').eq('id', shiftId).maybeSingle()).data?.started_at;
+  if (effectiveStartedAt) {
+    const { data: shiftRow } = await supabase.from('shifts').select('user_id').eq('id', shiftId).maybeSingle();
+    if (shiftRow) {
+      await syncAllocatedFixedCentsForDay((shiftRow as { user_id: string }).user_id, toUtcShiftDate(effectiveStartedAt));
+    }
   }
 }
 
@@ -289,6 +313,11 @@ export async function createManualShift(
     // placeholder allocation in place and log for investigation.
     console.error(`[shifts] failed to persist corrected allocated_fixed_cents for manual shift ${shiftId}`, correctionError);
   }
+
+  // Re-split the day's allocation across every shift now on it -- see
+  // syncAllocatedFixedCentsForDay. Relevant here: this manual entry may be
+  // backdated onto a day that already has an earlier, already-allocated shift.
+  await syncAllocatedFixedCentsForDay(userId, toUtcShiftDate(startedAt));
 
   return shiftId;
 }

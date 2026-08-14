@@ -1,4 +1,8 @@
-import { getAllocatedFixedCentsForShift } from '@/src/services/recurringExpenseAllocation';
+import {
+  getAllocatedFixedCentsForShift,
+  getRecurringExpenseTotalForRange,
+  syncAllocatedFixedCentsForDay,
+} from '@/src/services/recurringExpenseAllocation';
 import { supabase } from '@/src/lib/supabase';
 
 jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn() } }));
@@ -9,7 +13,7 @@ jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn() } }));
 // the real client when awaited (or via .maybeSingle() for single-row reads).
 // Reused across the expenses/goals/shifts tables in these tests by handing it
 // a different row array per table.
-function makeQueryBuilder(rows: Record<string, unknown>[]) {
+function makeQueryBuilder(rows: Record<string, unknown>[], updateSink?: Array<{ id: unknown; payload: Record<string, unknown> }>) {
   let filtered = rows;
   const builder: any = {
     select: () => builder,
@@ -17,6 +21,16 @@ function makeQueryBuilder(rows: Record<string, unknown>[]) {
       filtered = filtered.filter(r => r[field] === value);
       return builder;
     },
+    // Only exercised by syncAllocatedFixedCentsForDay's per-shift correction
+    // write (shifts table). Mirrors the real client shape:
+    // .update({...}).eq('id', shiftId).
+    update: (payload: Record<string, unknown>) => ({
+      eq: (field: string, value: unknown) => {
+        updateSink?.push({ id: value, payload });
+        void field;
+        return Promise.resolve({ error: null });
+      },
+    }),
     gte: (field: string, value: unknown) => {
       filtered = filtered.filter(r => (r[field] as string) >= (value as string));
       return builder;
@@ -59,12 +73,14 @@ function mockTables(opts: {
 }) {
   const { expenses = [], goal = null, goals, shifts = [] } = opts;
   const goalRows = goals ?? (goal ? [goal] : []);
+  const shiftUpdates: Array<{ id: unknown; payload: Record<string, unknown> }> = [];
   (supabase.from as jest.Mock).mockImplementation((table: string) => {
     if (table === 'expenses') return makeQueryBuilder(expenses);
     if (table === 'goals') return makeQueryBuilder(goalRows);
-    if (table === 'shifts') return makeQueryBuilder(shifts);
+    if (table === 'shifts') return makeQueryBuilder(shifts, shiftUpdates);
     throw new Error(`unexpected table ${table}`);
   });
+  return { shiftUpdates };
 }
 
 describe('getAllocatedFixedCentsForShift', () => {
@@ -182,5 +198,104 @@ describe('getAllocatedFixedCentsForShift', () => {
     });
 
     await expect(getAllocatedFixedCentsForShift('user-1', '2026-08-05', 'does-not-exist')).rejects.toThrow();
+  });
+});
+
+describe('getRecurringExpenseTotalForRange', () => {
+  // Regression coverage for the bug found in production: getWeekTotals/
+  // getMonthReport/getYearlyReport used to sum the raw `expenses` rows within
+  // their date window directly. A weekly-frequency recurring expense is
+  // stored as ONE row (its `expense_date` anchor), so that raw sum only ever
+  // credited whichever single week/month happened to contain the anchor date
+  // -- every other period saw nothing for it. This function instead sums the
+  // per-day prorated share (same math as getAllocatedFixedCentsForShift)
+  // across every day in the requested range.
+  it('sums a weekly expense\'s daily share across a full month, not just the week containing its anchor date', async () => {
+    // R$804.31/week (Eddie's real production figure), Mon-Sat (6 working
+    // days) -> 80431/6 = 13405 cents/day (rounds to R$134.05, matching the
+    // "Total despesas" rateio the driver actually sees).
+    mockTables({
+      expenses: [{ user_id: 'user-1', amount_cents: 80431, expense_date: '2026-08-10', recurring: true, recurring_frequency: 'weekly' }],
+      goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
+    });
+
+    // Full August 2026 (31 days): Sundays (the one non-working day) are
+    // 2026-08-02, 09, 16, 23, 30 -> 5 Sundays, 26 working days.
+    const total = await getRecurringExpenseTotalForRange('user-1', '2026-08-01', '2026-09-01');
+    expect(total).toBe(26 * 13405);
+  });
+
+  it('returns 0 for a range with no active recurring expenses', async () => {
+    mockTables({
+      expenses: [],
+      goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
+    });
+    const total = await getRecurringExpenseTotalForRange('user-1', '2026-08-01', '2026-09-01');
+    expect(total).toBe(0);
+  });
+
+  it('returns 0 when there is no goal covering the range (no working_days to allocate against)', async () => {
+    mockTables({
+      expenses: [{ user_id: 'user-1', amount_cents: 80431, expense_date: '2026-08-10', recurring: true, recurring_frequency: 'weekly' }],
+      goal: null,
+    });
+    const total = await getRecurringExpenseTotalForRange('user-1', '2026-08-01', '2026-09-01');
+    expect(total).toBe(0);
+  });
+});
+
+describe('syncAllocatedFixedCentsForDay', () => {
+  // Regression coverage for the production bug: a shift ended earlier in the
+  // day (back when it was the day's ONLY shift) keeps the day's FULL
+  // recurring share in its allocated_fixed_cents/net_cents -- nothing
+  // revisited it once a second shift joined the same day. This re-fetches
+  // every shift on the day and corrects any whose stored share no longer
+  // matches an even split across the day's current shift count.
+  it('corrects an earlier shift that is still holding the full-day share after a second shift joins the day', async () => {
+    // Daily total = 13405 (matches getAllocatedFixedCentsForShift's own
+    // fixture above). Two shifts -> splitAcrossShifts(13405, 2) = [6702, 6703].
+    const { shiftUpdates } = mockTables({
+      expenses: [{ user_id: 'user-1', amount_cents: 80431, expense_date: '2026-08-10', recurring: true, recurring_frequency: 'weekly' }],
+      goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
+      shifts: [
+        // Stale: this shift ended when it was the day's only shift, so it
+        // was allocated the FULL 13405 -- now wrong since a second shift
+        // exists. gross 21691, no trip deductions -> net was 21691-13405=8286.
+        { id: 's1', user_id: 'user-1', started_at: '2026-08-13T09:23:00.000Z', gross_cents: 21691, net_cents: 8286, tolls_cents: 0, parking_cents: 0, food_cents: 0, allocated_fixed_cents: 13405 },
+        // New shift, correctly allocated its own share at completion time.
+        { id: 's2', user_id: 'user-1', started_at: '2026-08-13T18:47:00.000Z', gross_cents: 156, net_cents: 156 - 6703, tolls_cents: 0, parking_cents: 0, food_cents: 0, allocated_fixed_cents: 6703 },
+      ],
+    });
+
+    await syncAllocatedFixedCentsForDay('user-1', '2026-08-13');
+
+    // s1 (first by started_at) gets the base share; s2 (last) absorbs the
+    // rounding remainder -- same convention as splitAcrossShifts elsewhere.
+    expect(shiftUpdates).toContainEqual({ id: 's1', payload: { allocated_fixed_cents: 6702, net_cents: 21691 - 6702 } });
+    // s2 was already correct (6703) -- update() must be skipped for it
+    // entirely (see the `if (currentShare === newAllocated) return null`
+    // short-circuit), not just a no-op write.
+    expect(shiftUpdates.find(u => u.id === 's2')).toBeUndefined();
+    expect(shiftUpdates).toHaveLength(1);
+  });
+
+  it('does nothing (no updates fired) when every shift already holds its correct even share', async () => {
+    const { shiftUpdates } = mockTables({
+      expenses: [{ user_id: 'user-1', amount_cents: 80431, expense_date: '2026-08-10', recurring: true, recurring_frequency: 'weekly' }],
+      goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
+      shifts: [
+        { id: 's1', user_id: 'user-1', started_at: '2026-08-13T09:23:00.000Z', gross_cents: 21691, net_cents: 21691 - 6702, tolls_cents: 0, parking_cents: 0, food_cents: 0, allocated_fixed_cents: 6702 },
+        { id: 's2', user_id: 'user-1', started_at: '2026-08-13T18:47:00.000Z', gross_cents: 156, net_cents: 156 - 6703, tolls_cents: 0, parking_cents: 0, food_cents: 0, allocated_fixed_cents: 6703 },
+      ],
+    });
+
+    await syncAllocatedFixedCentsForDay('user-1', '2026-08-13');
+
+    expect(shiftUpdates).toHaveLength(0);
+  });
+
+  it('never throws even if a lookup fails -- a sync failure must not block whatever shift save triggered it', async () => {
+    (supabase.from as jest.Mock).mockImplementation(() => { throw new Error('boom'); });
+    await expect(syncAllocatedFixedCentsForDay('user-1', '2026-08-13')).resolves.toBeUndefined();
   });
 });

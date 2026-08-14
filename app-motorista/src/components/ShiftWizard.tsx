@@ -224,11 +224,15 @@ export function ShiftWizard({ visible, distanceUnit, vehicleId, isPremium, onClo
         payload.tolls_cents = decimalToCents(parse(state.fuelCost));
       }
 
-      const shiftId = await createManualShift(user.id, vehicleId, startedAt, endedAt, payload, isPremium);
+      await createManualShift(user.id, vehicleId, startedAt, endedAt, payload, isPremium);
 
-      // enrich with fuel cost calculation
-      supabase.functions.invoke('calculate-shift', { body: { shift_id: shiftId } }).catch(() => {});
-
+      // NOTE: previously also fired supabase.functions.invoke('calculate-shift', ...)
+      // here. That legacy edge function recomputes gross_cents/net_cents with a
+      // stale formula (hardcoded allocated_fixed_cents = 0, fuel cost estimated
+      // from the vehicle's declared avg_consumption_per_100 instead of real
+      // data) and its fire-and-forget write was clobbering the correct
+      // net_cents createManualShift had just persisted (the one that DOES
+      // include the real recurring-expense/rateio allocation). Removed.
       onSaved();
     } catch (err) {
       if (err instanceof FreeLimitError) {

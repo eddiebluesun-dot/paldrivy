@@ -295,8 +295,16 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
         }
         await updateShift(shiftId, payload, parsedStart, parsedEnd ?? undefined);
       }
-      // Edge Function enriches with fuel cost — non-blocking
-      supabase.functions.invoke('calculate-shift', { body: { shift_id: shiftId } }).catch(() => {});
+      // NOTE: previously also fired supabase.functions.invoke('calculate-shift', ...)
+      // here as a "non-blocking enrichment" step. That legacy edge function
+      // recomputes gross_cents/net_cents itself with a stale formula that
+      // hardcodes allocated_fixed_cents to 0 and estimates fuel cost from the
+      // vehicle's declared avg_consumption_per_100 (usually 0 -- see
+      // fuelConsumption.ts) instead of real fuel_entries/expenses -- its
+      // fire-and-forget write was landing seconds after endShift/updateShift's
+      // correct net_cents (which DOES include the real recurring-expense
+      // allocation) and silently overwriting it back to gross_cents. Removed:
+      // endShift/updateShift already persist the authoritative gross/net.
       onSaved();
     } catch {
       setError(t('common.error'));

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { streakFromDates, countActiveDays } from '../utils/cockpitUtils';
+import { getRecurringExpenseTotalForRange } from './recurringExpenseAllocation';
 export {
   workingDaysInMonth,
   getDailyGoalCents,
@@ -40,9 +41,14 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
       .eq('user_id', userId)
       .gte('started_at', cutoffIso)
       .not('ended_at', 'is', null),
+    // Weekly/monthly recurring rows excluded -- see the matching comment in
+    // dashboard.ts's getMonthReport. Each bucketed month's prorated share is
+    // added below via getRecurringExpenseTotalForRange instead of this raw
+    // sum, otherwise a weekly-frequency expense would only ever land in
+    // whichever single month contains its anchor date.
     supabase
       .from('expenses')
-      .select('expense_date, amount_cents')
+      .select('expense_date, amount_cents, recurring, recurring_frequency')
       .eq('user_id', userId)
       .gte('expense_date', cutoffStr),
     supabase
@@ -76,7 +82,10 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
       b.km_meters += row.odometer_end_meters - row.odometer_start_meters;
     }
   }
-  for (const row of (expRes.data ?? []) as Array<{ expense_date: string; amount_cents: number }>) {
+  const expenseRows = ((expRes.data ?? []) as
+    Array<{ expense_date: string; amount_cents: number; recurring: boolean; recurring_frequency: string | null }>)
+    .filter(e => !(e.recurring && (e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')));
+  for (const row of expenseRows) {
     const d = new Date(row.expense_date + 'T00:00:00');
     const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
     const b = buckets.get(key);
@@ -91,6 +100,18 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
       b.liters_ml += row.volume_ml ?? 0;
     }
   }
+
+  // Each bucketed month's recurring-expense share, same rationale as
+  // getYearlyReport in dashboard.ts.
+  const bucketKeys = Array.from(buckets.keys());
+  const recurringTotals = await Promise.all(bucketKeys.map(key => {
+    const b = buckets.get(key)!;
+    const mStart = `${b.year}-${String(b.month).padStart(2, '0')}-01`;
+    const nextMonthDate = new Date(b.year, b.month, 1);
+    const mEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+    return getRecurringExpenseTotalForRange(userId, mStart, mEnd);
+  }));
+  bucketKeys.forEach((key, i) => { buckets.get(key)!.expenses_cents += recurringTotals[i]; });
 
   return Array.from(buckets.values()).reverse(); // newest first
 }

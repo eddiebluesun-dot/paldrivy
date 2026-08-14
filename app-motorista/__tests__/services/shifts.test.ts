@@ -12,13 +12,22 @@ jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn() } }));
 // result correctly) rather than re-testing the allocation math itself.
 jest.mock('@/src/services/recurringExpenseAllocation', () => ({
   getAllocatedFixedCentsForShift: jest.fn(),
+  // Every shift-completion path (endShift/updateShift/createManualShift) now
+  // also fires a day-wide re-split so sibling same-day shifts don't keep a
+  // stale allocation once a new shift joins their day (see
+  // recurringExpenseAllocation.ts). That's covered by its own dedicated unit
+  // tests -- here it's mocked out entirely so these tests stay focused on
+  // shifts.ts's own wiring, same rationale as getAllocatedFixedCentsForShift
+  // above.
+  syncAllocatedFixedCentsForDay: jest.fn(),
 }));
 
-// Minimal fake 'shifts' table double supporting the three chain shapes these
+// Minimal fake 'shifts' table double supporting the four chain shapes these
 // functions use:
-//   .select('user_id, started_at').eq('id', x).single()   (fetch context)
-//   .update({...}).eq('id', x)                             (persist)
-//   .insert({...}).select('id').single()                   (create, then read back id)
+//   .select('user_id, started_at').eq('id', x).single()      (fetch context)
+//   .select('user_id' | 'started_at').eq('id', x).maybeSingle() (sync lookup)
+//   .update({...}).eq('id', x)                                (persist)
+//   .insert({...}).select('id').single()                      (create, then read back id)
 // Captures every update/insert payload seen so tests can assert on them.
 function makeShiftsTableDouble(opts: { fetchRow?: Record<string, unknown>; insertId?: string; fetchError?: Error }) {
   const updates: Record<string, unknown>[] = [];
@@ -31,6 +40,10 @@ function makeShiftsTableDouble(opts: { fetchRow?: Record<string, unknown>; inser
           opts.fetchError
             ? Promise.resolve({ data: null, error: opts.fetchError })
             : Promise.resolve({ data: opts.fetchRow ?? null, error: null }),
+        // Used only by the post-write syncAllocatedFixedCentsForDay lookup
+        // (fetching user_id/started_at so it knows which day to re-split) --
+        // never throws on a missing row, unlike .single() above.
+        maybeSingle: () => Promise.resolve({ data: opts.fetchRow ?? null, error: null }),
       }),
     }),
     update: (payload: Record<string, unknown>) => ({

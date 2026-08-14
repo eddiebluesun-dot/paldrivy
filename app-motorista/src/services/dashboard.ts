@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Goal } from '../types';
-import { getRecurringExpenseBreakdownForDay } from './recurringExpenseAllocation';
+import { getRecurringExpenseBreakdownForDay, getRecurringExpenseTotalForRange, getRecurringExpenseBreakdownForRange } from './recurringExpenseAllocation';
 
 export interface DailySummary {
   gross_cents: number;
@@ -412,7 +412,10 @@ export async function getYearlyReport(userId: string, year: number): Promise<Yea
       .gte('started_at', yearStart.toISOString())
       .lt('started_at', yearEnd.toISOString())
       .not('ended_at', 'is', null),
-    supabase.from('expenses').select('expense_date, amount_cents')
+    // Weekly/monthly recurring rows excluded -- see the matching comment in
+    // getWeekTotals/getMonthReport. Each month's prorated share is added
+    // below via getRecurringExpenseTotalForRange instead.
+    supabase.from('expenses').select('expense_date, amount_cents, recurring, recurring_frequency')
       .eq('user_id', userId)
       .gte('expense_date', yearStartStr)
       .lt('expense_date', yearEndStr),
@@ -435,13 +438,32 @@ export async function getYearlyReport(userId: string, year: number): Promise<Yea
     b.gross_cents += row.gross_cents ?? 0;
     b.net_cents += row.net_cents ?? 0;
   }
-  for (const row of (expensesRes.data ?? []) as Array<{ expense_date: string; amount_cents: number }>) {
+  const expenseRows = ((expensesRes.data ?? []) as
+    Array<{ expense_date: string; amount_cents: number; recurring: boolean; recurring_frequency: string | null }>)
+    .filter(e => !(e.recurring && (e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')));
+  for (const row of expenseRows) {
     const m = new Date(row.expense_date + 'T00:00:00').getMonth() + 1;
     monthMap.get(m)!.expenses_cents += row.amount_cents;
   }
   for (const row of (fuelRes.data ?? []) as Array<{ filled_at: string; total_cost_cents: number }>) {
     const m = new Date(row.filled_at).getMonth() + 1;
     monthMap.get(m)!.fuel_cents += row.total_cost_cents;
+  }
+
+  // Each month's recurring-expense share, computed the same way as
+  // getMonthReport (one getRecurringExpenseTotalForRange call per calendar
+  // month) rather than one raw sum for the whole year -- otherwise a
+  // weekly-frequency expense would only ever land in whichever single month
+  // contains its anchor date.
+  const recurringTotals = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+      const mStart = toLocalDateString(new Date(year, m - 1, 1));
+      const mEnd = toLocalDateString(new Date(year, m, 1));
+      return getRecurringExpenseTotalForRange(userId, mStart, mEnd);
+    }),
+  );
+  for (let m = 1; m <= 12; m++) {
+    monthMap.get(m)!.expenses_cents += recurringTotals[m - 1];
   }
 
   return { year, months: Array.from(monthMap.values()) };
@@ -463,13 +485,23 @@ export async function getWeekTotals(userId: string): Promise<MonthlyTotals> {
   sundayEnd.setDate(monday.getDate() + 6);
   sundayEnd.setHours(23, 59, 59, 999);
 
-  const [shiftsRes, expRes, fuelRes] = await Promise.all([
+  const sundayEndExclusiveStr = toLocalDateString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7));
+
+  const [shiftsRes, expRes, fuelRes, recurringTotal] = await Promise.all([
     supabase.from('shifts').select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters')
       .eq('user_id', userId)
       .gte('started_at', monday.toISOString())
       .lte('started_at', sundayEnd.toISOString())
       .not('ended_at', 'is', null),
-    supabase.from('expenses').select('amount_cents')
+    // Weekly/monthly recurring rows are excluded here -- their raw
+    // expense_date anchor is not "what happened this week", it's diluted
+    // across working days via getRecurringExpenseTotalForRange below
+    // (matching getDayDetail/getTodaySummary's same exclusion). Without this
+    // filter, a week that happens to contain the anchor date would count
+    // that one row on top of its own prorated share; every OTHER week would
+    // silently show zero for that recurring cost since no row falls in its
+    // window at all.
+    supabase.from('expenses').select('amount_cents, recurring, recurring_frequency')
       .eq('user_id', userId)
       .gte('expense_date', toLocalDateString(monday))
       .lte('expense_date', toLocalDateString(sundayEnd)),
@@ -477,6 +509,7 @@ export async function getWeekTotals(userId: string): Promise<MonthlyTotals> {
       .eq('user_id', userId)
       .gte('filled_at', monday.toISOString())
       .lte('filled_at', sundayEnd.toISOString()),
+    getRecurringExpenseTotalForRange(userId, toLocalDateString(monday), sundayEndExclusiveStr),
   ]);
 
   const rows = (shiftsRes.data ?? []) as {
@@ -488,10 +521,13 @@ export async function getWeekTotals(userId: string): Promise<MonthlyTotals> {
     r.odometer_start_meters != null && r.odometer_end_meters != null
       ? s + (r.odometer_end_meters - r.odometer_start_meters)
       : s, 0);
+  const expenseRows = ((expRes.data ?? []) as
+    { amount_cents: number; recurring: boolean; recurring_frequency: string | null }[])
+    .filter(e => !(e.recurring && (e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')));
   return {
     gross_cents: rows.reduce((s, r) => s + (r.gross_cents ?? 0), 0),
     net_cents: rows.reduce((s, r) => s + (r.net_cents ?? 0), 0),
-    expenses_cents: ((expRes.data ?? []) as { amount_cents: number }[]).reduce((s, e) => s + e.amount_cents, 0),
+    expenses_cents: expenseRows.reduce((s, e) => s + e.amount_cents, 0) + recurringTotal,
     fuel_cents: ((fuelRes.data ?? []) as { total_cost_cents: number }[]).reduce((s, e) => s + e.total_cost_cents, 0),
     km_meters,
     duration_seconds: rows.reduce((s, r) => s + durationFromRow(r), 0),
@@ -512,20 +548,31 @@ export async function getMonthReport(userId: string, year: number, month: number
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const [shiftsRes, expRes, fuelRes] = await Promise.all([
+  const monthStartStr = toLocalDateString(monthStart);
+  const monthEndStr = toLocalDateString(monthEnd);
+
+  const [shiftsRes, expRes, fuelRes, recurringByCategory] = await Promise.all([
     supabase.from('shifts').select('gross_cents, net_cents, duration_seconds, started_at, ended_at, odometer_start_meters, odometer_end_meters, platforms')
       .eq('user_id', userId)
       .gte('started_at', monthStart.toISOString())
       .lt('started_at', monthEnd.toISOString())
       .not('ended_at', 'is', null),
-    supabase.from('expenses').select('category, amount_cents')
+    // Weekly/monthly recurring rows excluded -- see the matching comment in
+    // getWeekTotals. Their prorated share for the month comes from
+    // getRecurringExpenseBreakdownForRange below instead of this raw sum,
+    // otherwise a monthly-frequency expense would show as only its single
+    // anchor amount (correct by coincidence) while a weekly-frequency one
+    // would show as only ~1/4 of the month's actual cost (whichever single
+    // week the anchor row's date happens to fall in).
+    supabase.from('expenses').select('category, amount_cents, recurring, recurring_frequency')
       .eq('user_id', userId)
-      .gte('expense_date', toLocalDateString(monthStart))
-      .lt('expense_date', toLocalDateString(monthEnd)),
+      .gte('expense_date', monthStartStr)
+      .lt('expense_date', monthEndStr),
     supabase.from('fuel_entries').select('total_cost_cents')
       .eq('user_id', userId)
       .gte('filled_at', monthStart.toISOString())
       .lt('filled_at', monthEnd.toISOString()),
+    getRecurringExpenseBreakdownForRange(userId, monthStartStr, monthEndStr),
   ]);
 
   const rows = (shiftsRes.data ?? []) as {
@@ -542,14 +589,20 @@ export async function getMonthReport(userId: string, year: number, month: number
       ? s + (r.odometer_end_meters - r.odometer_start_meters)
       : s, 0);
 
-  const expRows = (expRes.data ?? []) as { category: string; amount_cents: number }[];
-  const expenses_cents = expRows.reduce((s, e) => s + e.amount_cents, 0);
+  const expRows = ((expRes.data ?? []) as
+    { category: string; amount_cents: number; recurring: boolean; recurring_frequency: string | null }[])
+    .filter(e => !(e.recurring && (e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')));
+  const recurringTotal = recurringByCategory.reduce((s, e) => s + e.amountCents, 0);
+  const expenses_cents = expRows.reduce((s, e) => s + e.amount_cents, 0) + recurringTotal;
   const fuel_cents = ((fuelRes.data ?? []) as { total_cost_cents: number }[])
     .reduce((s, e) => s + e.total_cost_cents, 0);
 
   const catMap = new Map<string, number>();
   for (const row of expRows) {
     catMap.set(row.category, (catMap.get(row.category) ?? 0) + row.amount_cents);
+  }
+  for (const r of recurringByCategory) {
+    catMap.set(r.category, (catMap.get(r.category) ?? 0) + r.amountCents);
   }
   const expensesByCategory = Array.from(catMap.entries())
     .map(([category, total_cents]) => ({ category, total_cents }))

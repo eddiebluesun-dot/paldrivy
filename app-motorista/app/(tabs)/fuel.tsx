@@ -446,6 +446,17 @@ export default function FuelScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [vehicleFuelType, setVehicleFuelType] = useState<FuelType>('gasoline');
   const [effectiveVehicleId, setEffectiveVehicleId] = useState<string | null>(null);
+  // Distinguishes "still resolving" from "genuinely no vehicle registered" --
+  // both leave effectiveVehicleId at null, but only the first should block
+  // adding an entry. Without this, tapping "Adicionar" before the
+  // getEffectiveVehicleId lookup below finishes (a real async DB round-trip,
+  // not instant) silently saves the entry with vehicle_id: null. That
+  // fragments this vehicle's fuel-history into a disconnected run (see
+  // statsFromEntries in fuelConsumptionUtils.ts, which groups entries into
+  // contiguous same-vehicle runs) and can permanently freeze "Consumo real"
+  // at its last-known value, since no NEW full-tank-to-full-tank segment can
+  // ever close across a null-tagged entry.
+  const [vehicleResolved, setVehicleResolved] = useState(false);
   const [entries, setEntries] = useState<FuelEntry[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -472,7 +483,11 @@ export default function FuelScreen() {
   // allowance tracking, fuel consumption trend).
   useEffect(() => {
     if (!userId) return;
-    getEffectiveVehicleId(userId, profile?.vehicle_id ?? null).then(setEffectiveVehicleId).catch(() => {});
+    setVehicleResolved(false);
+    getEffectiveVehicleId(userId, profile?.vehicle_id ?? null)
+      .then(setEffectiveVehicleId)
+      .catch(() => {})
+      .finally(() => setVehicleResolved(true));
   }, [userId, profile?.vehicle_id]);
 
   const loadEntries = useCallback(async () => {
@@ -541,8 +556,14 @@ export default function FuelScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>{t('fuel.title')}</Text>
-          <TouchableOpacity style={styles.addButton} onPress={() => setAddVisible(true)}>
-            <Text style={styles.addButtonText}>{t('fuel.add')}</Text>
+          <TouchableOpacity
+            style={[styles.addButton, !vehicleResolved && styles.addButtonDisabled]}
+            onPress={() => setAddVisible(true)}
+            disabled={!vehicleResolved}
+          >
+            {vehicleResolved
+              ? <Text style={styles.addButtonText}>{t('fuel.add')}</Text>
+              : <ActivityIndicator size="small" color={Colors.onBrand} />}
           </TouchableOpacity>
         </View>
 
@@ -677,7 +698,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
     flexShrink: 0,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  addButtonDisabled: { opacity: 0.6 },
   addButtonText: { color: Colors.onBrand, fontSize: 14, fontWeight: '600' },
   errorText: { color: Colors.error, marginBottom: Spacing.sm, textAlign: 'center' },
   list: { flex: 1 },
