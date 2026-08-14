@@ -1443,6 +1443,7 @@ export default function DashboardScreen() {
         description: null,
         recurring: false,
         recurring_frequency: null,
+        ends_at: null,
       });
       setOverageExpenseAdded(true);
       setTimeout(() => setOverageExpenseAdded(false), 3000);

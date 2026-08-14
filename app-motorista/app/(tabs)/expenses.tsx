@@ -46,7 +46,7 @@ const EXPENSE_CATEGORIES = [
 ] as const;
 
 const RECURRING_FREQUENCIES = [
-  'weekly', 'monthly', 'quarterly', 'semiannual', 'annual',
+  'daily', 'weekly', 'monthly', 'quarterly', 'semiannual', 'annual',
 ] as const;
 
 type RecurringFrequency = typeof RECURRING_FREQUENCIES[number];
@@ -113,6 +113,7 @@ function ExpenseForm({
   const [frequency, setFrequency] = useState<RecurringFrequency>(
     (initialValues as any)?.recurring_frequency ?? 'monthly'
   );
+  const [endsAt, setEndsAt] = useState((initialValues as any)?.ends_at ?? '');
 
   function handleSave() {
     const trimmedDate = date.trim();
@@ -127,6 +128,7 @@ function ExpenseForm({
       description: description.trim() !== '' ? description.trim() : null,
       recurring,
       recurring_frequency: recurring ? frequency : null,
+      ends_at: recurring && endsAt.trim() !== '' ? endsAt.trim() : null,
     });
   }
 
@@ -191,6 +193,18 @@ function ExpenseForm({
                 value: f,
               }))}
             />
+            <Text style={styles.label}>{t('expense.ends_at')}</Text>
+            <TextInput
+              style={styles.input}
+              value={endsAt}
+              onChangeText={setEndsAt}
+              placeholder="AAAA-MM-DD"
+              placeholderTextColor={Colors.textSecondary}
+              autoCapitalize="none"
+              keyboardType="numbers-and-punctuation"
+              maxLength={10}
+            />
+            <Text style={styles.hint}>{t('expense.ends_at_hint')}</Text>
           </>
         )}
 
@@ -260,6 +274,7 @@ function AddExpenseModal({
   const [description, setDescription] = useState('');
   const [recurring, setRecurring] = useState(false);
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
+  const [endsAt, setEndsAt] = useState('');
   const [installments, setInstallments] = useState('1');
   const [fuelType, setFuelType] = useState<FuelType>(defaultFuelType);
   const [fuelTotalStr, setFuelTotalStr] = useState('');
@@ -283,6 +298,7 @@ function AddExpenseModal({
   function resetForm() {
     setCategory(EXPENSE_CATEGORIES[0]); setAmount(''); setDate(todayIso());
     setDescription(''); setRecurring(false); setFrequency('monthly');
+    setEndsAt('');
     setInstallments('1');
     setFuelType(defaultFuelType); setFuelTotalStr(''); setFuelUnitPrice(''); setError(null);
   }
@@ -306,7 +322,7 @@ function AddExpenseModal({
         const unitLabel = isElectric ? 'kWh' : 'L';
         await Promise.all([
           addFuelEntry({ user_id: userId, vehicle_id: vehicleId, fuel_type: fuelType, odometer_meters: null, volume_ml: volumeMl, total_cost_cents: totalCostCents, price_per_unit_cents: decimalToCents(fuelUnitPriceNum), full_tank: false, station: null, filled_at: new Date(trimmedDate + 'T12:00:00').toISOString() }),
-          addExpense({ user_id: userId, category, amount_cents: totalCostCents, expense_date: trimmedDate, description: `${t(`onboarding.fuel_${fuelType}`)} — ${fuelQtyNum.toFixed(3)} ${unitLabel} × R$${fuelUnitPriceNum.toFixed(3)}`, recurring: false }),
+          addExpense({ user_id: userId, category, amount_cents: totalCostCents, expense_date: trimmedDate, description: `${t(`onboarding.fuel_${fuelType}`)} — ${fuelQtyNum.toFixed(3)} ${unitLabel} × R$${fuelUnitPriceNum.toFixed(3)}`, recurring: false, recurring_frequency: null, ends_at: null }),
         ]);
       } else {
         const totalCents = decimalToCents(parseFloat(amount.replace(',', '.')));
@@ -314,7 +330,7 @@ function AddExpenseModal({
         const desc = description.trim() || null;
 
         if (n === 1) {
-          await addExpense({ user_id: userId, category, amount_cents: totalCents, expense_date: trimmedDate, description: desc, recurring, recurring_frequency: recurring ? frequency : null });
+          await addExpense({ user_id: userId, category, amount_cents: totalCents, expense_date: trimmedDate, description: desc, recurring, recurring_frequency: recurring ? frequency : null, ends_at: recurring && endsAt.trim() !== '' ? endsAt.trim() : null });
         } else {
           const perCents = Math.floor(totalCents / n);
           const remainder = totalCents - perCents * n;
@@ -327,6 +343,7 @@ function AddExpenseModal({
               description: desc ? `${desc} (${i + 1}/${n})` : `${t(`expense_category.${category}`)} (${i + 1}/${n})`,
               recurring: false,
               recurring_frequency: null,
+              ends_at: null,
             }))
           );
         }
@@ -409,6 +426,18 @@ function AddExpenseModal({
                         onValueChange={(v) => setFrequency(v as RecurringFrequency)}
                         items={RECURRING_FREQUENCIES.map(f => ({ label: t(`expense.frequency_${f}`), value: f }))}
                       />
+                      <Text style={styles.label}>{t('expense.ends_at')}</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={endsAt}
+                        onChangeText={setEndsAt}
+                        placeholder="AAAA-MM-DD"
+                        placeholderTextColor={Colors.textSecondary}
+                        autoCapitalize="none"
+                        keyboardType="numbers-and-punctuation"
+                        maxLength={10}
+                      />
+                      <Text style={styles.hint}>{t('expense.ends_at_hint')}</Text>
                     </>
                   )}
                 </>
@@ -800,6 +829,7 @@ const styles = StyleSheet.create({
   cancelButton: { paddingVertical: Spacing.md, alignItems: 'center' },
   cancelButtonText: { color: Colors.textSecondary, fontSize: 16 },
   installmentHint: { color: Colors.accent, fontSize: 12, fontWeight: '600', marginTop: 4, marginBottom: 4 },
+  hint: { color: Colors.textSecondary, fontSize: 12, marginTop: 4, marginBottom: 4 },
 });
 
 const calStyles = StyleSheet.create({

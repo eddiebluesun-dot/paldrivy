@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-export type RecurringFrequency = 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
 
 export interface Expense {
   id: string;
@@ -11,6 +11,7 @@ export interface Expense {
   description: string | null;
   recurring: boolean;
   recurring_frequency: RecurringFrequency | null;
+  ends_at: string | null;
 }
 
 export async function getExpenses(
