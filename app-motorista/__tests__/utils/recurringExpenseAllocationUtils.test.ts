@@ -76,6 +76,49 @@ describe('computeDailyAllocationCents', () => {
     expect(result).toBe(0);
   });
 
+  it('a daily expense contributes its full amount on every working day, no division', () => {
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 5000, expenseDate: '2026-08-04', frequency: 'daily' },
+    ];
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-05T12:00:00Z'));
+    expect(result).toBe(5000);
+  });
+
+  it('a daily expense contributes 0 on a day off, same as weekly/monthly', () => {
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 5000, expenseDate: '2026-08-04', frequency: 'daily' },
+    ];
+    // 2026-08-09 is a Sunday, not in the Mon-Sat working days below.
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-09T12:00:00Z'));
+    expect(result).toBe(0);
+  });
+
+  it('an expense with endsAt on/before the target date contributes 0', () => {
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 66000, expenseDate: '2026-08-04', frequency: 'weekly', endsAt: '2026-08-05' },
+    ];
+    // Target date equals endsAt -- must already be excluded (endsAt is the
+    // first day the expense no longer applies, not the last day it does).
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-05T12:00:00Z'));
+    expect(result).toBe(0);
+  });
+
+  it('an expense with endsAt in the future still contributes normally before that date', () => {
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 66000, expenseDate: '2026-08-04', frequency: 'weekly', endsAt: '2026-12-01' },
+    ];
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-05T12:00:00Z'));
+    expect(result).toBe(11000); // same as the very first test in this file
+  });
+
+  it('a daily expense also respects endsAt', () => {
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 5000, expenseDate: '2026-08-04', frequency: 'daily', endsAt: '2026-08-05' },
+    ];
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-05T12:00:00Z'));
+    expect(result).toBe(0);
+  });
+
   it('summing the daily share across every day of the period reconciles to the total expense, not more', () => {
     // The exact scenario reported: R$804.31/week, driver works Mon-Sat.
     // Every working day in the period should get an equal share that sums

@@ -7,7 +7,12 @@ import { getPeriodBounds } from './rentalKmAllowanceUtils';
 export interface RecurringExpenseInput {
   amountCents: number;
   expenseDate: string; // YYYY-MM-DD, anchors this expense's period cycle
-  frequency: 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+  frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+  // YYYY-MM-DD. When set, this expense contributes 0 for any targetDate on
+  // or after this date -- days before it are unaffected (forward-only, no
+  // retroactive recalculation). Optional so existing callers/fixtures that
+  // never set it keep compiling unchanged.
+  endsAt?: string | null;
 }
 
 // Counts how many days in [periodStart, periodEnd) match one of the ISO
@@ -48,6 +53,18 @@ export function computeDailyAllocationCents(
 
   let total = 0;
   for (const expense of expenses) {
+    if (expense.endsAt) {
+      const endsAtDate = new Date(`${expense.endsAt}T00:00:00.000Z`);
+      if (targetDate >= endsAtDate) continue;
+    }
+
+    // A daily rate is already "per working day" -- nothing to divide across
+    // a period, unlike weekly/monthly. Bypasses getPeriodBounds entirely.
+    if (expense.frequency === 'daily') {
+      total += expense.amountCents;
+      continue;
+    }
+
     if (expense.frequency !== 'weekly' && expense.frequency !== 'monthly') continue;
 
     const bounds = getPeriodBounds(expense.expenseDate, expense.frequency, targetDate);
