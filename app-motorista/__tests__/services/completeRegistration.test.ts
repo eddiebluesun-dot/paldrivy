@@ -1,14 +1,14 @@
 import { completeRegistration } from '@/src/services/completeRegistration';
 import { authSignUp } from '@/src/hooks/useAuth';
 import { upsertProfile, markOnboardingDone } from '@/src/services/profile';
-import { createVehicle } from '@/src/services/vehicles';
+import { createVehicle, syncVehicleRecurringCost } from '@/src/services/vehicles';
 import { saveUserPlatforms } from '@/src/services/platforms';
 import { recordConsents } from '@/src/services/legal';
 import { supabase } from '@/src/lib/supabase';
 
 jest.mock('@/src/hooks/useAuth', () => ({ authSignUp: jest.fn() }));
 jest.mock('@/src/services/profile', () => ({ upsertProfile: jest.fn(), markOnboardingDone: jest.fn() }));
-jest.mock('@/src/services/vehicles', () => ({ createVehicle: jest.fn() }));
+jest.mock('@/src/services/vehicles', () => ({ createVehicle: jest.fn(), syncVehicleRecurringCost: jest.fn() }));
 jest.mock('@/src/services/platforms', () => ({ saveUserPlatforms: jest.fn() }));
 jest.mock('@/src/services/legal', () => ({ recordConsents: jest.fn() }));
 jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn(() => ({ insert: jest.fn().mockResolvedValue({ error: null }) })) } }));
@@ -122,5 +122,41 @@ describe('completeRegistration', () => {
     expect(saveUserPlatforms).not.toHaveBeenCalled();
     expect(recordConsents).not.toHaveBeenCalled();
     expect(markOnboardingDone).not.toHaveBeenCalled();
+  });
+
+  it('syncs the vehicle recurring cost after creating the vehicle, using the chosen rental frequency', async () => {
+    (authSignUp as jest.Mock).mockResolvedValue({ data: { user: { id: 'u1' }, session: {} }, error: null });
+    (createVehicle as jest.Mock).mockResolvedValue({ id: 'v1' });
+
+    const rentInput = {
+      ...baseInput,
+      vehicle: { ...baseInput.vehicle, ownership_type: 'rent' as const, monthly_cost_cents: 80431, rentalCostFrequency: 'weekly' as const },
+    };
+
+    const result = await completeRegistration(rentInput);
+
+    expect(result.status).toBe('success');
+    expect(syncVehicleRecurringCost).toHaveBeenCalledWith({
+      vehicleId: 'v1',
+      userId: 'u1',
+      ownershipType: 'rent',
+      amountCents: 80431,
+      frequency: 'weekly',
+    });
+  });
+
+  it('defaults the recurring cost frequency to monthly when rentalCostFrequency is not provided', async () => {
+    (authSignUp as jest.Mock).mockResolvedValue({ data: { user: { id: 'u1' }, session: {} }, error: null });
+    (createVehicle as jest.Mock).mockResolvedValue({ id: 'v1' });
+
+    await completeRegistration(baseInput); // baseInput.vehicle has no rentalCostFrequency, ownership_type: 'own'
+
+    expect(syncVehicleRecurringCost).toHaveBeenCalledWith({
+      vehicleId: 'v1',
+      userId: 'u1',
+      ownershipType: 'own',
+      amountCents: 0,
+      frequency: 'monthly',
+    });
   });
 });

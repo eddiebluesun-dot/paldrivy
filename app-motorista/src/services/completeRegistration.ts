@@ -1,6 +1,6 @@
 import { authSignUp } from '../hooks/useAuth';
 import { upsertProfile, markOnboardingDone } from './profile';
-import { createVehicle } from './vehicles';
+import { createVehicle, syncVehicleRecurringCost } from './vehicles';
 import { saveUserPlatforms } from './platforms';
 import { recordConsents } from './legal';
 import { supabase } from '../lib/supabase';
@@ -25,7 +25,11 @@ export interface RegistrationInput {
   email: string;
   password: string;
   profile: Pick<Profile, 'name' | 'phone' | 'city' | 'state' | 'country' | 'locale' | 'currency_code' | 'distance_unit' | 'volume_unit' | 'timezone' | 'worker_type'>;
-  vehicle: Omit<Vehicle, 'id' | 'user_id' | 'created_at' | 'name'>;
+  vehicle: Omit<Vehicle, 'id' | 'user_id' | 'created_at' | 'name'> & {
+    // Only meaningful when ownership_type is 'rent'; defaults to 'monthly'
+    // otherwise (financed/own keep today's single-monthly-field behavior).
+    rentalCostFrequency?: 'daily' | 'weekly' | 'monthly';
+  };
   platforms: string[];
   monthlyGoalCents: number | null;
   legalDocs: LegalDoc[];
@@ -83,7 +87,14 @@ export async function completeRegistration(
     }
     if (startIndex <= STEP_ORDER.indexOf('vehicle')) {
       currentStep = 'vehicle';
-      await createVehicle({ ...input.vehicle, user_id: userId, name: `${input.vehicle.brand} ${input.vehicle.model}` });
+      const vehicle = await createVehicle({ ...input.vehicle, user_id: userId, name: `${input.vehicle.brand} ${input.vehicle.model}` });
+      await syncVehicleRecurringCost({
+        vehicleId: vehicle.id,
+        userId,
+        ownershipType: input.vehicle.ownership_type,
+        amountCents: input.vehicle.monthly_cost_cents,
+        frequency: input.vehicle.rentalCostFrequency ?? 'monthly',
+      });
     }
     if (startIndex <= STEP_ORDER.indexOf('platforms') && input.platforms.length > 0) {
       currentStep = 'platforms';
