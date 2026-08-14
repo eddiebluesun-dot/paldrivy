@@ -102,6 +102,75 @@ describe('computeConsumptionTrend', () => {
     const trend = computeConsumptionTrend(entries, now);
     expect(trend).not.toBeNull();
     expect(trend!.current_month).toBeNull();
+    // Even with no closed segment yet, the raw month total still exists --
+    // there IS one real fill this month, just nothing to measure km/L from.
+    expect(trend!.current_month_totals).toEqual({ km_driven: 0, total_liters: 30, fill_count: 1 });
+  });
+
+  // Regression test for the real production report: Eddie said "todos os
+  // dados assinalados estão errados" about the CONSUMO REAL card's month
+  // tiles. Traced to real data (user db85eea7-8cd7-464d-ba68-05f1e8a15560,
+  // August 2026): current_month (the closed full-tank-segment method) was
+  // never wrong -- 1035km/99.7L/10.4km/L/4 segments is exactly what that
+  // method computes -- but "km calculados"/"combustível"/"abastec." were
+  // being read from it, which necessarily EXCLUDES the opening fill's
+  // liters and any fill not yet closed by a later full-tank fill. The real
+  // August total was 194.3L across 8 fills, not 99.7L across 4 -- current_month
+  // undercounted the month by nearly half. current_month_totals is the fix:
+  // every fill in the month counts, full_tank or not.
+  test('current_month_totals counts every fill in the month, unlike the closed-segment current_month', () => {
+    const now = new Date('2026-08-14');
+    const entries: FuelEntryForConsumption[] = [
+      { odometer_meters: 18_611_000, volume_ml: 28639, filled_at: '2026-08-07', full_tank: true },
+      { odometer_meters: 18_925_000, volume_ml: 30311, filled_at: '2026-08-08', full_tank: true },
+      { odometer_meters: 19_231_000, volume_ml: 8850,  filled_at: '2026-08-10', full_tank: false },
+      { odometer_meters: 19_302_000, volume_ml: 30100, filled_at: '2026-08-10', full_tank: false },
+      { odometer_meters: 19_646_000, volume_ml: 30434, filled_at: '2026-08-11', full_tank: true },
+      { odometer_meters: 19_841_000, volume_ml: 12618, filled_at: '2026-08-12', full_tank: false },
+      { odometer_meters: 20_034_000, volume_ml: 27769, filled_at: '2026-08-12', full_tank: false },
+      { odometer_meters: 20_271_000, volume_ml: 25571, filled_at: '2026-08-13', full_tank: false },
+    ];
+
+    const trend = computeConsumptionTrend(entries, now);
+    expect(trend).not.toBeNull();
+
+    // Closed-segment method: unchanged, still exactly what production showed.
+    expect(trend!.current_month!.total_km).toBeCloseTo(1035, 1);
+    expect(trend!.current_month!.total_liters).toBeCloseTo(99.695, 2);
+    expect(trend!.current_month!.segments).toBe(4);
+
+    // True month totals: every fill counts, including the opening full-tank
+    // fill's own liters and the two not-yet-closed fills after the last
+    // full-tank (Aug 12 x2, Aug 13).
+    expect(trend!.current_month_totals).not.toBeNull();
+    expect(trend!.current_month_totals!.km_driven).toBeCloseTo(1660, 1); // 20271 - 18611
+    expect(trend!.current_month_totals!.total_liters).toBeCloseTo(194.292, 2);
+    expect(trend!.current_month_totals!.fill_count).toBe(8);
+  });
+
+  // Regression test: two full-tank fills tied at the exact same filled_at
+  // (no real time-of-day captured -- confirmed in production, same-day fills
+  // default to the same clock time) are exactly the case where ordering
+  // matters: they're the two ends of the segment. Without the odometer
+  // tie-break, whichever of the two happened to sort first (unspecified --
+  // depends on a DB query result order with no secondary ORDER BY key,
+  // confirmed inconsistent in production between two different tied pairs)
+  // becomes "first full-tank" -- if that's the HIGHER-odometer one, run_km
+  // goes negative and the whole segment is silently discarded (null),
+  // instead of the valid positive distance it actually represents.
+  test('two full-tank fills tied at the same filled_at always resolve odometer-ascending, regardless of input order', () => {
+    const now = new Date('2026-08-14');
+    const lowFull  = { odometer_meters: 18_611_000, volume_ml: 28639, filled_at: '2026-08-07T15:00:00Z', full_tank: true };
+    const highFull = { odometer_meters: 18_925_000, volume_ml: 30311, filled_at: '2026-08-07T15:00:00Z', full_tank: true };
+
+    const trendHighFirst = computeConsumptionTrend([highFull, lowFull], now);
+    const trendLowFirst  = computeConsumptionTrend([lowFull, highFull], now);
+
+    // Both input orders must resolve to the same valid, positive segment
+    // (18,925,000 - 18,611,000 = 314,000m = 314km) -- never null, and never
+    // dependent on which literal array position the caller happened to pass.
+    expect(trendHighFirst!.current_month!.total_km).toBeCloseTo(314, 3);
+    expect(trendLowFirst!.current_month!.total_km).toBeCloseTo(314, 3);
   });
 
   test('entries from a previous month do not leak into current_month', () => {

@@ -26,7 +26,18 @@ export interface ConsumptionStats {
 export interface ConsumptionTrend {
   overall: ConsumptionStats;
   recent: ConsumptionStats | null;
+  // Full-tank-segment method (see statsFromEntries) — the only sound way to
+  // compute a real km/L figure, but it necessarily EXCLUDES liters/km at the
+  // edges of the month (the opening fill's liters, any fill not yet closed
+  // by a later full-tank) — see current_month_totals for the true sums.
   current_month: ConsumptionStats | null;
+  // True calendar-month totals: every fill in the month counts, regardless
+  // of whether it falls inside a closed full-tank segment. Answers "how much
+  // did I actually spend/drive/fill up this month" -- current_month answers
+  // "what's my measured efficiency this month," a narrower, different
+  // question. Both can be non-null independently (e.g. one fill this month
+  // with no closed segment yet: totals exist, current_month doesn't).
+  current_month_totals: { km_driven: number; total_liters: number; fill_count: number } | null;
   change_pct: number | null;
 }
 
@@ -161,9 +172,19 @@ export function computeConsumptionTrend(
   // reorder entries out of chronological sequence and reach across vehicles
   // when computing a delta — see statsFromEntries above and the "vehicle-swap
   // regression" tests for the production incident this caused.
-  const entries = [...rawEntries].sort(
-    (a, b) => new Date(a.filled_at).getTime() - new Date(b.filled_at).getTime(),
-  );
+  //
+  // Secondary sort by odometer when filled_at ties exactly: multiple fills
+  // on the same day commonly share the identical default clock time (no
+  // real time-of-day is captured), and without a tie-breaker the DB's
+  // return order for those rows is unspecified -- confirmed in production,
+  // one tied pair came back odometer-ascending, another tied pair on a
+  // different day came back odometer-descending, for the SAME query shape.
+  // Odometer-ascending is the only sane deterministic tie-break: the car
+  // cannot have driven backwards between two same-day fills.
+  const entries = [...rawEntries].sort((a, b) => {
+    const t = new Date(a.filled_at).getTime() - new Date(b.filled_at).getTime();
+    return t !== 0 ? t : a.odometer_meters - b.odometer_meters;
+  });
 
   const overall = statsFromEntries(entries);
   if (!overall) return null;
@@ -185,7 +206,13 @@ export function computeConsumptionTrend(
   });
   const current_month = statsFromEntries(monthEntries);
 
+  const current_month_totals = monthEntries.length > 0 ? {
+    km_driven: computeWeeklyKmMeters(monthEntries) / 1000,
+    total_liters: monthEntries.reduce((s, e) => s + e.volume_ml / 1000, 0),
+    fill_count: monthEntries.length,
+  } : null;
+
   const change_pct = recent ? ((recent.km_per_l - overall.km_per_l) / overall.km_per_l) * 100 : null;
 
-  return { overall, recent, current_month, change_pct };
+  return { overall, recent, current_month, current_month_totals, change_pct };
 }
