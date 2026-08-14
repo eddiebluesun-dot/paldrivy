@@ -197,6 +197,7 @@
                       "hours":  "horas",
                       "km":  "km",
                       "gross_per_hour":  "Bruto/hora",
+                      "km_driven_week":  "Km rodados",
                       "net_per_hour":  "Líquido/hora",
                       "net_per_km":  "Líquido/km",
                       "gross_per_km":  "Bruto/km",

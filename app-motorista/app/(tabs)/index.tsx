@@ -586,8 +586,19 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
 
       {/* Consumo Real — merged from FuelConsumptionCard */}
       {/* Scoped to the current month (mês em exercício), matching RESUMO DO
-          MÊS above — not consumptionTrend.overall, which is lifetime. */}
-      {consumptionTrend?.current_month && (
+          MÊS above — not consumptionTrend.overall, which is lifetime.
+          km/L stays from current_month (the closed full-tank-segment
+          method — the only sound way to compute real efficiency), but km
+          calculados/combustível/abastec. now read from current_month_totals
+          instead: current_month necessarily excludes the opening fill's
+          liters and any fill not yet closed by a later full-tank, which
+          made those three numbers look wrong against the driver's own count
+          of the month's actual fill-ups (confirmed against real production
+          data: current_month showed 99.7L/4 fills, the true August total
+          was 194.3L/8 fills — current_month was never computing the wrong
+          thing, it was just answering a narrower question than the label
+          implied). */}
+      {(consumptionTrend?.current_month || consumptionTrend?.current_month_totals) && (
         <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <Ionicons name="speedometer-outline" size={13} color={Colors.textSecondary} />
@@ -595,18 +606,31 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
           </View>
           <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
             {[
-              { value: consumptionTrend.current_month.km_per_l.toFixed(1), label: isElectric ? t('dashboard.km_kwh_avg') : t('dashboard.km_avg'), color: Colors.success },
-              { value: consumptionTrend.current_month.total_km.toFixed(0), label: t('dashboard.km_calculated'), color: Colors.textPrimary },
               {
-                value: isElectric
-                  ? `${consumptionTrend.current_month.total_liters.toFixed(1)} kWh`
+                value: consumptionTrend.current_month ? consumptionTrend.current_month.km_per_l.toFixed(1) : '—',
+                label: isElectric ? t('dashboard.km_kwh_avg') : t('dashboard.km_avg'),
+                color: Colors.success,
+              },
+              {
+                value: consumptionTrend.current_month_totals ? consumptionTrend.current_month_totals.km_driven.toFixed(0) : '—',
+                label: t('dashboard.km_calculated'),
+                color: Colors.textPrimary,
+              },
+              {
+                value: !consumptionTrend.current_month_totals ? '—'
+                  : isElectric
+                  ? `${consumptionTrend.current_month_totals.total_liters.toFixed(1)} kWh`
                   : volumeUnit === 'gallons'
-                  ? `${(consumptionTrend.current_month.total_liters * 0.264172).toFixed(2)} gal`
-                  : `${consumptionTrend.current_month.total_liters.toFixed(1)} L`,
+                  ? `${(consumptionTrend.current_month_totals.total_liters * 0.264172).toFixed(2)} gal`
+                  : `${consumptionTrend.current_month_totals.total_liters.toFixed(1)} L`,
                 label: t('dashboard.fuel_used'),
                 color: Colors.brandBlue,
               },
-              { value: String(consumptionTrend.current_month.segments), label: t('dashboard.fueling_count'), color: Colors.accent },
+              {
+                value: consumptionTrend.current_month_totals ? String(consumptionTrend.current_month_totals.fill_count) : '—',
+                label: t('dashboard.fueling_count'),
+                color: Colors.accent,
+              },
             ].map(item => (
               <View key={item.label} style={{ width: '23.5%', flexGrow: 1, minWidth: 70, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: 8, alignItems: 'center', gap: 2 }}>
                 <Text style={{ color: item.color, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{item.value}</Text>
@@ -695,6 +719,8 @@ function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }
   const expPct        = totals.gross_cents > 0 ? Math.round((totalExpenses / totals.gross_cents) * 100) : 0;
   const marginPct     = totals.gross_cents > 0 ? Math.round((profit / totals.gross_cents) * 100) : 0;
   const profitColor   = marginPct >= 50 ? Colors.success : marginPct >= 25 ? Colors.accent : Colors.error;
+  const distScale     = distanceUnit === 'km' ? 1000 : 1609.344;
+  const distTotal     = (totals.km_meters ?? 0) / distScale;
 
   const glass = { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.10)', borderWidth: 1 } as const;
 
@@ -745,6 +771,15 @@ function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }
       icon: 'hourglass-outline' as const,
       iconColor: Colors.brandBlue,
       accentBorder: Colors.brandBlue,
+    },
+    {
+      title: t('dashboard.km_driven_week'),
+      value: distTotal > 0 ? `~ ${distTotal.toFixed(1)} ${distanceUnit}` : '—',
+      sub: undefined,
+      subColor: Colors.textSecondary,
+      icon: 'speedometer-outline' as const,
+      iconColor: Colors.textSecondary,
+      accentBorder: Colors.border,
     },
   ];
 
@@ -1103,7 +1138,6 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
   const maxVal = Math.max(...buckets.map(b => b.net_cents), 1);
   const today = new Date().toISOString().slice(0, 10);
   const weekTotal = buckets.reduce((s, b) => s + b.net_cents, 0);
-  const weekKm = weekTotals ? (weekTotals.km_meters / 1000).toFixed(1) : null;
   const distScale = distanceUnit === 'km' ? 1000 : 1609.344;
   const distTotal = weekTotals ? weekTotals.km_meters / distScale : 0;
   // Bruto/km here, not líquido/km -- líquido/km is already shown in "Impacto
@@ -1113,17 +1147,9 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
 
   return (
     <View style={styles.card}>
-      {/* Header — the "esta semana" title itself now lives above this whole section
-          (rendered by the parent, alongside the summary grid) so only the distance pill
-          stays here. */}
-      <View style={[styles.cardRowBetween, { justifyContent: 'flex-end' }]}>
-        {weekKm && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.surfaceAlt, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border }}>
-            <Text style={{ color: Colors.textSecondary, fontSize: 10 }}>~</Text>
-            <Text style={{ color: Colors.textSecondary, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{weekKm} {distanceUnit}</Text>
-          </View>
-        )}
-      </View>
+      {/* Distance total moved into KillShotCards' "KM RODADOS" tile (its own
+          card, same style as Receita/Despesas/Lucro/etc.) so it isn't a
+          floating pill anymore — see the parent's summary grid above. */}
 
       {/* Bars — full width, centered; no longer sharing the row with a squeezed
           side column (that column's text was overlapping the chart at narrower

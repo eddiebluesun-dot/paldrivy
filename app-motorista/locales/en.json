@@ -197,6 +197,7 @@
                       "hours":  "hours",
                       "km":  "miles",
                       "gross_per_hour":  "Gross/hour",
+                      "km_driven_week":  "Km driven",
                       "net_per_hour":  "Net/hour",
                       "net_per_km":  "Net/mile",
                       "gross_per_km":  "Gross/mile",
