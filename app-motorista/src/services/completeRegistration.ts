@@ -87,13 +87,23 @@ export async function completeRegistration(
     }
     if (startIndex <= STEP_ORDER.indexOf('vehicle')) {
       currentStep = 'vehicle';
-      const vehicle = await createVehicle({ ...input.vehicle, user_id: userId, name: `${input.vehicle.brand} ${input.vehicle.model}` });
+      // rentalCostFrequency is NOT a vehicles column -- it only exists to
+      // feed syncVehicleRecurringCost below. Spreading input.vehicle
+      // straight into createVehicle() (as this used to do) leaks it into
+      // the INSERT payload, which PostgREST rejects wholesale (schema-cache
+      // "column not found", PGRST204) -- confirmed in production: the
+      // vehicle step failed 100% of the time for every registration once
+      // this field was added, and unlike the earlier vehicle-step bugs
+      // fixed today, NO row was created at all (INSERT never happens when
+      // the payload itself is rejected, unlike a select-back failure).
+      const { rentalCostFrequency, ...vehicleFields } = input.vehicle;
+      const vehicle = await createVehicle({ ...vehicleFields, user_id: userId, name: `${vehicleFields.brand} ${vehicleFields.model}` });
       await syncVehicleRecurringCost({
         vehicleId: vehicle.id,
         userId,
-        ownershipType: input.vehicle.ownership_type,
-        amountCents: input.vehicle.monthly_cost_cents,
-        frequency: input.vehicle.rentalCostFrequency ?? 'monthly',
+        ownershipType: vehicleFields.ownership_type,
+        amountCents: vehicleFields.monthly_cost_cents,
+        frequency: rentalCostFrequency ?? 'monthly',
       });
     }
     if (startIndex <= STEP_ORDER.indexOf('platforms') && input.platforms.length > 0) {

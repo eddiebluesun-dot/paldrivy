@@ -159,4 +159,27 @@ describe('completeRegistration', () => {
       frequency: 'monthly',
     });
   });
+
+  // Regression test for the production bug: rentalCostFrequency is a field
+  // on RegistrationInput['vehicle'] used only to feed syncVehicleRecurringCost
+  // below -- it is NOT a column on the vehicles table. Spreading
+  // input.vehicle straight into createVehicle() leaked it into the INSERT
+  // payload, which PostgREST rejected wholesale (schema-cache "column not
+  // found", PGRST204) -- confirmed in production: 100% of registrations
+  // failed at the vehicle step with NO vehicle row created at all, for
+  // every driver, from the moment this field was added.
+  it('never includes rentalCostFrequency in the payload passed to createVehicle', async () => {
+    (authSignUp as jest.Mock).mockResolvedValue({ data: { user: { id: 'u1' }, session: {} }, error: null });
+    (createVehicle as jest.Mock).mockResolvedValue({ id: 'v1' });
+
+    const rentInput = {
+      ...baseInput,
+      vehicle: { ...baseInput.vehicle, ownership_type: 'rent' as const, monthly_cost_cents: 80431, rentalCostFrequency: 'weekly' as const },
+    };
+
+    await completeRegistration(rentInput);
+
+    const createVehiclePayload = (createVehicle as jest.Mock).mock.calls[0][0];
+    expect(createVehiclePayload).not.toHaveProperty('rentalCostFrequency');
+  });
 });
