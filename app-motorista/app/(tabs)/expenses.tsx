@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { decimalToCents, formatMoney } from '@/src/utils/currency';
+import { parseFlexibleDateInput } from '@/src/utils/dateInput';
 import { displayToMl } from '@/src/utils/units';
 import { addExpense, deleteExpense, getExpenses, updateExpense } from '@/src/services/expenses';
 import { addFuelEntry } from '@/src/services/fuel';
@@ -128,7 +129,7 @@ function ExpenseForm({
       description: description.trim() !== '' ? description.trim() : null,
       recurring,
       recurring_frequency: recurring ? frequency : null,
-      ends_at: recurring && endsAt.trim() !== '' ? endsAt.trim() : null,
+      ends_at: recurring ? parseFlexibleDateInput(endsAt) : null,
     });
   }
 
@@ -330,7 +331,7 @@ function AddExpenseModal({
         const desc = description.trim() || null;
 
         if (n === 1) {
-          await addExpense({ user_id: userId, category, amount_cents: totalCents, expense_date: trimmedDate, description: desc, recurring, recurring_frequency: recurring ? frequency : null, ends_at: recurring && endsAt.trim() !== '' ? endsAt.trim() : null });
+          await addExpense({ user_id: userId, category, amount_cents: totalCents, expense_date: trimmedDate, description: desc, recurring, recurring_frequency: recurring ? frequency : null, ends_at: recurring ? parseFlexibleDateInput(endsAt) : null });
         } else {
           const perCents = Math.floor(totalCents / n);
           const remainder = totalCents - perCents * n;

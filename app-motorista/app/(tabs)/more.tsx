@@ -10,6 +10,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/src/lib/supabase';
 import { Select } from '@/src/components/Select';
+import { parseFlexibleDateInput } from '@/src/utils/dateInput';
 import { authSignOut } from '@/src/hooks/useAuth';
 import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
@@ -339,10 +340,12 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
 
   async function handleSave() {
     if (!userId || !brand.trim() || !model.trim()) { setError(t('more.vehicle_required')); return; }
-    if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !rentalStartDate.trim()) { setError(t('more.vehicle_required')); return; }
+    // rentalStartDate must actually PARSE, not just be non-empty -- see the
+    // identical comment in register.tsx. Same production crash, same field.
+    if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !parseFlexibleDateInput(rentalStartDate)) { setError(t('more.vehicle_required')); return; }
     const rentalFields = {
       ownership_type: ownership,
-      rental_contract_start_date: ownership === 'rent' && rentalStartDate ? rentalStartDate : null,
+      rental_contract_start_date: ownership === 'rent' ? parseFlexibleDateInput(rentalStartDate) : null,
       rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
         ? displayToMeters(parseFloat(rentalStartOdometer.replace(',', '.')) || 0, 'km') : null,
       rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,

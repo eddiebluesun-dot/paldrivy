@@ -19,6 +19,7 @@ import {
 } from '../../src/services/completeRegistration';
 import { emailsMatch } from '../../src/utils/emailConfirmationUtils';
 import { decimalToCents } from '../../src/utils/currency';
+import { parseFlexibleDateInput } from '../../src/utils/dateInput';
 import { displayToMeters } from '../../src/utils/units';
 import { getAutoLocale, buildLocale, COUNTRY_DIAL, type SupportedLang } from '../../src/utils/autoLocale';
 import { Colors, Radius, Spacing } from '../../src/theme';
@@ -266,9 +267,14 @@ export default function RegisterScreen() {
   // this feature's purpose. The allowance amount/excess rate stay required,
   // though: a driver who picked weekly/monthly has stated they have a cap, and
   // those two fields feed the real excess-km cost calculation.
+  // rentalStartDate must actually PARSE, not just be non-empty -- the field's
+  // placeholder says "AAAA-MM-DD" but nothing enforced that, and a typed
+  // "14/08/2026" (DD/MM/YYYY, the format Brazilian users naturally reach
+  // for) crashed vehicle registration in production with a raw Postgres
+  // error rather than a caught, correctable validation message.
   const rentalOk      = ownership !== 'rent' || allowancePeriod === 'unlimited'
     ? true
-    : !!rentalStartDate.trim() && !!allowanceAmount.trim() && !!excessRate.trim();
+    : !!parseFlexibleDateInput(rentalStartDate) && !!allowanceAmount.trim() && !!excessRate.trim();
   const vehicleOk     = !!brand.trim() && !!model.trim() && !!year.trim()
     && !!fuelType && !!ownership && rentalOk;
   // LGPD: every active legal document must be individually accepted. This is
@@ -328,7 +334,7 @@ export default function RegisterScreen() {
         current_odometer: displayToMeters(parseFloat(odometer) || 0, 'km'),
         is_taxi: isTaxi,
         taxi_license_monthly_cents: isTaxi ? decimalToCents(parseFloat(taxiLicense) || 0) : 0,
-        rental_contract_start_date: ownership === 'rent' && rentalStartDate ? rentalStartDate : null,
+        rental_contract_start_date: ownership === 'rent' ? parseFlexibleDateInput(rentalStartDate) : null,
         rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
           ? displayToMeters(parseFloat(rentalStartOdometer.replace(',', '.')) || 0, 'km') : null,
         rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,
