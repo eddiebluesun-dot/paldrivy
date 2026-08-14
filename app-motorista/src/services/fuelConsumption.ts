@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { computeConsumptionTrend, type ConsumptionStats, type ConsumptionTrend } from '../utils/fuelConsumptionUtils';
+import { computeConsumptionTrend, computeWeeklyKmMeters, type ConsumptionStats, type ConsumptionTrend } from '../utils/fuelConsumptionUtils';
 
 export type { ConsumptionStats, ConsumptionTrend };
 
@@ -8,6 +8,7 @@ export type { ConsumptionStats, ConsumptionTrend };
 export interface WeeklyStats {
   week_label: string;
   total_volume: number;      // liters for thermal; kWh for electric (volume_ml / 1000 in both cases)
+  total_cost_cents: number;  // sum of every fill's total_cost_cents in the week, regardless of vehicle run
   km_driven: number;         // always in km (caller converts for display)
   efficiency: number | null; // km/L for thermal; km/kWh for electric
   is_electric: boolean;      // true when ALL entries in the week are electric
@@ -32,7 +33,7 @@ export async function getWeeklyConsumption(
 
   let q = supabase
     .from('fuel_entries')
-    .select('filled_at, volume_ml, odometer_meters, fuel_type')
+    .select('filled_at, volume_ml, odometer_meters, fuel_type, total_cost_cents, vehicle_id')
     .eq('user_id', userId)
     .gte('filled_at', since.toISOString())
     .order('filled_at', { ascending: true });
@@ -42,7 +43,7 @@ export async function getWeeklyConsumption(
   const { data, error } = await q;
   if (error || !data) return [];
 
-  type E = { filled_at: string; volume_ml: number; odometer_meters: number | null; fuel_type: string };
+  type E = { filled_at: string; volume_ml: number; odometer_meters: number | null; fuel_type: string; total_cost_cents: number; vehicle_id: string | null };
   const entries = data as E[];
 
   const byWeek = new Map<string, E[]>();
@@ -58,14 +59,16 @@ export async function getWeeklyConsumption(
   for (const [, wEntries] of [...byWeek.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     // volume_ml / 1000 = liters for thermal; kWh for electric (same conversion)
     const totalVolume = wEntries.reduce((s, e) => s + e.volume_ml / 1000, 0);
+    const totalCostCents = wEntries.reduce((s, e) => s + e.total_cost_cents, 0);
 
-    const odoms = wEntries
-      .map(e => e.odometer_meters)
-      .filter((v): v is number => v !== null && v > 0);
-
-    const kmDriven = odoms.length >= 2
-      ? (Math.max(...odoms) - Math.min(...odoms)) / 1000
-      : 0;
+    // Same vehicle-swap protection as the "Consumo Real" dashboard card
+    // (statsFromEntries) -- see computeWeeklyKmMeters. A raw whole-week
+    // max-min bridges the old car's odometer to the new car's whenever a
+    // week happens to straddle the swap, producing a nonsensical figure
+    // (confirmed in production: "104764 km / 1137.8 km/L" for one week).
+    const kmDriven = computeWeeklyKmMeters(
+      wEntries.map(e => ({ odometer_meters: e.odometer_meters ?? 0, vehicle_id: e.vehicle_id })),
+    ) / 1000;
 
     const efficiency = totalVolume > 0 && kmDriven > 0
       ? kmDriven / totalVolume  // km/L for thermal; km/kWh for electric
@@ -82,7 +85,7 @@ export async function getWeeklyConsumption(
       ? fmt(minDate)
       : `${fmt(minDate)} – ${fmt(maxDate)}`;
 
-    results.push({ week_label, total_volume: totalVolume, km_driven: kmDriven, efficiency, is_electric });
+    results.push({ week_label, total_volume: totalVolume, total_cost_cents: totalCostCents, km_driven: kmDriven, efficiency, is_electric });
   }
 
   return results.reverse();

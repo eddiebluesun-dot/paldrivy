@@ -1,5 +1,45 @@
 import { test, expect, describe } from '@jest/globals';
-import { computeConsumptionTrend, type FuelEntryForConsumption } from '../../src/utils/fuelConsumptionUtils';
+import { computeConsumptionTrend, computeWeeklyKmMeters, type FuelEntryForConsumption } from '../../src/utils/fuelConsumptionUtils';
+
+describe('computeWeeklyKmMeters', () => {
+  test('sums max-min per same-vehicle entry, in meters', () => {
+    const entries = [
+      { odometer_meters: 19228000, vehicle_id: 'v1' },
+      { odometer_meters: 19300000, vehicle_id: 'v1' },
+    ];
+    expect(computeWeeklyKmMeters(entries)).toBe(72000);
+  });
+
+  // Regression test for the real production bug: the "10 de ago – 13 de ago"
+  // week (all same vehicle_id, real car) computed fine, but "03 de ago – 08
+  // de ago" showed "104764 km / 1137.8 km/L" because that week's 3 entries
+  // span the exact vehicle-swap boundary from the Consumo Real fix
+  // (fuelConsumptionUtils.ts's statsFromEntries) -- getWeeklyConsumption
+  // used a raw whole-week max-min with no run-splitting at all, so it never
+  // got that protection.
+  test('never bridges a vehicle swap within the same ISO week (production regression)', () => {
+    const entries = [
+      { odometer_meters: 123375000, vehicle_id: 'v1' }, // old car, 2026-08-03
+      { odometer_meters: 18611000, vehicle_id: 'v1' },  // new car, 2026-08-07
+      { odometer_meters: 18925000, vehicle_id: 'v1' },  // new car, 2026-08-08
+    ];
+    // Old car's lone reading forms a 1-entry run (contributes nothing); new
+    // car's two readings form their own run: 18925000 - 18611000 = 314000.
+    expect(computeWeeklyKmMeters(entries)).toBe(314000);
+  });
+
+  test('ignores entries with a non-positive odometer reading', () => {
+    const entries = [
+      { odometer_meters: 0, vehicle_id: 'v1' },
+      { odometer_meters: 19300000, vehicle_id: 'v1' },
+    ];
+    expect(computeWeeklyKmMeters(entries)).toBe(0);
+  });
+
+  test('returns 0 for a single entry (nothing to measure a delta against)', () => {
+    expect(computeWeeklyKmMeters([{ odometer_meters: 19300000, vehicle_id: 'v1' }])).toBe(0);
+  });
+});
 
 describe('computeConsumptionTrend', () => {
   test('returns null with fewer than 2 entries', () => {

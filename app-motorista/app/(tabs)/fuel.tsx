@@ -617,6 +617,7 @@ export default function FuelScreen() {
                       <Text style={styles.weeklyChip}>{dist.toFixed(0)} {distLabel}</Text>
                     ) : null}
                     <Text style={styles.weeklyChip}>{volDisplay}</Text>
+                    <Text style={styles.weeklyChip}>R$ {(w.total_cost_cents / 100).toFixed(2)}</Text>
                     {effDisplay ? (
                       <Text style={[styles.weeklyChip, styles.weeklyChipAccent]}>{effDisplay}</Text>
                     ) : null}

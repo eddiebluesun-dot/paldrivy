@@ -60,26 +60,29 @@ export interface ConsumptionTrend {
 // is dropped), but the honest result is "no data" rather than the correct
 // per-vehicle number. Fixing that fully requires a vehicle_id backfill on
 // historical rows.
-function statsFromEntries(entries: FuelEntryForConsumption[]): ConsumptionStats | null {
-  if (entries.length < 2) return null;
+// A same-vehicle_id run must also stay odometer-monotonic (within a small
+// tolerance for same-day reordering noise: multiple fills on one day often
+// share the exact same `filled_at` clock time -- see getConsumptionTrend --
+// so chronological sort can place a slightly-lower reading right after a
+// slightly-higher one). A drop far larger than any real day's driving means
+// this vehicle_id row is being reused for a physically different car
+// (swapped/replaced vehicle, never re-pointed to a new vehicle_id) rather
+// than a same-car ordering hiccup. Without this, the whole history bridges
+// into one run, the old car's early odometer to the new car's low one
+// produces a nonsensical negative delta, and — since a single run was all
+// there was — the result is "no data" instead of the new car's own,
+// otherwise perfectly valid, segments.
+//
+// Shared by statsFromEntries (below) and computeWeeklyKmMeters -- both need
+// the exact same protection: an ISO week (or the whole history) can just as
+// easily straddle a vehicle swap as a full-tank-to-full-tank span can.
+const RUN_RESET_THRESHOLD_METERS = 500_000; // 500 km
 
-  const vehicleKey = (e: FuelEntryForConsumption) => e.vehicle_id ?? null;
-
-  // A same-vehicle_id run must also stay odometer-monotonic (within a small
-  // tolerance for same-day reordering noise: multiple fills on one day often
-  // share the exact same `filled_at` clock time -- see getConsumptionTrend --
-  // so chronological sort can place a slightly-lower reading right after a
-  // slightly-higher one). A drop far larger than any real day's driving means
-  // this vehicle_id row is being reused for a physically different car
-  // (swapped/replaced vehicle, never re-pointed to a new vehicle_id) rather
-  // than a same-car ordering hiccup. Without this, the whole history bridges
-  // into one run, the old car's early odometer to the new car's low one
-  // produces a nonsensical negative delta, and — since a single run was all
-  // there was — the result is "no data" instead of the new car's own,
-  // otherwise perfectly valid, segments.
-  const RUN_RESET_THRESHOLD_METERS = 500_000; // 500 km
-
-  const runs: FuelEntryForConsumption[][] = [];
+export function splitIntoVehicleRuns<T extends { odometer_meters: number; vehicle_id?: string | null }>(
+  entries: T[],
+): T[][] {
+  const vehicleKey = (e: T) => e.vehicle_id ?? null;
+  const runs: T[][] = [];
   for (const e of entries) {
     const currentRun = runs[runs.length - 1];
     const last = currentRun?.[currentRun.length - 1];
@@ -91,6 +94,33 @@ function statsFromEntries(entries: FuelEntryForConsumption[]): ConsumptionStats 
       runs.push([e]);
     }
   }
+  return runs;
+}
+
+// Sum of each vehicle-run's own (max - min) odometer delta, in meters --
+// the same "never bridge two different vehicles" protection as
+// statsFromEntries, but for a simple max-min distance calc instead of the
+// full-tank method (used by weekly consumption, which has no full-tank
+// requirement). Runs of length < 1 reading contribute nothing; entries with
+// odometer_meters <= 0 (unset/placeholder) are dropped before splitting.
+export function computeWeeklyKmMeters(
+  entries: { odometer_meters: number; vehicle_id?: string | null }[],
+): number {
+  const runs = splitIntoVehicleRuns(entries.filter(e => e.odometer_meters > 0));
+  let total = 0;
+  for (const run of runs) {
+    if (run.length < 2) continue;
+    const odoms = run.map(e => e.odometer_meters);
+    const delta = Math.max(...odoms) - Math.min(...odoms);
+    if (delta > 0) total += delta;
+  }
+  return total;
+}
+
+function statsFromEntries(entries: FuelEntryForConsumption[]): ConsumptionStats | null {
+  if (entries.length < 2) return null;
+
+  const runs = splitIntoVehicleRuns(entries);
 
   let total_km = 0;
   let total_liters = 0;
