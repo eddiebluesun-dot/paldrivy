@@ -143,6 +143,7 @@ export default function RegisterScreen() {
   const [fuelType, setFuelType] = useState<FuelType>('gasoline');
   const [ownership, setOwnership] = useState<OwnershipType>('own');
   const [monthlyCost, setMonthlyCost] = useState('0');
+  const [rentalCostFrequency, setRentalCostFrequency] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [insurance, setInsurance] = useState('0');
   const [isTaxi, setIsTaxi] = useState(false);
   const [taxiLicense, setTaxiLicense] = useState('0');
@@ -322,6 +323,7 @@ export default function RegisterScreen() {
         avg_consumption_per_100: 0,
         ownership_type: ownership,
         monthly_cost_cents: decimalToCents(parseFloat(monthlyCost) || 0),
+        rentalCostFrequency,
         monthly_insurance_cents: decimalToCents(parseFloat(insurance) || 0),
         current_odometer: displayToMeters(parseFloat(odometer) || 0, 'km'),
         is_taxi: isTaxi,
@@ -719,15 +721,41 @@ export default function RegisterScreen() {
               </>
             ) : null}
 
-            <Text style={s.label}>{t('onboarding.monthly_cost')}</Text>
-            <TextInput
-              style={inp}
-              value={monthlyCost}
-              onChangeText={setMonthlyCost}
-              keyboardType="decimal-pad"
-              placeholderTextColor={Colors.textSecondary}
-              accessibilityLabel={t('onboarding.monthly_cost')}
-            />
+            {ownership === 'rent' ? (
+              <>
+                <Text style={s.label}>{t('onboarding.rental_cost_frequency')}</Text>
+                <Select
+                  value={rentalCostFrequency}
+                  onValueChange={(v) => setRentalCostFrequency(v as 'daily' | 'weekly' | 'monthly')}
+                  items={[
+                    { label: t('onboarding.rental_cost_daily'), value: 'daily' },
+                    { label: t('onboarding.rental_cost_weekly'), value: 'weekly' },
+                    { label: t('onboarding.rental_cost_monthly'), value: 'monthly' },
+                  ]}
+                />
+                <Text style={s.label}>{t('onboarding.rental_cost_amount')}</Text>
+                <TextInput
+                  style={inp}
+                  value={monthlyCost}
+                  onChangeText={setMonthlyCost}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={Colors.textSecondary}
+                  accessibilityLabel={t('onboarding.rental_cost_amount')}
+                />
+              </>
+            ) : (
+              <>
+                <Text style={s.label}>{t('onboarding.monthly_cost')}</Text>
+                <TextInput
+                  style={inp}
+                  value={monthlyCost}
+                  onChangeText={setMonthlyCost}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={Colors.textSecondary}
+                  accessibilityLabel={t('onboarding.monthly_cost')}
+                />
+              </>
+            )}
 
             <Text style={s.label}>{t('onboarding.insurance')}</Text>
             <TextInput
