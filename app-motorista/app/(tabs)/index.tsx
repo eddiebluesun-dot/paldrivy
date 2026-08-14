@@ -426,11 +426,13 @@ function FuelConsumptionCard({ trend }: { trend: ConsumptionTrend }) {
 
 // ─── monthly chart ────────────────────────────────────────────────────────────
 
-function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, selectedDay, consumptionTrend, onEditGoal }: {
+function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, selectedDay, consumptionTrend, onEditGoal, isElectric, volumeUnit }: {
   buckets: MonthBucket[]; goalCents: number | null; currencyCode: string; locale: string;
   onDayPress?: (day: number) => void; selectedDay?: number | null;
   consumptionTrend?: ConsumptionTrend | null;
   onEditGoal?: () => void;
+  isElectric?: boolean;
+  volumeUnit?: 'liters' | 'gallons';
 }) {
   const { t } = useTranslation();
   const today = new Date().getDate();
@@ -591,13 +593,22 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
             <Ionicons name="speedometer-outline" size={13} color={Colors.textSecondary} />
             <Text style={{ color: Colors.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }}>{t('dashboard.fuel_consumption_title')}</Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
             {[
-              { value: consumptionTrend.current_month.km_per_l.toFixed(1), label: t('dashboard.km_avg'), color: Colors.success },
+              { value: consumptionTrend.current_month.km_per_l.toFixed(1), label: isElectric ? t('dashboard.km_kwh_avg') : t('dashboard.km_avg'), color: Colors.success },
               { value: consumptionTrend.current_month.total_km.toFixed(0), label: t('dashboard.km_calculated'), color: Colors.textPrimary },
+              {
+                value: isElectric
+                  ? `${consumptionTrend.current_month.total_liters.toFixed(1)} kWh`
+                  : volumeUnit === 'gallons'
+                  ? `${(consumptionTrend.current_month.total_liters * 0.264172).toFixed(2)} gal`
+                  : `${consumptionTrend.current_month.total_liters.toFixed(1)} L`,
+                label: t('dashboard.fuel_used'),
+                color: Colors.brandBlue,
+              },
               { value: String(consumptionTrend.current_month.segments), label: t('dashboard.fueling_count'), color: Colors.accent },
             ].map(item => (
-              <View key={item.label} style={{ flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: 8, alignItems: 'center', gap: 2 }}>
+              <View key={item.label} style={{ width: '23.5%', flexGrow: 1, minWidth: 70, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: 8, alignItems: 'center', gap: 2 }}>
                 <Text style={{ color: item.color, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{item.value}</Text>
                 <Text style={{ color: Colors.textSecondary, fontSize: 8, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3, textAlign: 'center' }}>{item.label}</Text>
               </View>
@@ -678,7 +689,8 @@ function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }
   const totalExpenses = totals.expenses_cents + totals.fuel_cents;
   const profit        = totals.gross_cents - totalExpenses;
   const hours         = (totals.duration_seconds ?? 0) / 3600;
-  const perHour       = hours > 0.5 ? Math.round(profit / hours) : null;
+  const grossPerHour  = hours > 0.5 ? Math.round(totals.gross_cents / hours) : null;
+  const netPerHour    = hours > 0.5 ? Math.round(profit / hours) : null;
   const trendPct      = prevGross > 0 ? Math.round(((totals.gross_cents - prevGross) / prevGross) * 100) : null;
   const expPct        = totals.gross_cents > 0 ? Math.round((totalExpenses / totals.gross_cents) * 100) : 0;
   const marginPct     = totals.gross_cents > 0 ? Math.round((profit / totals.gross_cents) * 100) : 0;
@@ -717,11 +729,20 @@ function KillShotCards({ totals, prevGross, currencyCode, locale, distanceUnit }
       accentBorder: profitColor,
     },
     {
-      title: 'R$/hora',
-      value: perHour !== null ? formatMoney(perHour, currencyCode, locale) : '—',
-      sub: perHour !== null ? `${hours.toFixed(1)}h trabalhadas` : 'sem dados',
+      title: t('dashboard.gross_per_hour'),
+      value: grossPerHour !== null ? formatMoney(grossPerHour, currencyCode, locale) : '—',
+      sub: grossPerHour !== null ? `${hours.toFixed(1)}h trabalhadas` : 'sem dados',
       subColor: Colors.textSecondary,
       icon: 'time-outline' as const,
+      iconColor: Colors.brandBlue,
+      accentBorder: Colors.brandBlue,
+    },
+    {
+      title: t('dashboard.net_per_hour'),
+      value: netPerHour !== null ? formatMoney(netPerHour, currencyCode, locale) : '—',
+      sub: netPerHour !== null ? `${hours.toFixed(1)}h trabalhadas` : 'sem dados',
+      subColor: Colors.textSecondary,
+      icon: 'hourglass-outline' as const,
       iconColor: Colors.brandBlue,
       accentBorder: Colors.brandBlue,
     },
@@ -1479,6 +1500,7 @@ export default function DashboardScreen() {
 
   const currencyCode = profile?.currency_code ?? 'BRL';
   const distanceUnit = profile?.distance_unit ?? 'km';
+  const volumeUnit = profile?.volume_unit ?? 'liters';
   const locale = profile?.locale ?? i18n.language;
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
@@ -1714,6 +1736,8 @@ export default function DashboardScreen() {
                 selectedDay={selectedMonthDay}
                 consumptionTrend={consumptionTrend}
                 onEditGoal={() => setGoalModalVisible(true)}
+                isElectric={vehicleInfo?.fuel_type === 'electric'}
+                volumeUnit={volumeUnit}
               />
             )}
             {monthlyTotals !== null && monthlyTotals.gross_cents > 0 && (
