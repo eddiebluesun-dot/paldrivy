@@ -217,7 +217,17 @@ function LocationModal({ visible, profile, onSaved, onClose }: {
     try {
       const { data } = await supabase.auth.getUser();
       if (!data.user) throw new Error();
-      await upsertProfile({ id: data.user.id, city: city.trim(), state: state.trim() });
+      // Plain update, not upsertProfile()/.upsert() — an upsert issues an
+      // INSERT ... ON CONFLICT DO UPDATE under the hood, and Postgres
+      // validates NOT NULL constraints (profiles.name) against the proposed
+      // INSERT row before it even checks for a conflict. A partial payload
+      // like {id, city, state} always fails with "null value in column
+      // name violates not-null constraint", even though the row already
+      // exists and only city/state are actually changing.
+      const { error } = await supabase.from('profiles')
+        .update({ city: city.trim(), state: state.trim() })
+        .eq('id', data.user.id);
+      if (error) throw error;
       onSaved();
     } catch { setError(t('common.error')); }
     finally { setSaving(false); }
@@ -334,7 +344,17 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
         await updateVehicle(vehicle.id, { brand: brand.trim(), model: model.trim(), year: parseInt(year) || vehicle.year, fuel_type: fuel, ...rentalFields });
       } else {
         const newVehicle = await createVehicle({ user_id: userId, name: `${brand.trim()} ${model.trim()}`, brand: brand.trim(), model: model.trim(), year: parseInt(year) || new Date().getFullYear(), fuel_type: fuel, avg_consumption_per_100: 0, monthly_cost_cents: 0, monthly_insurance_cents: 0, current_odometer: 0, is_taxi: false, taxi_license_monthly_cents: 0, ...rentalFields });
-        await upsertProfile({ id: userId, vehicle_id: newVehicle.id });
+        // Plain update, not upsertProfile()/.upsert() — see the identical
+        // comment in LocationModal.handleSave() above. {id, vehicle_id} alone
+        // always violated profiles.name's NOT NULL constraint here: the
+        // vehicle insert above would succeed (confirmed in prod — Eddie ended
+        // up with duplicate vehicle rows from retrying) while this link step
+        // failed every single time, so vehicle_id never got set and the
+        // screen showed a generic error despite the vehicle existing.
+        const { error: linkError } = await supabase.from('profiles')
+          .update({ vehicle_id: newVehicle.id })
+          .eq('id', userId);
+        if (linkError) throw linkError;
       }
       onSaved();
     } catch { setError(t('more.vehicle_error')); }
