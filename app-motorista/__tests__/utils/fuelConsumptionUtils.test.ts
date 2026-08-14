@@ -178,6 +178,44 @@ describe('computeConsumptionTrend', () => {
       const trend = computeConsumptionTrend(entries, now);
       expect(trend).toBeNull();
     });
+
+    // Regression test for the real production account (Eddie's own,
+    // db85eea7-8cd7-464d-ba68-05f1e8a15560): unlike the "known gap" case
+    // above, EVERY row here — old car (Tiggo, ~118k–123k km) AND new car
+    // (Kwid, ~18.6k–19.6k km) — carries the SAME non-null vehicle_id, because
+    // the vehicle record was reused for the new car instead of a fresh one
+    // being created. vehicleKey never changes, so run-splitting by vehicle_id
+    // alone never fires: the whole history is one run, first-to-last full-tank
+    // spans the swap boundary, the delta goes negative, and — since it was
+    // the only run — the ENTIRE trend (including the new car's own otherwise-
+    // valid segment) came back null. The odometer-drop check must recover the
+    // new car's segment even though vehicle_id gives no signal here.
+    test('same vehicle_id reused across a car swap still isolates the new car (odometer-drop split)', () => {
+      const now = new Date('2026-08-14');
+      const entries: FuelEntryForConsumption[] = [
+        // Only ONE Tiggo fill is full_tank — fullIdxs.length stays 1, so this
+        // half of the run measures nothing on its own (isolates the
+        // assertion below to "did the swap boundary block the Kwid's
+        // segment", not "does an unrelated earlier Tiggo segment also
+        // close").
+        { odometer_meters: 117_988_000, volume_ml: 45610, filled_at: '2026-06-29T15:00:00Z', vehicle_id: 'v1', full_tank: true },
+        { odometer_meters: 123_375_000, volume_ml: 33129, filled_at: '2026-08-03T15:00:00Z', vehicle_id: 'v1', full_tank: false },
+        // Swap happens here — same vehicle_id, odometer drops by ~104,764km.
+        { odometer_meters: 18_611_000, volume_ml: 28639, filled_at: '2026-08-07T15:00:00Z', vehicle_id: 'v1', full_tank: true },
+        { odometer_meters: 18_925_000, volume_ml: 30311, filled_at: '2026-08-08T15:00:00Z', vehicle_id: 'v1', full_tank: true },
+        { odometer_meters: 19_646_000, volume_ml: 30434, filled_at: '2026-08-11T15:00:00Z', vehicle_id: 'v1', full_tank: true },
+      ];
+
+      const trend = computeConsumptionTrend(entries, now);
+      expect(trend).not.toBeNull();
+
+      // overall must reflect ONLY the Kwid's two closed segments
+      // (18,611→18,925 = 314km, 18,925→19,646 = 721km = 1,035km total),
+      // never a bridge back to the Tiggo's 117,988,000m reading.
+      expect(trend!.overall.total_km).toBeCloseTo(1035, 3);
+      expect(trend!.overall.segments).toBe(2);
+      expect(trend!.overall.km_per_l).toBeGreaterThan(0);
+    });
   });
 
   // Full-tank-boundary method: a measured segment must start AND end on a

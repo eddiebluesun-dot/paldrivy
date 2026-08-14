@@ -65,11 +65,28 @@ function statsFromEntries(entries: FuelEntryForConsumption[]): ConsumptionStats 
 
   const vehicleKey = (e: FuelEntryForConsumption) => e.vehicle_id ?? null;
 
+  // A same-vehicle_id run must also stay odometer-monotonic (within a small
+  // tolerance for same-day reordering noise: multiple fills on one day often
+  // share the exact same `filled_at` clock time -- see getConsumptionTrend --
+  // so chronological sort can place a slightly-lower reading right after a
+  // slightly-higher one). A drop far larger than any real day's driving means
+  // this vehicle_id row is being reused for a physically different car
+  // (swapped/replaced vehicle, never re-pointed to a new vehicle_id) rather
+  // than a same-car ordering hiccup. Without this, the whole history bridges
+  // into one run, the old car's early odometer to the new car's low one
+  // produces a nonsensical negative delta, and — since a single run was all
+  // there was — the result is "no data" instead of the new car's own,
+  // otherwise perfectly valid, segments.
+  const RUN_RESET_THRESHOLD_METERS = 500_000; // 500 km
+
   const runs: FuelEntryForConsumption[][] = [];
   for (const e of entries) {
     const currentRun = runs[runs.length - 1];
-    if (currentRun && vehicleKey(currentRun[currentRun.length - 1]) === vehicleKey(e)) {
-      currentRun.push(e);
+    const last = currentRun?.[currentRun.length - 1];
+    const sameVehicle = !!currentRun && !!last && vehicleKey(last) === vehicleKey(e);
+    const odometerDrop = last ? last.odometer_meters - e.odometer_meters : 0;
+    if (sameVehicle && odometerDrop <= RUN_RESET_THRESHOLD_METERS) {
+      currentRun!.push(e);
     } else {
       runs.push([e]);
     }
