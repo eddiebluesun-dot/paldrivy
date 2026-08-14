@@ -26,7 +26,7 @@ export async function getAllocatedFixedCentsForShift(
   const dayEnd = new Date(new Date(dayStart).getTime() + 24 * 60 * 60 * 1000).toISOString();
 
   const [{ data: expenseRows }, { data: goal }, { data: sameDayShifts }] = await Promise.all([
-    supabase.from('expenses').select('amount_cents, expense_date, recurring_frequency')
+    supabase.from('expenses').select('amount_cents, expense_date, recurring_frequency, ends_at')
       .eq('user_id', userId).eq('recurring', true),
     // Most recent goal that was already active as of shiftDate (not any goal
     // created after it). This matters for backdated manual shifts
@@ -47,9 +47,9 @@ export async function getAllocatedFixedCentsForShift(
   if (workingDays.length === 0) return 0;
 
   const expenses: RecurringExpenseInput[] = (expenseRows ?? [])
-    .filter((e): e is typeof e & { recurring_frequency: 'weekly' | 'monthly' } =>
-      e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')
-    .map(e => ({ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency }));
+    .filter((e): e is typeof e & { recurring_frequency: 'daily' | 'weekly' | 'monthly' } =>
+      e.recurring_frequency === 'daily' || e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')
+    .map(e => ({ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency, endsAt: e.ends_at as string | null }));
 
   const dailyTotal = computeDailyAllocationCents(expenses, workingDays, new Date(dayStart));
   if (dailyTotal === 0) return 0;
@@ -91,7 +91,7 @@ export async function getRecurringExpenseBreakdownForDay(
   const dayStart = `${dateStr}T00:00:00.000Z`;
 
   const [{ data: expenseRows }, { data: goal }] = await Promise.all([
-    supabase.from('expenses').select('category, amount_cents, expense_date, recurring_frequency')
+    supabase.from('expenses').select('category, amount_cents, expense_date, recurring_frequency, ends_at')
       .eq('user_id', userId).eq('recurring', true),
     supabase.from('goals').select('working_days')
       .eq('user_id', userId).eq('type', 'monthly')
@@ -103,14 +103,14 @@ export async function getRecurringExpenseBreakdownForDay(
   if (workingDays.length === 0) return [];
 
   const recurring = (expenseRows ?? []).filter(
-    (e): e is typeof e & { recurring_frequency: 'weekly' | 'monthly' } =>
-      e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly'
+    (e): e is typeof e & { recurring_frequency: 'daily' | 'weekly' | 'monthly' } =>
+      e.recurring_frequency === 'daily' || e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly'
   );
 
   const byCategory = new Map<string, number>();
   for (const e of recurring) {
     const share = computeDailyAllocationCents(
-      [{ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency }],
+      [{ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency, endsAt: e.ends_at as string | null }],
       workingDays,
       new Date(dayStart),
     );
@@ -143,7 +143,7 @@ export async function getRecurringExpenseTotalForRange(
   endDateStrExclusive: string,
 ): Promise<number> {
   const [{ data: expenseRows }, { data: goals }] = await Promise.all([
-    supabase.from('expenses').select('amount_cents, expense_date, recurring_frequency')
+    supabase.from('expenses').select('amount_cents, expense_date, recurring_frequency, ends_at')
       .eq('user_id', userId).eq('recurring', true),
     supabase.from('goals').select('starts_at, working_days')
       .eq('user_id', userId).eq('type', 'monthly')
@@ -152,9 +152,9 @@ export async function getRecurringExpenseTotalForRange(
   ]);
 
   const recurring: RecurringExpenseInput[] = (expenseRows ?? [])
-    .filter((e): e is typeof e & { recurring_frequency: 'weekly' | 'monthly' } =>
-      e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')
-    .map(e => ({ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency }));
+    .filter((e): e is typeof e & { recurring_frequency: 'daily' | 'weekly' | 'monthly' } =>
+      e.recurring_frequency === 'daily' || e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')
+    .map(e => ({ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency, endsAt: e.ends_at as string | null }));
   if (recurring.length === 0) return 0;
 
   const goalList = (goals ?? []) as { starts_at: string; working_days: number[] | null }[];
@@ -192,7 +192,7 @@ export async function getRecurringExpenseBreakdownForRange(
   endDateStrExclusive: string,
 ): Promise<Array<{ category: string; amountCents: number }>> {
   const [{ data: expenseRows }, { data: goals }] = await Promise.all([
-    supabase.from('expenses').select('category, amount_cents, expense_date, recurring_frequency')
+    supabase.from('expenses').select('category, amount_cents, expense_date, recurring_frequency, ends_at')
       .eq('user_id', userId).eq('recurring', true),
     supabase.from('goals').select('starts_at, working_days')
       .eq('user_id', userId).eq('type', 'monthly')
@@ -201,8 +201,8 @@ export async function getRecurringExpenseBreakdownForRange(
   ]);
 
   const recurring = (expenseRows ?? []).filter(
-    (e): e is typeof e & { recurring_frequency: 'weekly' | 'monthly' } =>
-      e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly',
+    (e): e is typeof e & { recurring_frequency: 'daily' | 'weekly' | 'monthly' } =>
+      e.recurring_frequency === 'daily' || e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly',
   );
   if (recurring.length === 0) return [];
 
@@ -223,7 +223,7 @@ export async function getRecurringExpenseBreakdownForRange(
     if (workingDays.length > 0) {
       for (const e of recurring) {
         const share = computeDailyAllocationCents(
-          [{ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency }],
+          [{ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency, endsAt: e.ends_at as string | null }],
           workingDays,
           cursor,
         );
@@ -266,7 +266,7 @@ export async function syncAllocatedFixedCentsForDay(userId: string, shiftDate: s
     const dayEnd = new Date(new Date(dayStart).getTime() + 24 * 60 * 60 * 1000).toISOString();
 
     const [{ data: expenseRows }, { data: goal }, { data: sameDayShifts }] = await Promise.all([
-      supabase.from('expenses').select('amount_cents, expense_date, recurring_frequency')
+      supabase.from('expenses').select('amount_cents, expense_date, recurring_frequency, ends_at')
         .eq('user_id', userId).eq('recurring', true),
       supabase.from('goals').select('working_days')
         .eq('user_id', userId).eq('type', 'monthly')
@@ -287,9 +287,9 @@ export async function syncAllocatedFixedCentsForDay(userId: string, shiftDate: s
 
     const workingDays = goal?.working_days ?? [];
     const expenses: RecurringExpenseInput[] = (expenseRows ?? [])
-      .filter((e): e is typeof e & { recurring_frequency: 'weekly' | 'monthly' } =>
-        e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')
-      .map(e => ({ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency }));
+      .filter((e): e is typeof e & { recurring_frequency: 'daily' | 'weekly' | 'monthly' } =>
+        e.recurring_frequency === 'daily' || e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')
+      .map(e => ({ amountCents: e.amount_cents, expenseDate: e.expense_date, frequency: e.recurring_frequency, endsAt: e.ends_at as string | null }));
 
     const dailyTotal = workingDays.length > 0
       ? computeDailyAllocationCents(expenses, workingDays, new Date(dayStart))

@@ -190,6 +190,26 @@ describe('getAllocatedFixedCentsForShift', () => {
     expect(first + second + third).toBe(11000); // shares still sum back to the exact daily total
   });
 
+  it('a daily-frequency expense contributes its full amount, not divided across a period', async () => {
+    mockTables({
+      expenses: [{ user_id: 'user-1', amount_cents: 5000, expense_date: '2026-08-04', recurring: true, recurring_frequency: 'daily' }],
+      goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
+      shifts: [{ id: 's1', user_id: 'user-1', started_at: '2026-08-05T08:00:00.000Z' }],
+    });
+    const result = await getAllocatedFixedCentsForShift('user-1', '2026-08-05', 's1');
+    expect(result).toBe(5000);
+  });
+
+  it('an expense past its ends_at no longer contributes', async () => {
+    mockTables({
+      expenses: [{ user_id: 'user-1', amount_cents: 66000, expense_date: '2026-08-04', recurring: true, recurring_frequency: 'weekly', ends_at: '2026-08-05' }],
+      goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
+      shifts: [{ id: 's1', user_id: 'user-1', started_at: '2026-08-05T08:00:00.000Z' }],
+    });
+    const result = await getAllocatedFixedCentsForShift('user-1', '2026-08-05', 's1');
+    expect(result).toBe(0);
+  });
+
   it('throws when shiftId is not among the fetched same-day shifts (defensive: caller passed a bad/unpersisted id)', async () => {
     mockTables({
       expenses: [{ user_id: 'user-1', amount_cents: 66000, expense_date: '2026-08-04', recurring: true, recurring_frequency: 'weekly' }],
@@ -241,6 +261,19 @@ describe('getRecurringExpenseTotalForRange', () => {
     });
     const total = await getRecurringExpenseTotalForRange('user-1', '2026-08-01', '2026-09-01');
     expect(total).toBe(0);
+  });
+
+  it('an expense that ends partway through the range only counts the days before ends_at', async () => {
+    mockTables({
+      // Daily R$50, ends 2026-08-04 (the 4th itself is excluded), so only
+      // Aug 1/2/3 are even candidates -- but Aug 2, 2026 is a Sunday (Aug 10
+      // is the known Monday anchor used elsewhere in this file), not a
+      // Mon-Sat working day, so only Aug 1 (Sat) and Aug 3 (Mon) count = 2 days.
+      expenses: [{ user_id: 'user-1', amount_cents: 5000, expense_date: '2026-08-01', recurring: true, recurring_frequency: 'daily', ends_at: '2026-08-04' }],
+      goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
+    });
+    const total = await getRecurringExpenseTotalForRange('user-1', '2026-08-01', '2026-08-08');
+    expect(total).toBe(2 * 5000);
   });
 });
 
