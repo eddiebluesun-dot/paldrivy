@@ -26,6 +26,7 @@ import { addFuelEntry, deleteFuelEntry, getFuelEntries, updateFuelEntry } from '
 import { getWeeklyConsumption, WeeklyStats } from '@/src/services/fuelConsumption';
 import { getVehicles, getEffectiveVehicleId } from '@/src/services/vehicles';
 import { Select } from '@/src/components/Select';
+import { DateField } from '@/src/components/DateField';
 import { useProfile } from '@/src/hooks/useProfile';
 import type { FuelEntry, FuelType } from '@/src/services/fuel';
 
@@ -133,9 +134,9 @@ function FuelForm({
       price_per_unit_cents: decimalToCents(unitPriceNum),
       full_tank: fullTank,
       station: station.trim() !== '' ? station.trim() : null,
-      filled_at: dateStr.trim().match(/^\d{4}-\d{2}-\d{2}$/)
-        ? new Date(dateStr.trim() + 'T12:00:00').toISOString()
-        : (initialValues?.filled_at ?? new Date().toISOString()),
+      // dateStr now comes from DateField, which only ever produces a
+      // structurally valid 'YYYY-MM-DD' string -- no fallback needed.
+      filled_at: new Date(dateStr + 'T12:00:00').toISOString(),
     });
   }
 
@@ -215,14 +216,12 @@ function FuelForm({
         />
 
         <Text style={styles.label}>{t('fuel.entry_date')}</Text>
-        <TextInput
-          style={styles.input}
+        <DateField
           value={dateStr}
-          onChangeText={setDateStr}
-          placeholder="AAAA-MM-DD"
-          placeholderTextColor={Colors.textSecondary}
-          keyboardType="numbers-and-punctuation"
-          maxLength={10}
+          onChange={setDateStr}
+          placeholder={t('common.select_date')}
+          accessibilityLabel={t('fuel.entry_date')}
+          testID="fuel-form-date"
         />
 
         {error !== null && <Text style={styles.errorText}>{error}</Text>}
