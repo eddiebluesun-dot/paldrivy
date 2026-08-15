@@ -60,7 +60,10 @@ export function RentalAllowanceBanner({
     <View style={[s.banner, s.warning]} testID="rental-allowance-warning">
       <View style={s.textCol}>
         <Text style={s.text}>
-          {t('rental_allowance.near_limit', { percent: String(Math.round(status.percentUsed * 100)) })}
+          {t('rental_allowance.near_limit', {
+            percent: String(Math.round(status.percentUsed * 100)),
+            km: status.remainingKm.toFixed(0),
+          })}
         </Text>
         {baselineDisclosure}
       </View>

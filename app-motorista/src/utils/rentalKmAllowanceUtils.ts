@@ -83,6 +83,7 @@ export interface RentalAllowanceStatus {
   isOverLimit: boolean; // >= 100%
   overageKm: number; // 0 if not over
   overageCostCents: number; // 0 if not over
+  remainingKm: number; // max(0, allowanceAmountKm - usageKm) -- never negative, use overageKm for that
 }
 
 export function computeRentalAllowanceStatus(params: {
@@ -128,6 +129,7 @@ export function computeRentalAllowanceStatus(params: {
 
   const overageKm = Math.max(0, usageKm - allowanceAmountKm);
   const overageCostCents = excessRateCents != null ? Math.round(overageKm * excessRateCents) : 0;
+  const remainingKm = Math.max(0, allowanceAmountKm - usageKm);
 
   return {
     periodStart,
@@ -143,5 +145,6 @@ export function computeRentalAllowanceStatus(params: {
     isOverLimit: percentUsed >= 1,
     overageKm,
     overageCostCents,
+    remainingKm,
   };
 }

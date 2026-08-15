@@ -26,7 +26,7 @@ function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllow
     periodStart: new Date('2026-08-05'), periodEnd: new Date('2026-08-12'),
     baselineMeters: 18332000, baselineIsEstimated: false, currentOdometerMeters: 18622000,
     usageKm: 290, percentUsed: 0.58, isNearLimit: false, isOverLimit: false,
-    overageKm: 0, overageCostCents: 0,
+    overageKm: 0, overageCostCents: 0, remainingKm: 210,
     ...overrides,
   };
 }
@@ -45,6 +45,14 @@ describe('RentalAllowanceBanner', () => {
   it('shows a warning banner at >=90%', () => {
     render(<RentalAllowanceBanner status={makeStatus({ isNearLimit: true, percentUsed: 0.92 })} onAddExpense={jest.fn()} />);
     expect(screen.getByTestId('rental-allowance-warning')).toBeTruthy();
+  });
+
+  it('shows the remaining km on the warning banner, not just the percentage used', () => {
+    render(<RentalAllowanceBanner
+      status={makeStatus({ isNearLimit: true, percentUsed: 0.92, remainingKm: 142 })}
+      onAddExpense={jest.fn()}
+    />);
+    expect(screen.getByText(/142/)).toBeTruthy();
   });
 
   it('shows an over-limit banner with an add-expense button at >=100%', () => {

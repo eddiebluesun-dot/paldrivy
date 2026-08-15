@@ -351,9 +351,10 @@
   "rental_allowance": {
     "extract_title": "公里配额",
     "extract_usage": "已用 {{used}} / {{total}} 公里",
+    "extract_remaining": "剩余 {{km}} 公里",
     "period_weekly": "每周",
     "period_monthly": "每月",
-    "near_limit": "本周期已使用 {{percent}}% 的公里配额。",
+    "near_limit": "本周期已使用 {{percent}}% 的公里配额。剩余 {{km}} 公里。",
     "over_limit": "已超出配额 {{km}} 公里（额外费用约 {{cost}}）。",
     "add_expense": "添加为支出",
     "expense_added": "已添加超额里程支出！",

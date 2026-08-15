@@ -417,9 +417,10 @@
     "rental_allowance":  {
                              "extract_title":  "Franquia de km",
                              "extract_usage":  "{{used}} / {{total}} km usados",
+                             "extract_remaining":  "{{km}} km restantes",
                              "period_weekly":  "semanal",
                              "period_monthly":  "mensal",
-                             "near_limit":  "Você já usou {{percent}}% da franquia de km deste período.",
+                             "near_limit":  "Você já usou {{percent}}% da franquia de km deste período. Faltam {{km}} km.",
                              "over_limit":  "Você excedeu a franquia em {{km}} km (~{{cost}} de custo extra).",
                              "add_expense":  "Adicionar como despesa",
                              "expense_added":  "Despesa de km excedente adicionada!",

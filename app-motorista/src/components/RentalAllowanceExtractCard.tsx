@@ -37,7 +37,12 @@ export function RentalAllowanceExtractCard({ status }: { status: RentalAllowance
         <View style={[s.fill, { width: `${pct * 100}%`, backgroundColor: barColor }]} />
       </View>
 
-      <Text style={[s.pctText, { color: barColor }]}>{pctLabel}%</Text>
+      <View style={s.footerRow}>
+        <Text style={s.remainingText} testID="rental-allowance-remaining">
+          {t('rental_allowance.extract_remaining', { km: status.remainingKm.toFixed(0) })}
+        </Text>
+        <Text style={[s.pctText, { color: barColor }]}>{pctLabel}%</Text>
+      </View>
     </View>
   );
 }
@@ -53,5 +58,7 @@ const s = StyleSheet.create({
   usageText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: Spacing.sm },
   track: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
   fill: { height: 8, borderRadius: 4 },
-  pctText: { fontSize: 12, fontWeight: '700', marginTop: 4, textAlign: 'right' },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  remainingText: { color: Colors.textSecondary, fontSize: 12, flexShrink: 1 },
+  pctText: { fontSize: 12, fontWeight: '700' },
 });

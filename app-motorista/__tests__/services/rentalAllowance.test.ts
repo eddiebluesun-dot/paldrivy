@@ -113,4 +113,44 @@ describe('getRentalAllowanceStatus', () => {
     expect(result?.currentOdometerMeters).toBe(18622000);
     expect(result?.usageKm).toBe(290); // unaffected by the 99999000 future-dated row
   });
+
+  // Regression test for a real production bug (2026-08-15, user Eddie): the
+  // "FRANQUIA DE KM" card showed 1358/1500 km used, NOT reflecting a shift
+  // finished earlier that same day that drove the true odometer up to 20739.
+  // Root cause: the shift's END odometer reading was tagged with the shift's
+  // STARTED_at timestamp (not its own ended_at), so on a day with another
+  // same-day reading logged later (e.g. a fuel entry filled_at later that
+  // day), sorting readings by `at` and taking the last one picked the fuel
+  // entry's lower odometer over the shift's true, higher, end-of-day reading.
+  it('uses a shift end odometer as the latest reading when its ended_at is later than a same-day fuel entry, even though the shift STARTED earlier that day', async () => {
+    const vehicle = mockVehicle();
+    const now = new Date('2026-08-15T16:00:00Z');
+
+    (supabase.from as jest.Mock).mockImplementation((table: string) => {
+      if (table === 'shifts') {
+        return makeQueryBuilder([
+          {
+            vehicle_id: 'v1', user_id: 'u1',
+            odometer_start_meters: 20584000, odometer_end_meters: 20739000,
+            started_at: '2026-08-15T08:57:00Z', ended_at: '2026-08-15T15:46:00Z',
+          },
+        ]);
+      }
+      if (table === 'fuel_entries') {
+        return makeQueryBuilder([
+          // Logged mid-shift but with a filled_at timestamp later in the day
+          // than the shift's started_at -- the exact production shape that
+          // let this fuel entry's lower odometer win as "most recent".
+          { vehicle_id: 'v1', user_id: 'u1', odometer_meters: 20586000, filled_at: '2026-08-15T15:00:00Z' },
+        ]);
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const result = await getRentalAllowanceStatus(vehicle, now);
+
+    // Must reflect the finished shift's true end odometer (20739000), not
+    // the fuel entry's lower reading (20586000).
+    expect(result?.currentOdometerMeters).toBe(20739000);
+  });
 });

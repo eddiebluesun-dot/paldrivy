@@ -86,6 +86,8 @@ describe('computeRentalAllowanceStatus', () => {
     expect(status?.isOverLimit).toBe(false);
     // explicit contract-start odometer was available -> baseline is exact, not estimated
     expect(status?.baselineIsEstimated).toBe(false);
+    // 500km allowance - 290km used = 210km left this period
+    expect(status?.remainingKm).toBe(210);
   });
 
   it('falls back to the earliest in-period reading when no explicit start odometer is given (mid-contract signup)', () => {
@@ -122,6 +124,8 @@ describe('computeRentalAllowanceStatus', () => {
     expect(status?.isOverLimit).toBe(true);
     expect(status?.overageKm).toBe(20);
     expect(status?.overageCostCents).toBe(20 * 150);
+    // Already over the allowance -- remainingKm clamps at 0, it never goes negative.
+    expect(status?.remainingKm).toBe(0);
   });
 
   it('weekly allowance resets every Monday: a later calendar week is NOT treated as the "first period" even for a mid-week-started contract', () => {
