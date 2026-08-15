@@ -80,18 +80,28 @@ export function getPeriodBounds(
 export interface RentalAllowanceStatus {
   periodStart: Date;
   periodEnd: Date;
+  periodIndex: number;
+
   allowanceAmountKm: number;
   allowancePeriod: RentalAllowancePeriod;
+
   baselineMeters: number;
-  baselineIsEstimated: boolean; // true when baselineMeters came from the fallback (first in-period reading) rather than an explicit contract odometer
+  baselineIsEstimated: boolean; // true when baselineMeters came from the fallback (earliest-ever reading) rather than an explicit contract odometer
+
   currentOdometerMeters: number;
-  usageKm: number;
-  percentUsed: number;
-  isNearLimit: boolean; // >= 90%
-  isOverLimit: boolean; // >= 100%
-  overageKm: number; // 0 if not over
-  overageCostCents: number; // 0 if not over
-  remainingKm: number; // max(0, allowanceAmountKm - usageKm) -- never negative, use overageKm for that
+
+  periodUsageKm: number; // this period only -- display-only, drives the weekly/monthly bar
+  periodAllowanceKm: number; // alias of allowanceAmountKm, for display symmetry with periodUsageKm
+
+  cumulativeUsageKm: number; // since contract start, never resets
+  cumulativeAllowanceKm: number; // allowanceAmountKm * (periodIndex + 1)
+  balanceKm: number; // cumulativeAllowanceKm - cumulativeUsageKm; signed, positive = banked, negative = debt
+
+  isNearLimit: boolean; // cumulative percent used >= 90%
+  isOverLimit: boolean; // balanceKm < 0
+  overageKm: number; // max(0, -balanceKm)
+  overageCostCents: number;
+  remainingKm: number; // max(0, balanceKm)
 }
 
 export function computeRentalAllowanceStatus(params: {
@@ -107,7 +117,7 @@ export function computeRentalAllowanceStatus(params: {
 
   const bounds = getPeriodBounds(contractStartDate, allowancePeriod, now);
   if (!bounds || allowanceAmountKm == null) return null;
-  const { periodStart, periodEnd } = bounds;
+  const { periodStart, periodEnd, periodIndex } = bounds;
 
   const sorted = [...readings].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const inPeriod = sorted.filter(r => {
@@ -116,43 +126,53 @@ export function computeRentalAllowanceStatus(params: {
   });
   if (inPeriod.length === 0) return null;
 
-  // "First period" = the period that CONTAINS the contract's start date, not
-  // "periodStart exactly equals contractStartDate" -- that equality only
-  // ever held for monthly periods (still contract-day-anchored) or a weekly
-  // contract that happened to start on a Monday. Weekly periods are now
-  // calendar-aligned (see getPeriodBounds), so a contract starting mid-week
-  // has its first periodStart fall BEFORE contractStartDate, not equal to it.
-  const contractStart = new Date(`${contractStartDate}T00:00:00.000Z`);
-  const isFirstPeriod = contractStart >= periodStart && contractStart < periodEnd;
-  const hasExplicitBaseline = isFirstPeriod && contractStartOdometerMeters != null;
-  const baselineMeters = hasExplicitBaseline
-    ? (contractStartOdometerMeters as number)
-    : inPeriod[0].odometerMeters;
-  const baselineIsEstimated = !hasExplicitBaseline;
+  // Contract-lifetime baseline: fixed once, at contract start -- explicit
+  // odometer if the owner provided one, else the earliest reading ever
+  // logged. Reused for EVERY period (never recomputed at a period
+  // boundary), which is what makes cumulativeUsageKm immune to the old
+  // per-period-reset bug that silently dropped km driven across a boundary.
+  const baselineIsEstimated = contractStartOdometerMeters == null;
+  const baselineMeters = baselineIsEstimated
+    ? sorted[0].odometerMeters
+    : (contractStartOdometerMeters as number);
 
   const currentOdometerMeters = sorted[sorted.length - 1].odometerMeters;
-  const usageMeters = Math.max(0, currentOdometerMeters - baselineMeters);
-  const usageKm = usageMeters / 1000;
-  const percentUsed = usageKm / allowanceAmountKm;
 
-  const overageKm = Math.max(0, usageKm - allowanceAmountKm);
+  const cumulativeUsageKm = Math.max(0, currentOdometerMeters - baselineMeters) / 1000;
+  const cumulativeAllowanceKm = allowanceAmountKm * (periodIndex + 1);
+  const balanceKm = cumulativeAllowanceKm - cumulativeUsageKm;
+
+  // periodUsageKm (display-only, drives the weekly/monthly bar): baseline is
+  // the most recent reading at/before this period started, so a gap that
+  // spans the boundary (e.g. a weekend with no shift/fuel entry logged)
+  // shows up on whichever period's bar is currently on screen, instead of
+  // vanishing between two "first reading in period" resets. Falls back to
+  // the pre-existing rule (explicit start odometer for period 0, else the
+  // first in-period reading) only when there's no earlier reading at all --
+  // e.g. a brand-new contract, or a period reached after total inactivity.
+  const priorReadings = sorted.filter(r => new Date(r.at).getTime() <= periodStart.getTime());
+  const isFirstPeriodWithExplicitBaseline = periodIndex === 0 && contractStartOdometerMeters != null;
+  const periodBaselineMeters = priorReadings.length > 0
+    ? priorReadings[priorReadings.length - 1].odometerMeters
+    : isFirstPeriodWithExplicitBaseline
+      ? (contractStartOdometerMeters as number)
+      : inPeriod[0].odometerMeters;
+  const periodUsageKm = Math.max(0, currentOdometerMeters - periodBaselineMeters) / 1000;
+
+  const overageKm = Math.max(0, -balanceKm);
   const overageCostCents = excessRateCents != null ? Math.round(overageKm * excessRateCents) : 0;
-  const remainingKm = Math.max(0, allowanceAmountKm - usageKm);
+  const remainingKm = Math.max(0, balanceKm);
+  const cumulativePercentUsed = cumulativeUsageKm / cumulativeAllowanceKm;
 
   return {
-    periodStart,
-    periodEnd,
-    allowanceAmountKm,
-    allowancePeriod,
-    baselineMeters,
-    baselineIsEstimated,
+    periodStart, periodEnd, periodIndex,
+    allowanceAmountKm, allowancePeriod,
+    baselineMeters, baselineIsEstimated,
     currentOdometerMeters,
-    usageKm,
-    percentUsed,
-    isNearLimit: percentUsed >= 0.9,
-    isOverLimit: percentUsed >= 1,
-    overageKm,
-    overageCostCents,
-    remainingKm,
+    periodUsageKm, periodAllowanceKm: allowanceAmountKm,
+    cumulativeUsageKm, cumulativeAllowanceKm, balanceKm,
+    isNearLimit: cumulativePercentUsed >= 0.9,
+    isOverLimit: balanceKm < 0,
+    overageKm, overageCostCents, remainingKm,
   };
 }
