@@ -268,7 +268,7 @@ function AddExpenseModal({
   const [description, setDescription] = useState('');
   const [recurring, setRecurring] = useState(false);
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
-  const [endsAt, setEndsAt] = useState('');
+  const [endsAt, setEndsAt] = useState<string | null>(null);
   const [installments, setInstallments] = useState('1');
   const [fuelType, setFuelType] = useState<FuelType>(defaultFuelType);
   const [fuelTotalStr, setFuelTotalStr] = useState('');
@@ -292,7 +292,7 @@ function AddExpenseModal({
   function resetForm() {
     setCategory(EXPENSE_CATEGORIES[0]); setAmount(''); setDate(todayIso());
     setDescription(''); setRecurring(false); setFrequency('monthly');
-    setEndsAt('');
+    setEndsAt(null);
     setInstallments('1');
     setFuelType(defaultFuelType); setFuelTotalStr(''); setFuelUnitPrice(''); setError(null);
   }
@@ -300,8 +300,8 @@ function AddExpenseModal({
 
   async function handleSave() {
     setError(null);
-    const trimmedDate = date.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) { setError(t('common.required')); return; }
+    const trimmedDate = date;
+    if (!trimmedDate) { setError(t('common.required')); return; }
     if (isFuel) {
       if (fuelTotalNum <= 0 || fuelUnitPriceNum <= 0) { setError(t('common.required')); return; }
     } else {
@@ -324,7 +324,7 @@ function AddExpenseModal({
         const desc = description.trim() || null;
 
         if (n === 1) {
-          await addExpense({ user_id: userId, category, amount_cents: totalCents, expense_date: trimmedDate, description: desc, recurring, recurring_frequency: recurring ? frequency : null, ends_at: recurring ? parseFlexibleDateInput(endsAt) : null });
+          await addExpense({ user_id: userId, category, amount_cents: totalCents, expense_date: trimmedDate, description: desc, recurring, recurring_frequency: recurring ? frequency : null, ends_at: recurring ? endsAt : null });
         } else {
           const perCents = Math.floor(totalCents / n);
           const remainder = totalCents - perCents * n;
@@ -421,15 +421,12 @@ function AddExpenseModal({
                         items={RECURRING_FREQUENCIES.map(f => ({ label: t(`expense.frequency_${f}`), value: f }))}
                       />
                       <Text style={styles.label}>{t('expense.ends_at')}</Text>
-                      <TextInput
-                        style={styles.input}
+                      <DateField
                         value={endsAt}
-                        onChangeText={setEndsAt}
-                        placeholder="AAAA-MM-DD"
-                        placeholderTextColor={Colors.textSecondary}
-                        autoCapitalize="none"
-                        keyboardType="numbers-and-punctuation"
-                        maxLength={10}
+                        onChange={setEndsAt}
+                        placeholder={t('common.select_date')}
+                        accessibilityLabel={t('expense.ends_at')}
+                        testID="add-expense-ends-at"
                       />
                       <Text style={styles.hint}>{t('expense.ends_at_hint')}</Text>
                     </>
@@ -440,7 +437,7 @@ function AddExpenseModal({
           )}
 
           <Text style={styles.label}>{t('expense.date')}</Text>
-          <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder={t('expense.date_placeholder')} placeholderTextColor={Colors.textSecondary} autoCapitalize="none" keyboardType="numbers-and-punctuation" maxLength={10} />
+          <DateField value={date} onChange={setDate} placeholder={t('common.select_date')} accessibilityLabel={t('expense.date')} testID="add-expense-date" />
 
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
           <TouchableOpacity style={[styles.primaryButton, saving && styles.buttonDisabled]} onPress={handleSave} disabled={saving}>
