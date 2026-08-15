@@ -21,8 +21,8 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '@/src/lib/supabase';
 import { Colors, Radius, Spacing } from '@/src/theme';
 import { decimalToCents, formatMoney } from '@/src/utils/currency';
-import { parseFlexibleDateInput } from '@/src/utils/dateInput';
 import { displayToMl } from '@/src/utils/units';
+import { DateField } from '@/src/components/DateField';
 import { addExpense, deleteExpense, getExpenses, updateExpense } from '@/src/services/expenses';
 import { addFuelEntry } from '@/src/services/fuel';
 import type { FuelType } from '@/src/services/fuel';
@@ -114,22 +114,21 @@ function ExpenseForm({
   const [frequency, setFrequency] = useState<RecurringFrequency>(
     (initialValues as any)?.recurring_frequency ?? 'monthly'
   );
-  const [endsAt, setEndsAt] = useState((initialValues as any)?.ends_at ?? '');
+  const [endsAt, setEndsAt] = useState<string | null>((initialValues as any)?.ends_at ?? null);
 
   function handleSave() {
-    const trimmedDate = date.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) return;
+    if (!date) return;
     const amountNum = parseFloat(amount.replace(',', '.'));
     if (isNaN(amountNum) || amountNum <= 0) return;
 
     onSave({
       category,
       amount_cents: decimalToCents(amountNum),
-      expense_date: trimmedDate,
+      expense_date: date,
       description: description.trim() !== '' ? description.trim() : null,
       recurring,
       recurring_frequency: recurring ? frequency : null,
-      ends_at: recurring ? parseFlexibleDateInput(endsAt) : null,
+      ends_at: recurring ? endsAt : null,
     });
   }
 
@@ -195,30 +194,24 @@ function ExpenseForm({
               }))}
             />
             <Text style={styles.label}>{t('expense.ends_at')}</Text>
-            <TextInput
-              style={styles.input}
+            <DateField
               value={endsAt}
-              onChangeText={setEndsAt}
-              placeholder="AAAA-MM-DD"
-              placeholderTextColor={Colors.textSecondary}
-              autoCapitalize="none"
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
+              onChange={setEndsAt}
+              placeholder={t('common.select_date')}
+              accessibilityLabel={t('expense.ends_at')}
+              testID="expense-form-ends-at"
             />
             <Text style={styles.hint}>{t('expense.ends_at_hint')}</Text>
           </>
         )}
 
         <Text style={styles.label}>{t('expense.date')}</Text>
-        <TextInput
-          style={styles.input}
+        <DateField
           value={date}
-          onChangeText={setDate}
-          placeholder={t('expense.date_placeholder')}
-          placeholderTextColor={Colors.textSecondary}
-          autoCapitalize="none"
-          keyboardType="numbers-and-punctuation"
-          maxLength={10}
+          onChange={setDate}
+          placeholder={t('common.select_date')}
+          accessibilityLabel={t('expense.date')}
+          testID="expense-form-date"
         />
 
         {error !== null && <Text style={styles.errorText}>{error}</Text>}
