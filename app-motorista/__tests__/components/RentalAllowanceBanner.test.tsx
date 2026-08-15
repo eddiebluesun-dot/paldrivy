@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen } from '@testing-library/react-native';
 import { RentalAllowanceBanner } from '../../src/components/RentalAllowanceBanner';
 import type { RentalAllowanceStatus } from '../../src/utils/rentalKmAllowanceUtils';
 
@@ -23,9 +23,12 @@ jest.mock('react-i18next', () => ({
 
 function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllowanceStatus {
   return {
-    periodStart: new Date('2026-08-05'), periodEnd: new Date('2026-08-12'),
+    periodStart: new Date('2026-08-05'), periodEnd: new Date('2026-08-12'), periodIndex: 0,
+    allowanceAmountKm: 500, allowancePeriod: 'weekly',
     baselineMeters: 18332000, baselineIsEstimated: false, currentOdometerMeters: 18622000,
-    usageKm: 290, percentUsed: 0.58, isNearLimit: false, isOverLimit: false,
+    periodUsageKm: 290, periodAllowanceKm: 500,
+    cumulativeUsageKm: 290, cumulativeAllowanceKm: 500, balanceKm: 210,
+    isNearLimit: false, isOverLimit: false,
     overageKm: 0, overageCostCents: 0, remainingKm: 210,
     ...overrides,
   };
@@ -33,73 +36,68 @@ function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllow
 
 describe('RentalAllowanceBanner', () => {
   it('renders nothing when status is null', () => {
-    const { toJSON } = render(<RentalAllowanceBanner status={null} onAddExpense={jest.fn()} />);
+    const { toJSON } = render(<RentalAllowanceBanner status={null} />);
     expect(toJSON()).toBeNull();
   });
 
   it('renders nothing below the near-limit threshold', () => {
-    const { toJSON } = render(<RentalAllowanceBanner status={makeStatus()} onAddExpense={jest.fn()} />);
+    const { toJSON } = render(<RentalAllowanceBanner status={makeStatus()} />);
     expect(toJSON()).toBeNull();
   });
 
-  it('shows a warning banner at >=90%', () => {
-    render(<RentalAllowanceBanner status={makeStatus({ isNearLimit: true, percentUsed: 0.92 })} onAddExpense={jest.fn()} />);
+  it('shows a warning banner at >=90% CUMULATIVE usage', () => {
+    render(<RentalAllowanceBanner status={makeStatus({
+      isNearLimit: true, cumulativeUsageKm: 460, cumulativeAllowanceKm: 500,
+    })} />);
     expect(screen.getByTestId('rental-allowance-warning')).toBeTruthy();
   });
 
-  it('shows the remaining km on the warning banner, not just the percentage used', () => {
+  it('shows the remaining (banked) km on the warning banner, not just the percentage used', () => {
     render(<RentalAllowanceBanner
-      status={makeStatus({ isNearLimit: true, percentUsed: 0.92, remainingKm: 142 })}
-      onAddExpense={jest.fn()}
+      status={makeStatus({ isNearLimit: true, cumulativeUsageKm: 460, cumulativeAllowanceKm: 500, remainingKm: 142 })}
     />);
     expect(screen.getByText(/142/)).toBeTruthy();
   });
 
-  it('shows an over-limit banner with an add-expense button at >=100%', () => {
-    const onAddExpense = jest.fn();
+  it('shows an over-limit banner with the estimated cost of the accumulated debt at >=100% CUMULATIVE usage, with no action button', () => {
     render(<RentalAllowanceBanner
-      status={makeStatus({ isNearLimit: true, isOverLimit: true, percentUsed: 1.04, overageKm: 20, overageCostCents: 3000 })}
-      onAddExpense={onAddExpense}
+      status={makeStatus({
+        isNearLimit: true, isOverLimit: true, balanceKm: -20, overageKm: 20, overageCostCents: 3000,
+      })}
     />);
-    const button = screen.getByRole('button');
-    fireEvent.press(button);
-    expect(onAddExpense).toHaveBeenCalledWith(3000);
+    expect(screen.getByTestId('rental-allowance-over')).toBeTruthy();
+    expect(screen.getByText(/20/)).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('does not alert on a single heavy period when the cumulative balance still covers it', () => {
+    // periodUsageKm/periodAllowanceKm alone would look "over" (600/500), but
+    // isNearLimit/isOverLimit are driven by the cumulative fields, which the
+    // caller (computeRentalAllowanceStatus) would have computed as healthy.
+    const { toJSON } = render(<RentalAllowanceBanner status={makeStatus({
+      periodUsageKm: 600, periodAllowanceKm: 500, isNearLimit: false, isOverLimit: false,
+    })} />);
+    expect(toJSON()).toBeNull();
   });
 
   it('shows a baseline-estimated disclosure on the warning banner when the baseline was estimated', () => {
     render(<RentalAllowanceBanner
-      status={makeStatus({ isNearLimit: true, baselineIsEstimated: true, percentUsed: 0.92 })}
-      onAddExpense={jest.fn()}
+      status={makeStatus({ isNearLimit: true, baselineIsEstimated: true })}
     />);
     expect(screen.getByTestId('rental-allowance-baseline-estimated')).toBeTruthy();
   });
 
   it('shows a baseline-estimated disclosure on the over-limit banner when the baseline was estimated', () => {
     render(<RentalAllowanceBanner
-      status={makeStatus({ isNearLimit: true, isOverLimit: true, baselineIsEstimated: true, percentUsed: 1.04, overageKm: 20, overageCostCents: 3000 })}
-      onAddExpense={jest.fn()}
+      status={makeStatus({ isNearLimit: true, isOverLimit: true, baselineIsEstimated: true, balanceKm: -20, overageKm: 20, overageCostCents: 3000 })}
     />);
     expect(screen.getByTestId('rental-allowance-baseline-estimated')).toBeTruthy();
   });
 
   it('does not show a baseline-estimated disclosure when the baseline came from an explicit odometer', () => {
     render(<RentalAllowanceBanner
-      status={makeStatus({ isNearLimit: true, isOverLimit: true, baselineIsEstimated: false, percentUsed: 1.04, overageKm: 20, overageCostCents: 3000 })}
-      onAddExpense={jest.fn()}
+      status={makeStatus({ isNearLimit: true, isOverLimit: true, baselineIsEstimated: false, balanceKm: -20, overageKm: 20, overageCostCents: 3000 })}
     />);
     expect(screen.queryByTestId('rental-allowance-baseline-estimated')).toBeNull();
-  });
-
-  it('relabels the action as already-added and skips onAddExpense when alreadyLogged is true', () => {
-    const onAddExpense = jest.fn();
-    render(<RentalAllowanceBanner
-      status={makeStatus({ isNearLimit: true, isOverLimit: true, percentUsed: 1.04, overageKm: 20, overageCostCents: 3000 })}
-      onAddExpense={onAddExpense}
-      alreadyLogged
-    />);
-    const button = screen.getByRole('button');
-    expect(button.props.accessibilityLabel).toBe('Despesa já adicionada');
-    fireEvent.press(button);
-    expect(onAddExpense).not.toHaveBeenCalled();
   });
 });

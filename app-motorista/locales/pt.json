@@ -422,12 +422,9 @@
                              "extract_balance_negative":  "{{km}} km em débito",
                              "period_weekly":  "semanal",
                              "period_monthly":  "mensal",
-                             "near_limit":  "Você já usou {{percent}}% da franquia de km deste período. Faltam {{km}} km.",
-                             "over_limit":  "Você excedeu a franquia em {{km}} km (~{{cost}} de custo extra).",
-                             "add_expense":  "Adicionar como despesa",
-                             "expense_added":  "Despesa de km excedente adicionada!",
-                             "baseline_estimated":  "Contagem iniciada a partir do seu primeiro registro neste período.",
-                             "expense_already_added":  "Despesa já adicionada"
+                             "near_limit":  "Você já usou {{percent}}% da sua franquia acumulada. Restam {{km}} km de saldo.",
+                             "over_limit":  "Você está com {{km}} km de débito acumulado (~{{cost}} estimado).",
+                             "baseline_estimated":  "Contagem iniciada a partir do seu primeiro registro neste período."
                          },
     "more":  {
                  "title":  "Mais",

@@ -356,12 +356,9 @@
     "extract_balance_negative": "超支 {{km}} 公里",
     "period_weekly": "每周",
     "period_monthly": "每月",
-    "near_limit": "本周期已使用 {{percent}}% 的公里配额。剩余 {{km}} 公里。",
-    "over_limit": "已超出配额 {{km}} 公里（额外费用约 {{cost}}）。",
-    "add_expense": "添加为支出",
-    "expense_added": "已添加超额里程支出！",
-    "baseline_estimated": "本周期的公里数统计从您的第一条记录开始。",
-    "expense_already_added": "支出已添加"
+    "near_limit": "您已使用累计配额的 {{percent}}%。剩余 {{km}} 公里余额。",
+    "over_limit": "您累计超出 {{km}} 公里（预计约 {{cost}}）。",
+    "baseline_estimated": "本周期的公里数统计从您的第一条记录开始。"
   },
   "more": {
     "title": "更多",

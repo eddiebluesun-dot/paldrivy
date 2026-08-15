@@ -422,12 +422,9 @@
                              "extract_balance_negative":  "{{km}} km en déficit",
                              "period_weekly":  "semanal",
                              "period_monthly":  "mensual",
-                             "near_limit":  "Ya usaste el {{percent}}% de la franquicia de km de este período. Quedan {{km}} km.",
-                             "over_limit":  "Superaste la franquicia en {{km}} km (~{{cost}} de costo extra).",
-                             "add_expense":  "Agregar como gasto",
-                             "expense_added":  "¡Gasto de km excedente agregado!",
-                             "baseline_estimated":  "El conteo comenzó a partir de tu primer registro en este período.",
-                             "expense_already_added":  "Gasto ya agregado"
+                             "near_limit":  "Ya usaste el {{percent}}% de tu franquicia acumulada. Quedan {{km}} km de saldo.",
+                             "over_limit":  "Tienes {{km}} km de déficit acumulado (~{{cost}} estimado).",
+                             "baseline_estimated":  "El conteo comenzó a partir de tu primer registro en este período."
                          },
     "more":  {
                  "title":  "Más",
