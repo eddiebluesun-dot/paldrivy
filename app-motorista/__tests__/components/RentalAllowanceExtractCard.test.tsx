@@ -23,10 +23,12 @@ jest.mock('react-i18next', () => ({
 
 function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllowanceStatus {
   return {
-    periodStart: new Date('2026-08-10'), periodEnd: new Date('2026-08-17'),
+    periodStart: new Date('2026-08-10'), periodEnd: new Date('2026-08-17'), periodIndex: 1,
     allowanceAmountKm: 1500, allowancePeriod: 'weekly',
     baselineMeters: 19228000, baselineIsEstimated: true, currentOdometerMeters: 20739000,
-    usageKm: 1358, percentUsed: 1358 / 1500, isNearLimit: true, isOverLimit: false,
+    periodUsageKm: 1358, periodAllowanceKm: 1500,
+    cumulativeUsageKm: 2858, cumulativeAllowanceKm: 3000, balanceKm: 142,
+    isNearLimit: true, isOverLimit: false,
     overageKm: 0, overageCostCents: 0, remainingKm: 142,
     ...overrides,
   };
@@ -38,21 +40,21 @@ describe('RentalAllowanceExtractCard', () => {
     expect(toJSON()).toBeNull();
   });
 
-  it('shows used/total km and percentage', () => {
+  it('shows used/total km and percentage for THIS PERIOD, not the cumulative total', () => {
     render(<RentalAllowanceExtractCard status={makeStatus()} />);
     expect(screen.getByText('1358 / 1500 km usados')).toBeTruthy();
     expect(screen.getByText('91%')).toBeTruthy();
   });
 
-  it('also shows the remaining km, not just used/total and percentage', () => {
-    render(<RentalAllowanceExtractCard status={makeStatus({ remainingKm: 142 })} />);
-    expect(screen.getByTestId('rental-allowance-remaining').props.children).toBe('142 km restantes');
+  it('shows a positive balance as banked km', () => {
+    render(<RentalAllowanceExtractCard status={makeStatus({ balanceKm: 142 })} />);
+    expect(screen.getByTestId('rental-allowance-balance').props.children).toBe('142 km de saldo');
   });
 
-  it('shows 0 km remaining, not a negative number, once the allowance is exceeded', () => {
+  it('shows a negative balance as debt, without a minus sign leaking into the label', () => {
     render(<RentalAllowanceExtractCard status={makeStatus({
-      usageKm: 1520, percentUsed: 1520 / 1500, isOverLimit: true, remainingKm: 0,
+      periodUsageKm: 1520, isOverLimit: true, balanceKm: -11,
     })} />);
-    expect(screen.getByTestId('rental-allowance-remaining').props.children).toBe('0 km restantes');
+    expect(screen.getByTestId('rental-allowance-balance').props.children).toBe('11 km em débito');
   });
 });

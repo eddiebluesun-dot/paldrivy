@@ -418,6 +418,8 @@
                              "extract_title":  "Km allowance",
                              "extract_usage":  "{{used}} / {{total}} km used",
                              "extract_remaining":  "{{km}} km remaining",
+                             "extract_balance_positive":  "{{km}} km banked",
+                             "extract_balance_negative":  "{{km}} km over",
                              "period_weekly":  "weekly",
                              "period_monthly":  "monthly",
                              "near_limit":  "You've used {{percent}}% of this period's km allowance. {{km}} km left.",

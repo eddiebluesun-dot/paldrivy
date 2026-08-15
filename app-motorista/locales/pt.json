@@ -418,6 +418,8 @@
                              "extract_title":  "Franquia de km",
                              "extract_usage":  "{{used}} / {{total}} km usados",
                              "extract_remaining":  "{{km}} km restantes",
+                             "extract_balance_positive":  "{{km}} km de saldo",
+                             "extract_balance_negative":  "{{km}} km em débito",
                              "period_weekly":  "semanal",
                              "period_monthly":  "mensal",
                              "near_limit":  "Você já usou {{percent}}% da franquia de km deste período. Faltam {{km}} km.",

@@ -352,6 +352,8 @@
     "extract_title": "Forfait km",
     "extract_usage": "{{used}} / {{total}} km utilisés",
     "extract_remaining": "{{km}} km restants",
+    "extract_balance_positive": "{{km}} km de solde",
+    "extract_balance_negative": "{{km}} km de déficit",
     "period_weekly": "hebdomadaire",
     "period_monthly": "mensuel",
     "near_limit": "Vous avez déjà utilisé {{percent}} % du forfait km de cette période. Il reste {{km}} km.",
