@@ -98,13 +98,17 @@ describe('computeRentalAllowanceStatus', () => {
     expect(status?.periodIndex).toBe(0);
     expect(status?.periodUsageKm).toBe(290);
     expect(status?.cumulativeUsageKm).toBe(290);
-    expect(status?.cumulativeAllowanceKm).toBe(500); // allowanceAmountKm * (periodIndex 0 + 1)
-    expect(status?.balanceKm).toBe(210);
+    // Contract started Wed 2026-08-05, mid-week -- weekly period 0 is the
+    // calendar week [Mon 2026-08-03, Mon 2026-08-10), but only 5 of its 7
+    // days (Wed-Sun) are actual contract days, so period 0's allowance is
+    // prorated: 500 * 5/7 = 2500/7 ~= 357.14km, not the full 500km.
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(2500 / 7);
+    expect(status?.balanceKm).toBeCloseTo(2500 / 7 - 290);
     expect(status?.isNearLimit).toBe(false);
     expect(status?.isOverLimit).toBe(false);
     // explicit contract-start odometer was available -> baseline is exact, not estimated
     expect(status?.baselineIsEstimated).toBe(false);
-    expect(status?.remainingKm).toBe(210);
+    expect(status?.remainingKm).toBeCloseTo(2500 / 7 - 290);
   });
 
   it('falls back to the earliest-ever reading as the cumulative baseline when no explicit start odometer is given (mid-contract signup)', () => {
@@ -139,10 +143,14 @@ describe('computeRentalAllowanceStatus', () => {
       readings: heavyReadings,
       now: new Date('2026-08-06T19:00:00Z'),
     });
+    // Contract started Wed 2026-08-05 -- weekly period 0 is prorated to
+    // 5/7 of the nominal 500km allowance (2500/7 ~= 357.14km), same reasoning
+    // as the first test above, so the overage here is bigger than a naive
+    // "520 - 500 = 20km" would suggest.
     expect(status?.isOverLimit).toBe(true);
-    expect(status?.balanceKm).toBe(-20);
-    expect(status?.overageKm).toBe(20);
-    expect(status?.overageCostCents).toBe(20 * 150);
+    expect(status?.balanceKm).toBeCloseTo(2500 / 7 - 520);
+    expect(status?.overageKm).toBeCloseTo(520 - 2500 / 7);
+    expect(status?.overageCostCents).toBe(Math.round((520 - 2500 / 7) * 150));
     // Already over the allowance -- remainingKm clamps at 0, it never goes negative.
     expect(status?.remainingKm).toBe(0);
   });
@@ -180,10 +188,13 @@ describe('computeRentalAllowanceStatus', () => {
     // see (period 2's baseline would have reset to 19000000, silently
     // discarding the distance between 18332000 and 19000000).
     expect(status?.cumulativeUsageKm).toBe(768);
-    expect(status?.cumulativeAllowanceKm).toBe(1000); // 500 * (periodIndex 1 + 1)
-    expect(status?.balanceKm).toBe(232);
+    // Period 0 (contract-start week) is prorated to 5/7 of 500km (2500/7),
+    // same as the earlier tests -- period 1 on top of it is a FULL period
+    // (no proration past the first one): 2500/7 + 500 = 6000/7 ~= 857.14km.
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(6000 / 7);
+    expect(status?.balanceKm).toBeCloseTo(6000 / 7 - 768);
     expect(status?.isOverLimit).toBe(false);
-    expect(status?.isNearLimit).toBe(false); // 768/1000 = 76.8%, under 90%
+    expect(status?.isNearLimit).toBe(false); // 768/(6000/7) = 89.6%, under 90%
   });
 
   it('regression: km driven in the gap between two periods (no shift/fuel entry logged) is never lost, and shows up on the bar of the period where the bridging reading landed', () => {
@@ -256,6 +267,53 @@ describe('computeRentalAllowanceStatus', () => {
     expect(status?.balanceKm).toBe(3000);
     expect(status?.isOverLimit).toBe(false);
     expect(status?.isNearLimit).toBe(false); // 3000/6000 = 50%
+  });
+
+  it('regression: a mid-week contract start date does not grant a permanent bonus from the calendar-aligned weekly period 0 (production case, Eddie, 2026-08-15)', () => {
+    // Contract started Wed 2026-08-05 with baseline odometer 18332000. "now"
+    // is Sat 2026-08-15 -> periodIndex 1 (2nd calendar week). Current
+    // odometer 20739000 -> 2407km driven since contract start. Before this
+    // fix, cumulativeAllowanceKm was a flat allowanceAmountKm*(periodIndex+1)
+    // = 1500*2 = 3000km, which silently gave the FULL 1500km for period 0
+    // even though only 5 of its 7 days (Wed-Sun) were actual contract days --
+    // a permanent ~429km bonus (2 days x ~214km/day) baked into the balance
+    // forever, since nothing else ever resets it. Correct: period 0 prorated
+    // to 5/7 of 1500km (7500/7 ~= 1071.43km) + one full period 1 (1500km) =
+    // 18000/7 ~= 2571.43km.
+    const status = computeRentalAllowanceStatus({
+      contractStartDate: '2026-08-05',
+      contractStartOdometerMeters: 18332000,
+      allowancePeriod: 'weekly',
+      allowanceAmountKm: 1500,
+      excessRateCents: 150,
+      readings: [{ odometerMeters: 20739000, at: '2026-08-15T10:00:00Z' }],
+      now: new Date('2026-08-15T16:00:00Z'),
+    });
+    expect(status?.periodIndex).toBe(1);
+    expect(status?.cumulativeUsageKm).toBe(2407);
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(18000 / 7); // ~2571.43km, NOT 3000km
+    expect(status?.balanceKm).toBeCloseTo(18000 / 7 - 2407); // ~164.43km, NOT 593km
+  });
+
+  it('monthly periods are never partial at period 0 (periodStart already equals contractStartDate), so the first-period proration is a no-op ratio of 1', () => {
+    // Unlike weekly (calendar-Monday-aligned), monthly period 0 always starts
+    // exactly ON contractStartDate itself (see getPeriodBounds), so there is
+    // no gap to prorate -- cumulativeAllowanceKm stays the plain
+    // allowanceAmountKm*(periodIndex+1) formula, unchanged by this fix.
+    const status = computeRentalAllowanceStatus({
+      contractStartDate: '2026-08-05',
+      contractStartOdometerMeters: 0,
+      allowancePeriod: 'monthly',
+      allowanceAmountKm: 1000,
+      excessRateCents: 100,
+      readings: [{ odometerMeters: 2_500_000, at: '2026-09-10T12:00:00Z' }],
+      now: new Date('2026-09-10T12:00:00Z'),
+    });
+    expect(status?.periodIndex).toBe(1); // 2026-09-05 to 2026-10-05
+    expect(status?.cumulativeUsageKm).toBe(2500);
+    expect(status?.cumulativeAllowanceKm).toBe(2000); // 1000 * (periodIndex 1 + 1), exact -- no proration
+    expect(status?.balanceKm).toBe(-500);
+    expect(status?.isOverLimit).toBe(true);
   });
 
   it('returns null for unlimited allowance (no tracking)', () => {

@@ -94,7 +94,7 @@ export interface RentalAllowanceStatus {
   periodAllowanceKm: number; // alias of allowanceAmountKm, for display symmetry with periodUsageKm
 
   cumulativeUsageKm: number; // since contract start, never resets
-  cumulativeAllowanceKm: number; // allowanceAmountKm * (periodIndex + 1)
+  cumulativeAllowanceKm: number; // first period prorated by real contract days within it (weekly periods are calendar-Monday-aligned, so period 0 can start before the contract did) + allowanceAmountKm * periodIndex full periods after it
   balanceKm: number; // cumulativeAllowanceKm - cumulativeUsageKm; signed, positive = banked, negative = debt
 
   isNearLimit: boolean; // cumulative percent used >= 90%
@@ -139,7 +139,25 @@ export function computeRentalAllowanceStatus(params: {
   const currentOdometerMeters = sorted[sorted.length - 1].odometerMeters;
 
   const cumulativeUsageKm = Math.max(0, currentOdometerMeters - baselineMeters) / 1000;
-  const cumulativeAllowanceKm = allowanceAmountKm * (periodIndex + 1);
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const contractStart = new Date(`${contractStartDate}T00:00:00.000Z`);
+  // The period containing contractStartDate is always periodIndex 0 by construction
+  // (see getPeriodBounds's own tests) -- reuse it to find exactly how many of its
+  // days actually fall under the contract, since a weekly period is calendar-Monday-
+  // aligned and can start before the contract itself did (e.g. contract started
+  // Wednesday -> period 0 runs Monday-Sunday, but only 5 of its 7 days are "real"
+  // contract days). Monthly periods never have this gap (period 0's periodStart
+  // always equals contractStartDate exactly), so this is a no-op ratio of 1 there.
+  const firstPeriodBounds = getPeriodBounds(contractStartDate, allowancePeriod, contractStart)!;
+  const firstPeriodLengthDays = (firstPeriodBounds.periodEnd.getTime() - firstPeriodBounds.periodStart.getTime()) / DAY_MS;
+  const daysUnderContractInFirstPeriod = (firstPeriodBounds.periodEnd.getTime() - contractStart.getTime()) / DAY_MS;
+  const firstPeriodAllowanceKm = allowanceAmountKm * (daysUnderContractInFirstPeriod / firstPeriodLengthDays);
+  // Only the first (possibly partial) period is prorated -- every full period
+  // after it still grants the whole nominal allowance in one shot, per Eddie's
+  // explicit call: no general daily proration, just no permanent "bonus" from
+  // a calendar-aligned period 0 that started mid-week.
+  const cumulativeAllowanceKm = firstPeriodAllowanceKm + allowanceAmountKm * periodIndex;
   const balanceKm = cumulativeAllowanceKm - cumulativeUsageKm;
 
   // periodUsageKm (display-only, drives the weekly/monthly bar): baseline is
