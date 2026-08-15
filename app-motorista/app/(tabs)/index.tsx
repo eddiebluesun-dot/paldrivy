@@ -42,7 +42,7 @@ import { RentalAllowanceExtractCard } from '@/src/components/RentalAllowanceExtr
 import { fireRentalAllowanceNearLimitNotification } from '@/src/services/notifications';
 import { getRecurringExpenseBreakdownForDay } from '@/src/services/recurringExpenseAllocation';
 import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
-import { addExpense, hasExpenseSince } from '@/src/services/expenses';
+import { addExpense } from '@/src/services/expenses';
 import type { RentalAllowanceStatus } from '@/src/utils/rentalKmAllowanceUtils';
 import type { Shift, Vehicle } from '@/src/types';
 
@@ -1331,8 +1331,6 @@ export default function DashboardScreen() {
   const [weekPlatformBreakdown, setWeekPlatformBreakdown] = useState<PlatformItem[]>([]);
   const [dayPlatformBreakdown, setDayPlatformBreakdown] = useState<PlatformItem[]>([]);
   const [rentalStatus, setRentalStatus] = useState<RentalAllowanceStatus | null>(null);
-  const [overageExpenseAdded, setOverageExpenseAdded] = useState(false);
-  const [overageAlreadyLogged, setOverageAlreadyLogged] = useState(false);
 
   function refreshNotifCount() {
     getInAppNotifications().then(ns => setNotifCount(ns.length)).catch(() => {});
@@ -1367,19 +1365,6 @@ export default function DashboardScreen() {
         return null;
       }
     })();
-    // Only over the limit does the "Adicionar como despesa" button (and its
-    // duplicate-guard) matter, so this stays a no-op query the rest of the
-    // time. Failure here must not block the dashboard load either -- worst
-    // case the button is offered again and handleAddOverageExpense's own
-    // guard catches the duplicate before insert.
-    const overageAlreadyLoggedP: Promise<boolean> = rentalStatusP.then(async status => {
-      if (!status || !status.isOverLimit) return false;
-      try {
-        return await hasExpenseSince(uid, 'km_excedente', status.periodStart.toISOString().slice(0, 10));
-      } catch {
-        return false;
-      }
-    });
     // getConsumptionTrend needs the RESOLVED vehicle id, not raw
     // profile?.vehicle_id -- when that's null (no vehicle explicitly picked,
     // the common case for a single-vehicle driver), passing null skips the
@@ -1396,7 +1381,7 @@ export default function DashboardScreen() {
         return null;
       }
     })();
-    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, weekPlatforms, dayPlatforms, rentalStatusData, overageAlreadyLoggedData] = await Promise.all([
+    const [todaySummary, buckets, monthly, active, goalData, consumption, vehicleData, mTotals, wTotals, history, streakCount, mood, prevGross, prevWeekGrossData, platforms, weekPlatforms, dayPlatforms, rentalStatusData] = await Promise.all([
       getTodaySummary(uid),
       getWeekBuckets(uid),
       getMonthlyBuckets(uid),
@@ -1422,7 +1407,6 @@ export default function DashboardScreen() {
       getWeekPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
       getDayPlatformBreakdown(uid).catch(() => [] as PlatformItem[]),
       rentalStatusP,
-      overageAlreadyLoggedP,
     ]);
     setSummary(todaySummary);
     setWeekBuckets(buckets);
@@ -1435,7 +1419,6 @@ export default function DashboardScreen() {
     if (rentalStatusData?.isNearLimit) {
       fireRentalAllowanceNearLimitNotification(i18n.language, rentalStatusData.periodStart.toISOString().slice(0, 10)).catch(() => {});
     }
-    setOverageAlreadyLogged(overageAlreadyLoggedData);
     setMonthlyTotals(mTotals);
     setWeekTotals(wTotals);
     setMonthHistory(history);
@@ -1464,43 +1447,6 @@ export default function DashboardScreen() {
   async function handleGoalSaved() {
     setGoalModalVisible(false);
     if (userId) await loadData(userId).catch(() => {});
-  }
-
-  // "Adicionar como despesa" on the over-limit rental banner: logs the
-  // estimated overage cost as a one-off expense. Success feedback follows
-  // the same inline checkmark-banner pattern as profile_saved/settings_saved
-  // in more.tsx (auto-hides after 3s) rather than introducing a toast lib.
-  // Re-checks for an existing km_excedente expense this period right before
-  // inserting (rather than trusting only the loadData-computed
-  // overageAlreadyLogged flag) so a second tap in the same session -- before
-  // loadData has re-run -- can't still slip a duplicate through.
-  async function handleAddOverageExpense(overageCostCents: number) {
-    if (!userId || !rentalStatus) return;
-    try {
-      const alreadyLogged = await hasExpenseSince(
-        userId, 'km_excedente', rentalStatus.periodStart.toISOString().slice(0, 10)
-      );
-      if (alreadyLogged) {
-        setOverageAlreadyLogged(true);
-        return;
-      }
-      await addExpense({
-        user_id: userId,
-        category: 'km_excedente',
-        amount_cents: overageCostCents,
-        expense_date: new Date().toISOString().slice(0, 10),
-        description: null,
-        recurring: false,
-        recurring_frequency: null,
-        ends_at: null,
-      });
-      setOverageExpenseAdded(true);
-      setTimeout(() => setOverageExpenseAdded(false), 3000);
-      await loadData(userId).catch(() => {});
-    } catch (e) {
-      console.error('addExpense (km_excedente) failed:', e);
-      setFetchError(true);
-    }
   }
 
   // Tapping a day in "Resumo do mês" opens the same full day-detail modal
@@ -1633,18 +1579,9 @@ export default function DashboardScreen() {
 
         <RentalAllowanceBanner
           status={rentalStatus}
-          onAddExpense={handleAddOverageExpense}
-          alreadyLogged={overageAlreadyLogged}
           currencyCode={currencyCode}
           locale={locale}
         />
-
-        {overageExpenseAdded && (
-          <View style={styles.successBanner}>
-            <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-            <Text style={styles.successText}>{t('rental_allowance.expense_added')}</Text>
-          </View>
-        )}
 
         {vehicleInfo && (
           <TourTarget id="vehicle-pill">
@@ -1834,8 +1771,6 @@ const styles = StyleSheet.create({
   avatarText: { color: Colors.onAccent, fontSize: 17, fontWeight: '800' },
   // error
   errorBanner: { color: Colors.error, fontSize: 14, backgroundColor: Colors.errorBg, padding: Spacing.sm, borderRadius: Radius.input, marginBottom: Spacing.md },
-  successBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.successBg, borderRadius: Radius.input, padding: Spacing.sm, marginBottom: Spacing.md, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' },
-  successText: { color: Colors.success, fontSize: 14, fontWeight: '500' },
   // active shift
   activeBanner: {
     backgroundColor: Colors.successBg, borderRadius: Radius.card, padding: Spacing.md,

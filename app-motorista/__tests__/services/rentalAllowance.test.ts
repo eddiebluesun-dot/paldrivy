@@ -79,7 +79,7 @@ describe('getRentalAllowanceStatus', () => {
     });
 
     const result = await getRentalAllowanceStatus(vehicle, new Date('2026-08-07T09:00:00Z'));
-    expect(result?.usageKm).toBe(290); // 18622000 - 18332000
+    expect(result?.cumulativeUsageKm).toBe(290); // 18622000 - 18332000
   });
 
   it('bounds both queries to now, so a future-dated (e.g. mistyped-year) reading is excluded', async () => {
@@ -111,7 +111,7 @@ describe('getRentalAllowanceStatus', () => {
     const result = await getRentalAllowanceStatus(vehicle, now);
 
     expect(result?.currentOdometerMeters).toBe(18622000);
-    expect(result?.usageKm).toBe(290); // unaffected by the 99999000 future-dated row
+    expect(result?.cumulativeUsageKm).toBe(290); // unaffected by the 99999000 future-dated row
   });
 
   // Regression test for a real production bug (2026-08-15, user Eddie): the
