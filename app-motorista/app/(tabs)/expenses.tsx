@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -28,6 +27,7 @@ import { addExpense, deleteExpense, getExpenses, updateExpense } from '@/src/ser
 import { addFuelEntry } from '@/src/services/fuel';
 import type { FuelType } from '@/src/services/fuel';
 import { getVehicles, getEffectiveVehicleId } from '@/src/services/vehicles';
+import { platformConfirm } from '@/src/utils/platformConfirm';
 import { useProfile } from '@/src/hooks/useProfile';
 import type { Expense } from '@/src/services/expenses';
 import { getCalendarHeatmap } from '@/src/services/cockpit';
@@ -651,24 +651,22 @@ export default function ExpensesScreen() {
   }
 
   function handleDelete(entry: Expense) {
-    Alert.alert(
+    // Alert.alert has no implementation on react-native-web -- it silently
+    // no-ops there, which is why the trash-icon delete button did nothing
+    // on the web build. platformConfirm routes web through window.confirm
+    // instead (same fix already applied in shifts.tsx and PostCard.tsx).
+    platformConfirm(
       t('expense.delete_title'),
       t('expense.delete_confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteExpense(entry.id);
-              setEntries(prev => prev.filter(e => e.id !== entry.id));
-            } catch {
-              setScreenError(t('common.error'));
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await deleteExpense(entry.id);
+          setEntries(prev => prev.filter(e => e.id !== entry.id));
+        } catch {
+          setScreenError(t('common.error'));
+        }
+      },
+      { cancelText: t('common.cancel'), confirmText: t('common.delete') }
     );
   }
 
