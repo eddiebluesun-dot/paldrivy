@@ -587,18 +587,18 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
       {/* Consumo Real — merged from FuelConsumptionCard */}
       {/* Scoped to the current month (mês em exercício), matching RESUMO DO
           MÊS above — not consumptionTrend.overall, which is lifetime.
-          km/L stays from current_month (the closed full-tank-segment
-          method — the only sound way to compute real efficiency), but km
-          calculados/combustível/abastec. now read from current_month_totals
-          instead: current_month necessarily excludes the opening fill's
-          liters and any fill not yet closed by a later full-tank, which
-          made those three numbers look wrong against the driver's own count
-          of the month's actual fill-ups (confirmed against real production
-          data: current_month showed 99.7L/4 fills, the true August total
-          was 194.3L/8 fills — current_month was never computing the wrong
-          thing, it was just answering a narrower question than the label
-          implied). */}
-      {(consumptionTrend?.current_month || consumptionTrend?.current_month_totals) && (
+          All 4 tiles now derive from the SAME current_month_totals numbers
+          (km/L médio = km_driven / total_liters), not a mix of two
+          different methods. Originally km/L came from current_month (the
+          closed full-tank-segment method) while the other 3 tiles came from
+          current_month_totals -- individually each number was correct for
+          what it measured, but showing them together made the card
+          internally inconsistent (km/L × combustível ≠ km calculados),
+          which read as "wrong" even though nothing was actually
+          miscalculated (confirmed with real production data both times
+          this was reported). Deriving km/L from the same totals guarantees
+          the four numbers always reconcile with each other by construction. */}
+      {consumptionTrend?.current_month_totals && (
         <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <Ionicons name="speedometer-outline" size={13} color={Colors.textSecondary} />
@@ -607,7 +607,9 @@ function MonthlyChart({ buckets, goalCents, currencyCode, locale, onDayPress, se
           <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
             {[
               {
-                value: consumptionTrend.current_month ? consumptionTrend.current_month.km_per_l.toFixed(1) : '—',
+                value: consumptionTrend.current_month_totals.total_liters > 0
+                  ? (consumptionTrend.current_month_totals.km_driven / consumptionTrend.current_month_totals.total_liters).toFixed(1)
+                  : '—',
                 label: isElectric ? t('dashboard.km_kwh_avg') : t('dashboard.km_avg'),
                 color: Colors.success,
               },
