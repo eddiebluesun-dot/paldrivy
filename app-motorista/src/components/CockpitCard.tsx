@@ -181,7 +181,13 @@ export function CockpitCard({
         <View style={styles.expensesCol}>
           <View style={styles.expensesCard}>
             <Ionicons name="receipt-outline" size={18} color={Colors.error} style={{ marginBottom: 6 }} />
-            <Text style={styles.expensesValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
+            {/* adjustsFontSizeToFit/minimumFontScale have no react-native-web
+                implementation -- on web numberOfLines alone was left to
+                truncate with an ellipsis instead of shrinking, cutting off
+                any value at or past R$ 100,00. Sized the box for the full
+                "R$ xx.xxx,xx" range instead and allowed a 2-line wrap, which
+                works identically on both platforms. */}
+            <Text style={styles.expensesValue} numberOfLines={2}>
               {formatMoney(expensesTodayCents, currencyCode, locale)}
             </Text>
             <Text style={styles.expensesLabel} numberOfLines={1}>DESPESAS</Text>
@@ -310,7 +316,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   expensesCol: {
-    width: 76,
+    width: 92,
     alignItems: 'stretch',
   },
   expensesCard: {
@@ -329,7 +335,8 @@ const styles = StyleSheet.create({
   },
   expensesValue: {
     color: Colors.error,
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
