@@ -1080,14 +1080,14 @@ function WeekBucketItem({ bucket, currencyCode, locale, language, onPress }: {
   const { t } = useTranslation();
   const dayLabel = new Date(bucket.date + 'T12:00:00').toLocaleDateString(language, { weekday: 'short' }).toUpperCase();
   const dayNum = new Date(bucket.date + 'T12:00:00').getDate();
-  const hasData = bucket.net_cents > 0;
+  const hasData = bucket.gross_cents > 0;
   const isToday = bucket.date === new Date().toISOString().slice(0, 10);
   return (
     <TouchableOpacity style={[styles.bucketItem, hasData && styles.bucketItemActive, isToday && styles.bucketItemToday]} onPress={() => onPress(bucket.date)} activeOpacity={0.7}>
       <Text style={[styles.bucketDay, isToday && { color: Colors.accent }]}>{dayLabel}</Text>
       <Text style={[styles.bucketDate, isToday && { color: Colors.accent }]}>{dayNum}</Text>
       <Text style={[styles.bucketNet, hasData && { color: Colors.success }]}>
-        {hasData ? formatMoney(bucket.net_cents, currencyCode, locale) : t('dashboard.no_data')}
+        {hasData ? formatMoney(bucket.gross_cents, currencyCode, locale) : t('dashboard.no_data')}
       </Text>
     </TouchableOpacity>
   );
@@ -1137,9 +1137,18 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
   buckets: DayBucket[]; weekTotals: MonthlyTotals | null; currencyCode: string; locale: string; language: string; distanceUnit: string; onPress: (d: string) => void;
 }) {
   const { t } = useTranslation();
-  const maxVal = Math.max(...buckets.map(b => b.net_cents), 1);
+  // Bars + "SEMANA" chip below both sum gross_cents (bruto), deliberately
+  // matching the RECEITA tile in KillShotCards (which reads gross_cents via
+  // getWeekTotals) so the two always agree. Previously summed net_cents,
+  // which for shifts saved before the legacy calculate-shift edge-function
+  // removal (commit 84f68235, 2026-08-13) can be permanently stuck without
+  // its allocated_fixed_cents deduction applied -- that column is
+  // forward-only and never retroactively recalculated -- silently
+  // understating this total against RECEITA. See getWeekBuckets in
+  // src/services/dashboard.ts for the matching fix on the data side.
+  const maxVal = Math.max(...buckets.map(b => b.gross_cents), 1);
   const today = new Date().toISOString().slice(0, 10);
-  const weekTotal = buckets.reduce((s, b) => s + b.net_cents, 0);
+  const weekTotal = buckets.reduce((s, b) => s + b.gross_cents, 0);
   const distScale = distanceUnit === 'km' ? 1000 : 1609.344;
   const distTotal = weekTotals ? weekTotals.km_meters / distScale : 0;
   // Bruto/km here, not líquido/km -- líquido/km is already shown in "Impacto
@@ -1160,15 +1169,15 @@ function WeekBarChart({ buckets, weekTotals, currencyCode, locale, language, dis
       <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'center' }}>
         {buckets.map(b => {
           const isToday = b.date === today;
-          const hasData = b.net_cents > 0;
-          const barPct = hasData ? Math.max(b.net_cents / maxVal, 0.06) : 0.04;
+          const hasData = b.gross_cents > 0;
+          const barPct = hasData ? Math.max(b.gross_cents / maxVal, 0.06) : 0.04;
           const barColor = isToday ? Colors.accent : Colors.success;
           const dayLabel = new Date(b.date + 'T12:00:00').toLocaleDateString(language, { weekday: 'short' }).replace('.', '').toUpperCase().slice(0, 3);
           const dayNum = new Date(b.date + 'T12:00:00').getDate();
           return (
             <TouchableOpacity key={b.date} onPress={() => onPress(b.date)} style={{ flex: 1, minWidth: 0, alignItems: 'center' }} activeOpacity={0.7}>
               <Text style={{ fontSize: 7, color: isToday ? Colors.accent : Colors.textSecondary, fontVariant: ['tabular-nums'], fontWeight: isToday ? '700' : '400', marginBottom: 3, minHeight: 11, textAlign: 'center' }} numberOfLines={1} adjustsFontSizeToFit>
-                {hasData ? formatMoney(b.net_cents, currencyCode, locale) : ''}
+                {hasData ? formatMoney(b.gross_cents, currencyCode, locale) : ''}
               </Text>
               <View style={{ width: '100%', height: WBAR_H, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, justifyContent: 'flex-end' }}>
                 {hasData ? (

@@ -16,7 +16,16 @@ export interface DailySummary {
 
 export interface DayBucket {
   date: string;
-  net_cents: number;
+  // Bruto (gross_cents), not líquido -- deliberately matches the RECEITA tile
+  // (KillShotCards, via getWeekTotals' gross_cents) so the week's daily bars
+  // and the "SEMANA" chip always agree with it. Previously summed net_cents,
+  // which for shifts saved before the legacy calculate-shift edge-function
+  // removal (commit 84f68235) can be permanently stuck without its
+  // allocated_fixed_cents deduction applied (that column is forward-only,
+  // never retroactively recalculated) -- silently understating the week
+  // total against RECEITA by whatever recurring-expense share those shifts
+  // were missing.
+  gross_cents: number;
 }
 
 export interface MonthBucket {
@@ -130,7 +139,7 @@ export async function getWeekBuckets(userId: string): Promise<DayBucket[]> {
 
   const { data, error } = await supabase
     .from('shifts')
-    .select('started_at, net_cents')
+    .select('started_at, gross_cents')
     .eq('user_id', userId)
     .gte('started_at', monday.toISOString())
     .lte('started_at', sundayEnd.toISOString())
@@ -139,7 +148,7 @@ export async function getWeekBuckets(userId: string): Promise<DayBucket[]> {
 
   if (error) throw error;
 
-  const rows = (data ?? []) as Array<{ started_at: string; net_cents: number | null }>;
+  const rows = (data ?? []) as Array<{ started_at: string; gross_cents: number | null }>;
 
   const bucketMap = new Map<string, number>();
   for (let i = 0; i < 7; i++) {
@@ -151,11 +160,11 @@ export async function getWeekBuckets(userId: string): Promise<DayBucket[]> {
   for (const row of rows) {
     const dateKey = toLocalDateString(new Date(row.started_at));
     if (bucketMap.has(dateKey)) {
-      bucketMap.set(dateKey, (bucketMap.get(dateKey) ?? 0) + (row.net_cents ?? 0));
+      bucketMap.set(dateKey, (bucketMap.get(dateKey) ?? 0) + (row.gross_cents ?? 0));
     }
   }
 
-  return Array.from(bucketMap.entries()).map(([date, net_cents]) => ({ date, net_cents }));
+  return Array.from(bucketMap.entries()).map(([date, gross_cents]) => ({ date, gross_cents }));
 }
 
 export async function getMonthlyBucketsForMonth(userId: string, year: number, month: number): Promise<MonthBucket[]> {
