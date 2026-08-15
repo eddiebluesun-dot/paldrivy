@@ -36,6 +36,9 @@ import {
 import { getUserPlatforms } from '@/src/services/platforms';
 import { getEffectiveVehicleId } from '@/src/services/vehicles';
 import { reconcileShiftPlatforms } from '@/src/utils/shiftReconciliationUtils';
+import { dateAndTimeToIso, isoToDateAndTime } from '@/src/utils/shiftDateTimeUtils';
+import { DateField } from '@/src/components/DateField';
+import { TimeField } from '@/src/components/TimeField';
 import type { ShiftPause } from '@/src/types';
 import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
@@ -154,8 +157,10 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editStartedAt, setEditStartedAt] = useState('');
-  const [editEndedAt, setEditEndedAt] = useState('');
+  const [editStartDate, setEditStartDate] = useState<string | null>(null);
+  const [editStartTime, setEditStartTime] = useState<string | null>(null);
+  const [editEndDate, setEditEndDate] = useState<string | null>(null);
+  const [editEndTime, setEditEndTime] = useState<string | null>(null);
   // Confirms the amounts just entered are the platform's cumulative total
   // for the whole day (what Uber/99/etc. show), not this shift's isolated
   // earnings. Auto-defaults to checked whenever a completed shift already
@@ -180,22 +185,6 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
     });
   }, [visible, mode]);
 
-  function isoToDisplay(iso: string | null | undefined): string {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
-  function displayToIso(display: string): string | undefined {
-    // expects DD/MM/YYYY HH:mm
-    const m = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
-    if (!m) return undefined;
-    const [, dd, mm, yyyy, hh, min] = m;
-    const d = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min));
-    return isNaN(d.getTime()) ? undefined : d.toISOString();
-  }
-
   useEffect(() => {
     if (!visible) return;
     if (mode === 'edit' && existingShift) {
@@ -214,8 +203,12 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       setBonuses(existingShift.bonuses_cents ? (existingShift.bonuses_cents / 100).toFixed(2) : '');
       setMood(existingShift.mood_rating ?? null);
       setNotes(existingShift.notes ?? '');
-      setEditStartedAt(isoToDisplay(existingShift.started_at));
-      setEditEndedAt(isoToDisplay(existingShift.ended_at));
+      const startParts = isoToDateAndTime(existingShift.started_at);
+      setEditStartDate(startParts.date);
+      setEditStartTime(startParts.time);
+      const endParts = isoToDateAndTime(existingShift.ended_at);
+      setEditEndDate(endParts.date);
+      setEditEndTime(endParts.time);
     } else {
       setOdometer('');
       setPlatforms([{ name: '', amount: '', rides: '' }]);
@@ -223,8 +216,10 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       setBonuses('');
       setMood(null);
       setNotes('');
-      setEditStartedAt('');
-      setEditEndedAt('');
+      setEditStartDate(null);
+      setEditStartTime(null);
+      setEditEndDate(null);
+      setEditEndTime(null);
     }
     setIsCumulativeDayTotal(cumulativeDayTotalDefault);
     setError(null);
@@ -286,13 +281,12 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
       if (mode === 'end') {
         await endShift(shiftId, payload, startedAt, pauses ?? []);
       } else {
-        const parsedStart = editStartedAt.trim() ? displayToIso(editStartedAt) : existingShift?.started_at;
-        const parsedEnd = editEndedAt.trim() ? displayToIso(editEndedAt) : existingShift?.ended_at;
-        if ((editStartedAt.trim() && !parsedStart) || (editEndedAt.trim() && !parsedEnd)) {
-          setError(t('shift.time_format_hint'));
-          setSaving(false);
-          return;
-        }
+        // editStartDate/editStartTime (and the End pair) are always set
+        // together from the same existingShift on modal open, and DateField/
+        // TimeField only ever produce structurally valid values -- no parse
+        // failure mode remains, so there's no error path to guard here.
+        const parsedStart = (editStartDate && editStartTime) ? dateAndTimeToIso(editStartDate, editStartTime) : existingShift?.started_at;
+        const parsedEnd = (editEndDate && editEndTime) ? dateAndTimeToIso(editEndDate, editEndTime) : existingShift?.ended_at;
         await updateShift(shiftId, payload, parsedStart, parsedEnd ?? undefined);
       }
       // NOTE: previously also fired supabase.functions.invoke('calculate-shift', ...)
@@ -324,23 +318,47 @@ function ShiftFormModal({ visible, mode, shiftId, startedAt, existingShift, dist
           {mode === 'edit' && (
             <>
               <Text style={styles.fieldLabel}>{t('shift.start_time')}</Text>
-              <TextInput
-                style={styles.input}
-                value={editStartedAt}
-                onChangeText={setEditStartedAt}
-                placeholder={t('shift.time_format_hint')}
-                placeholderTextColor={Colors.textSecondary}
-                keyboardType="numbers-and-punctuation"
-              />
+              <View style={styles.dateTimeRow}>
+                <View style={styles.dateTimeField}>
+                  <DateField
+                    value={editStartDate}
+                    onChange={setEditStartDate}
+                    placeholder={t('common.select_date')}
+                    accessibilityLabel={t('shift.start_time')}
+                    testID="shift-edit-start-date"
+                  />
+                </View>
+                <View style={styles.dateTimeField}>
+                  <TimeField
+                    value={editStartTime}
+                    onChange={setEditStartTime}
+                    placeholder={t('common.select_time')}
+                    accessibilityLabel={t('shift.start_time')}
+                    testID="shift-edit-start-time"
+                  />
+                </View>
+              </View>
               <Text style={styles.fieldLabel}>{t('shift.end_time')}</Text>
-              <TextInput
-                style={styles.input}
-                value={editEndedAt}
-                onChangeText={setEditEndedAt}
-                placeholder={t('shift.time_format_hint')}
-                placeholderTextColor={Colors.textSecondary}
-                keyboardType="numbers-and-punctuation"
-              />
+              <View style={styles.dateTimeRow}>
+                <View style={styles.dateTimeField}>
+                  <DateField
+                    value={editEndDate}
+                    onChange={setEditEndDate}
+                    placeholder={t('common.select_date')}
+                    accessibilityLabel={t('shift.end_time')}
+                    testID="shift-edit-end-date"
+                  />
+                </View>
+                <View style={styles.dateTimeField}>
+                  <TimeField
+                    value={editEndTime}
+                    onChange={setEditEndTime}
+                    placeholder={t('common.select_time')}
+                    accessibilityLabel={t('shift.end_time')}
+                    testID="shift-edit-end-time"
+                  />
+                </View>
+              </View>
             </>
           )}
 
@@ -927,4 +945,6 @@ const styles = StyleSheet.create({
   odometerHint: { color: Colors.textSecondary, fontSize: 12, marginTop: -Spacing.xs, marginBottom: Spacing.md, paddingHorizontal: 2 },
   cancelBtn: { paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.sm },
   cancelBtnText: { color: Colors.textSecondary, fontSize: 15 },
+  dateTimeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
+  dateTimeField: { flex: 1 },
 });
