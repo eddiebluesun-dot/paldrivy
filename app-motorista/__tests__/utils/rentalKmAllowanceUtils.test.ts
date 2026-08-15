@@ -5,16 +5,27 @@ describe('getPeriodBounds', () => {
     expect(getPeriodBounds('2026-08-05', 'unlimited', new Date('2026-08-20'))).toBeNull();
   });
 
+  it('periodIndex is 0 for the period containing the contract start date', () => {
+    const bounds = getPeriodBounds('2026-08-05', 'weekly', new Date('2026-08-05T12:00:00Z'));
+    expect(bounds).toEqual({
+      periodStart: new Date('2026-08-03T00:00:00.000Z'),
+      periodEnd: new Date('2026-08-10T00:00:00.000Z'),
+      periodIndex: 0,
+    });
+  });
+
   it('computes the current weekly period as the calendar week (Mon-Sun) containing "now", regardless of the contract start date\'s weekday', () => {
     // Weekly periods are calendar-aligned (Mon-Sun), not floating 7-day
     // windows anchored to the contract's own start weekday. Contract started
     // Wed 2026-08-05; "now" is 2026-08-15 (a Saturday) -> the calendar week
     // containing it is [2026-08-10 Mon, 2026-08-17 Mon), independent of the
-    // fact the contract itself started on a Wednesday.
+    // fact the contract itself started on a Wednesday. That's 1 full week
+    // after the contract-start week (which began Mon 2026-08-03) -> periodIndex 1.
     const bounds = getPeriodBounds('2026-08-05', 'weekly', new Date('2026-08-15T12:00:00Z'));
     expect(bounds).toEqual({
       periodStart: new Date('2026-08-10T00:00:00.000Z'),
       periodEnd: new Date('2026-08-17T00:00:00.000Z'),
+      periodIndex: 1,
     });
   });
 
@@ -25,15 +36,18 @@ describe('getPeriodBounds', () => {
     expect(bounds).toEqual({
       periodStart: new Date('2026-08-10T00:00:00.000Z'),
       periodEnd: new Date('2026-08-17T00:00:00.000Z'),
+      periodIndex: 1,
     });
   });
 
   it('computes the current monthly period from the contract start date', () => {
-    // contract started 2026-08-05; "now" is 2026-09-10 -> period 2 is [2026-09-05, 2026-10-05)
+    // contract started 2026-08-05; "now" is 2026-09-10 -> period 2 is [2026-09-05, 2026-10-05),
+    // which is periodIndex 1 (0-based: the contract-start period is index 0).
     const bounds = getPeriodBounds('2026-08-05', 'monthly', new Date('2026-09-10T12:00:00Z'));
     expect(bounds).toEqual({
       periodStart: new Date('2026-09-05T00:00:00.000Z'),
       periodEnd: new Date('2026-10-05T00:00:00.000Z'),
+      periodIndex: 1,
     });
   });
 
@@ -47,17 +61,18 @@ describe('getPeriodBounds', () => {
     expect(bounds).toEqual({
       periodStart: new Date('2026-02-28T00:00:00.000Z'),
       periodEnd: new Date('2026-03-31T00:00:00.000Z'),
+      periodIndex: 1,
     });
   });
 
   it('does not drift for a start day that exists in every month (regression check)', () => {
     // contract started 2026-01-15 (a day with no overflow risk). "now" is
-    // 2026-03-20 -> period 3 is [2026-03-15, 2026-04-15), same as the
-    // unclamped calculation would give.
+    // 2026-03-20 -> period 3 is [2026-03-15, 2026-04-15), which is periodIndex 2 (0-based).
     const bounds = getPeriodBounds('2026-01-15', 'monthly', new Date('2026-03-20T12:00:00Z'));
     expect(bounds).toEqual({
       periodStart: new Date('2026-03-15T00:00:00.000Z'),
       periodEnd: new Date('2026-04-15T00:00:00.000Z'),
+      periodIndex: 2,
     });
   });
 });

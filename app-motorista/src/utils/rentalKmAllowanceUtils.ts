@@ -11,6 +11,7 @@ export interface OdometerReading {
 export interface PeriodBounds {
   periodStart: Date;
   periodEnd: Date;
+  periodIndex: number; // 0-based: the period containing contractStartDate is 0, the next is 1, etc.
 }
 
 // Adds `monthsToAdd` calendar months to `base`, clamping the result's
@@ -37,6 +38,12 @@ function addMonthClamped(base: Date, monthsToAdd: number): Date {
 // started the 5th -> periods run 5th-to-5th), clamped to the last valid day
 // of the target month for start days that don't exist in every month
 // (29th-31st).
+// The UTC-midnight Monday of the calendar week containing `d`.
+function mondayOf(d: Date): Date {
+  const daysSinceMonday = (d.getUTCDay() + 6) % 7; // 0=Sun..6=Sat -> days back to Monday
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - daysSinceMonday));
+}
+
 export function getPeriodBounds(
   contractStartDate: string,
   allowancePeriod: RentalAllowancePeriod,
@@ -47,11 +54,12 @@ export function getPeriodBounds(
   const start = new Date(`${contractStartDate}T00:00:00.000Z`);
 
   if (allowancePeriod === 'weekly') {
-    const dow = now.getUTCDay(); // 0=Sun..6=Sat
-    const daysSinceMonday = (dow + 6) % 7;
-    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday));
+    const periodStart = mondayOf(now);
     const periodEnd = new Date(periodStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-    return { periodStart, periodEnd };
+    const periodIndex = Math.round(
+      (periodStart.getTime() - mondayOf(start).getTime()) / (7 * 24 * 60 * 60 * 1000)
+    );
+    return { periodStart, periodEnd, periodIndex };
   }
 
   // monthly: both bounds are always computed from the ORIGINAL contract
@@ -66,7 +74,7 @@ export function getPeriodBounds(
     periodStart = addMonthClamped(start, n);
     periodEnd = addMonthClamped(start, n + 1);
   }
-  return { periodStart, periodEnd };
+  return { periodStart, periodEnd, periodIndex: n };
 }
 
 export interface RentalAllowanceStatus {
