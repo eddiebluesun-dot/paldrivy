@@ -495,7 +495,9 @@
                    "edit":  "Editar",
                    "loading":  "Carregando...",
                    "error":  "Algo deu errado",
-                   "required":  "Campo obrigatório"
+                   "required":  "Campo obrigatório",
+                   "select_date":  "Selecionar data",
+                   "select_time":  "Selecionar horário"
                },
     "report":  {
                    "monthly":  "Mensal",

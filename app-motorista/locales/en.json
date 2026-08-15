@@ -495,7 +495,9 @@
                    "edit":  "Edit",
                    "loading":  "Loading...",
                    "error":  "Something went wrong",
-                   "required":  "Required field"
+                   "required":  "Required field",
+                   "select_date":  "Select date",
+                   "select_time":  "Select time"
                },
     "report":  {
                    "monthly":  "Monthly",

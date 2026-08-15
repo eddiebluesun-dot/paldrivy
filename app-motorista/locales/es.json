@@ -496,7 +496,9 @@
                    "edit":  "Editar",
                    "loading":  "Cargando...",
                    "error":  "Algo salió mal",
-                   "required":  "Campo requerido"
+                   "required":  "Campo requerido",
+                   "select_date":  "Seleccionar fecha",
+                   "select_time":  "Seleccionar hora"
                },
     "report":  {
                    "monthly":  "Mensual",

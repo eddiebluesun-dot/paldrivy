@@ -427,7 +427,9 @@
     "edit": "Modifier",
     "loading": "Chargement...",
     "error": "Quelque chose a mal tourné",
-    "required": "Champ obligatoire"
+    "required": "Champ obligatoire",
+    "select_date": "Sélectionner une date",
+    "select_time": "Sélectionner une heure"
   },
   "report": {
     "monthly": "Mensuel",
