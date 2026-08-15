@@ -10,7 +10,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/src/lib/supabase';
 import { Select } from '@/src/components/Select';
-import { parseFlexibleDateInput } from '@/src/utils/dateInput';
+import { DateField } from '@/src/components/DateField';
 import { authSignOut } from '@/src/hooks/useAuth';
 import { useProfile } from '@/src/hooks/useProfile';
 import { usePremiumStatus } from '@/src/hooks/usePremiumStatus';
@@ -295,7 +295,7 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
   const [costAmount, setCostAmount] = useState('0');
   const [linkedCost, setLinkedCost] = useState<VehicleRecurringCost | null>(null);
   const [endingCost, setEndingCost] = useState(false);
-  const [rentalStartDate, setRentalStartDate]         = useState('');
+  const [rentalStartDate, setRentalStartDate]         = useState<string | null>(null);
   const [rentalStartOdometer, setRentalStartOdometer] = useState('');
   const [allowancePeriod, setAllowancePeriod]         = useState<RentalAllowancePeriod>('unlimited');
   const [allowanceAmount, setAllowanceAmount]         = useState('');
@@ -308,7 +308,7 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
       setBrand(vehicle.brand); setModel(vehicle.model);
       setYear(String(vehicle.year)); setFuel(vehicle.fuel_type);
       setOwnership(vehicle.ownership_type);
-      setRentalStartDate(vehicle.rental_contract_start_date ?? '');
+      setRentalStartDate(vehicle.rental_contract_start_date ?? null);
       setRentalStartOdometer(
         vehicle.rental_contract_start_odometer != null
           ? String(metersToDisplay(vehicle.rental_contract_start_odometer, 'km'))
@@ -332,7 +332,7 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
       setBrand(''); setModel(''); setYear(String(new Date().getFullYear()));
       setFuel('gasoline');
       setOwnership('own');
-      setRentalStartDate(''); setRentalStartOdometer('');
+      setRentalStartDate(null); setRentalStartOdometer('');
       setAllowancePeriod('unlimited'); setAllowanceAmount(''); setExcessRate('');
       setRentalCostFrequency('monthly'); setCostAmount('0'); setLinkedCost(null);
     }
@@ -340,12 +340,12 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
 
   async function handleSave() {
     if (!userId || !brand.trim() || !model.trim()) { setError(t('more.vehicle_required')); return; }
-    // rentalStartDate must actually PARSE, not just be non-empty -- see the
-    // identical comment in register.tsx. Same production crash, same field.
-    if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !parseFlexibleDateInput(rentalStartDate)) { setError(t('more.vehicle_required')); return; }
+    // rentalStartDate now comes from DateField, which only ever produces a
+    // structurally valid 'YYYY-MM-DD' string or null -- no parsing needed.
+    if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !rentalStartDate) { setError(t('more.vehicle_required')); return; }
     const rentalFields = {
       ownership_type: ownership,
-      rental_contract_start_date: ownership === 'rent' ? parseFlexibleDateInput(rentalStartDate) : null,
+      rental_contract_start_date: ownership === 'rent' ? rentalStartDate : null,
       rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
         ? displayToMeters(parseFloat(rentalStartOdometer.replace(',', '.')) || 0, 'km') : null,
       rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,
@@ -482,13 +482,12 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
           {ownership === 'rent' ? (
             <>
               <Text style={s.fieldLabel}>{t('onboarding.rental_start_date')}</Text>
-              <TextInput
-                style={s.fieldInput}
+              <DateField
                 value={rentalStartDate}
-                onChangeText={setRentalStartDate}
-                placeholder="AAAA-MM-DD"
-                placeholderTextColor={Colors.textSecondary}
+                onChange={setRentalStartDate}
+                placeholder={t('common.select_date')}
                 accessibilityLabel={t('onboarding.rental_start_date')}
+                testID="vehicle-rental-start-date"
               />
 
               <Text style={s.fieldLabel}>{t('onboarding.rental_start_odometer')}</Text>
