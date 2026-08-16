@@ -1,0 +1,46 @@
+// Init script applied to ALL Gradle builds including composite/included builds.
+// 1. Redirects buildDir for node_modules projects (composite builds) to avoid Google Drive file-locking.
+// 2. Redirects cmake buildStagingDirectory (.cxx) for ALL android projects — solves both
+//    file-locking AND Windows MAX_PATH (260 chars) issues caused by long Google Drive paths.
+gradle.allprojects {
+    def p = projectDir.absolutePath.replace("\\", "/")
+
+    // Redirect Gradle buildDir only for node_modules (composite builds).
+    //
+    // EXCEPTION: @react-native-community/datetimepicker's own Gradle codegen
+    // task writes its generated RNDateTimePickerCGen JNI/CMakeLists output
+    // relative to `project.buildDir`, but React Native's autolinking always
+    // hardcodes the app's CMake `add_subdirectory` call to the *default*,
+    // buildDir-agnostic path (`<pkg>/android/build/generated/source/codegen/jni`).
+    // Redirecting this package's buildDir orphans its own generated files
+    // where CMake can never find them (CXX1429 "not an existing directory" /
+    // "Cannot specify link libraries for target ... which is not built by
+    // this project" — root cause of the RNCDatePicker / TurboModuleRegistry
+    // crash from the 2026-08-15 versionCode 24 build). Other codegen-based
+    // deps (reanimated/worklets/gesture-handler/async-storage) don't hit
+    // this because their codegen output already exists as frozen files at
+    // the default location and hasn't needed to regenerate since. This
+    // package's own build output is small, so the Drive file-locking risk
+    // from leaving it unredirected is minimal.
+    if (p.contains("/node_modules/") && !p.endsWith("/node_modules/@react-native-community/datetimepicker/android")) {
+        buildDir = "D:/build/paldrivy/libs/${name}"
+    }
+
+    // Redirect CMake staging for EVERY android project (node_modules AND :app)
+    // .cxx dir lives at projectDir/.cxx by default (AGP 7+), causing MAX_PATH on Windows
+    // when projectDir is deep inside Google Drive.
+    afterEvaluate { proj ->
+        try {
+            if (proj.plugins.hasPlugin("com.android.library") || proj.plugins.hasPlugin("com.android.application")) {
+                proj.android.externalNativeBuild.cmake.buildStagingDirectory =
+                    new File("D:/build/paldrivy/cxx/${proj.name}")
+            }
+        } catch (Throwable ignored) {}
+        try {
+            if (proj.plugins.hasPlugin("com.android.library") || proj.plugins.hasPlugin("com.android.application")) {
+                proj.android.externalNativeBuild.ndkBuild.buildStagingDirectory =
+                    new File("D:/build/paldrivy/cxx/${proj.name}")
+            }
+        } catch (Throwable ignored) {}
+    }
+}

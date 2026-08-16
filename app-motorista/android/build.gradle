@@ -1,0 +1,53 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath('com.android.tools.build:gradle')
+    classpath('com.facebook.react:react-native-gradle-plugin')
+    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+  }
+}
+
+allprojects {
+  repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+  }
+}
+
+// Redirect module builds out of Google Drive to avoid file-locking.
+// IMPORTANT: this must be `subprojects`, not `allprojects`. React Native's
+// autolinking writes `generated/autolinking/autolinking.json` to the
+// *physical* `android/build` folder from settings.gradle (before this file
+// even runs), but the app module's PackageList.java/CMake codegen later
+// reads that same file via `rootProject.buildDir`. If `allprojects` also
+// redirects the root project's buildDir, that read resolves to a second,
+// orphaned copy of autolinking.json that nothing ever regenerates again -
+// so any native module added after that stale copy was created silently
+// never gets linked into the compiled app (root cause of the RNCDatePicker
+// / TurboModuleRegistry crash from the 2026-08-15 versionCode 24 build).
+subprojects {
+  // @react-native-community/datetimepicker's own Gradle codegen task writes
+  // its generated RNDateTimePickerCGen JNI/CMakeLists output relative to
+  // `project.buildDir`. React Native's autolinking always hardcodes the
+  // app's CMake `add_subdirectory` call to the *default*, buildDir-agnostic
+  // path (`<pkg>/android/build/generated/source/codegen/jni`), so
+  // redirecting this package's buildDir orphans its own generated files
+  // where CMake can never find them (CXX1429 "not an existing directory").
+  // Other codegen-based deps (reanimated/worklets/gesture-handler/
+  // async-storage) don't hit this because their codegen output already
+  // exists as frozen files at the default location and hasn't needed to
+  // regenerate. Exclude datetimepicker from the redirect; its own build
+  // output is small, so the Drive file-locking risk here is minimal.
+  if (project.name != 'react-native-community_datetimepicker') {
+    buildDir = "D:/build/paldrivy/libs/${project.name}"
+  }
+}
+
+apply plugin: "expo-root-project"
+apply plugin: "com.facebook.react.rootproject"
