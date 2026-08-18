@@ -43,7 +43,7 @@ import { fireRentalAllowanceNearLimitNotification } from '@/src/services/notific
 import { getRecurringExpenseBreakdownForDay } from '@/src/services/recurringExpenseAllocation';
 import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
 import { addExpense } from '@/src/services/expenses';
-import type { RentalAllowanceStatus } from '@/src/utils/rentalKmAllowanceUtils';
+import { getPeriodBounds, type RentalAllowanceStatus, type RentalAllowancePeriod } from '@/src/utils/rentalKmAllowanceUtils';
 import type { Shift, Vehicle } from '@/src/types';
 
 function secondsToHHMM(s: number): string {
@@ -1426,7 +1426,21 @@ export default function DashboardScreen() {
     setVehicleInfo(vehicleData as VehicleInfo | null);
     setRentalStatus(rentalStatusData);
     if (rentalStatusData?.isNearLimit) {
-      fireRentalAllowanceNearLimitNotification(i18n.language, rentalStatusData.periodStart.toISOString().slice(0, 10)).catch(() => {});
+      // RentalAllowanceStatus no longer carries periodStart/periodEnd (removed
+      // 2026-08-18 along with the block-accrual formula -- see
+      // docs/superpowers/specs/2026-08-18-km-gaps-and-cumulative-balance-bar-design.md).
+      // The notification's dedup key still needs a value that re-arms on
+      // each new calendar week/month, so it's derived directly here from
+      // getPeriodBounds (the exact function the old removed periodStart
+      // field itself came from) -- this key is display/dedup plumbing only,
+      // it never flows into RentalAllowanceStatus.
+      const vd = vehicleData as { rental_contract_start_date?: string | null; rental_km_allowance_period?: RentalAllowancePeriod | null } | null;
+      const notifBounds = vd?.rental_contract_start_date && vd?.rental_km_allowance_period
+        ? getPeriodBounds(vd.rental_contract_start_date, vd.rental_km_allowance_period, new Date())
+        : null;
+      if (notifBounds) {
+        fireRentalAllowanceNearLimitNotification(i18n.language, notifBounds.periodStart.toISOString().slice(0, 10)).catch(() => {});
+      }
     }
     setMonthlyTotals(mTotals);
     setWeekTotals(wTotals);
