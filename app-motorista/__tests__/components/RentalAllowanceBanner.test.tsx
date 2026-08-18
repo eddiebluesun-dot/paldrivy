@@ -23,10 +23,8 @@ jest.mock('react-i18next', () => ({
 
 function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllowanceStatus {
   return {
-    periodStart: new Date('2026-08-05'), periodEnd: new Date('2026-08-12'), periodIndex: 0,
     allowanceAmountKm: 500, allowancePeriod: 'weekly',
     baselineMeters: 18332000, baselineIsEstimated: false, currentOdometerMeters: 18622000,
-    periodUsageKm: 290, periodAllowanceKm: 500,
     cumulativeUsageKm: 290, cumulativeAllowanceKm: 500, balanceKm: 210,
     isNearLimit: false, isOverLimit: false,
     overageKm: 0, overageCostCents: 0, remainingKm: 210,
@@ -68,16 +66,6 @@ describe('RentalAllowanceBanner', () => {
     expect(screen.getByTestId('rental-allowance-over')).toBeTruthy();
     expect(screen.getByText(/20/)).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
-  });
-
-  it('does not alert on a single heavy period when the cumulative balance still covers it', () => {
-    // periodUsageKm/periodAllowanceKm alone would look "over" (600/500), but
-    // isNearLimit/isOverLimit are driven by the cumulative fields, which the
-    // caller (computeRentalAllowanceStatus) would have computed as healthy.
-    const { toJSON } = render(<RentalAllowanceBanner status={makeStatus({
-      periodUsageKm: 600, periodAllowanceKm: 500, isNearLimit: false, isOverLimit: false,
-    })} />);
-    expect(toJSON()).toBeNull();
   });
 
   it('shows a baseline-estimated disclosure on the warning banner when the baseline was estimated', () => {
