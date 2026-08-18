@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
 import { RentalAllowanceExtractCard } from '../../src/components/RentalAllowanceExtractCard';
+import { Colors } from '../../src/theme';
 import type { RentalAllowanceStatus } from '../../src/utils/rentalKmAllowanceUtils';
 
 // Same convention as RentalAllowanceBanner.test.tsx: mock react-i18next with
@@ -21,12 +22,14 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return Array.isArray(style) ? Object.assign({}, ...style) : (style as Record<string, unknown>);
+}
+
 function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllowanceStatus {
   return {
-    periodStart: new Date('2026-08-10'), periodEnd: new Date('2026-08-17'), periodIndex: 1,
     allowanceAmountKm: 1500, allowancePeriod: 'weekly',
     baselineMeters: 19228000, baselineIsEstimated: true, currentOdometerMeters: 20739000,
-    periodUsageKm: 1358, periodAllowanceKm: 1500,
     cumulativeUsageKm: 2858, cumulativeAllowanceKm: 3000, balanceKm: 142,
     isNearLimit: true, isOverLimit: false,
     overageKm: 0, overageCostCents: 0, remainingKm: 142,
@@ -40,10 +43,10 @@ describe('RentalAllowanceExtractCard', () => {
     expect(toJSON()).toBeNull();
   });
 
-  it('shows used/total km and percentage for THIS PERIOD, not the cumulative total', () => {
+  it('shows used/total km and percentage from the CUMULATIVE balance, not a period-scoped figure', () => {
     render(<RentalAllowanceExtractCard status={makeStatus()} />);
-    expect(screen.getByText('1358 / 1500 km usados')).toBeTruthy();
-    expect(screen.getByText('91%')).toBeTruthy();
+    expect(screen.getByText('2858 / 3000 km usados')).toBeTruthy();
+    expect(screen.getByText('95%')).toBeTruthy(); // round(2858/3000 * 100) = 95
   });
 
   it('shows a positive balance as banked km', () => {
@@ -53,8 +56,27 @@ describe('RentalAllowanceExtractCard', () => {
 
   it('shows a negative balance as debt, without a minus sign leaking into the label', () => {
     render(<RentalAllowanceExtractCard status={makeStatus({
-      periodUsageKm: 1520, isOverLimit: true, balanceKm: -11,
+      cumulativeUsageKm: 3011, isOverLimit: true, balanceKm: -11,
     })} />);
     expect(screen.getByTestId('rental-allowance-balance').props.children).toBe('11 km em débito');
+  });
+
+  it('caps the bar fill at 100% and switches it to error color once the cumulative balance goes negative, regardless of how far over', () => {
+    render(<RentalAllowanceExtractCard status={makeStatus({
+      cumulativeUsageKm: 6000, cumulativeAllowanceKm: 3000,
+      isNearLimit: true, isOverLimit: true, balanceKm: -3000,
+    })} />);
+    const fill = flattenStyle(screen.getByTestId('rental-allowance-fill').props.style);
+    expect(fill.width).toBe('100%'); // usage is 2x allowance -- fill must still cap at 100%
+    expect(fill.backgroundColor).toBe(Colors.error);
+  });
+
+  it('shows the bar in accent color, not yet full, while near but under the limit', () => {
+    render(<RentalAllowanceExtractCard status={makeStatus({
+      cumulativeUsageKm: 2858, cumulativeAllowanceKm: 3000, isNearLimit: true, isOverLimit: false,
+    })} />);
+    const fill = flattenStyle(screen.getByTestId('rental-allowance-fill').props.style);
+    expect(fill.width).toBe(`${(2858 / 3000) * 100}%`);
+    expect(fill.backgroundColor).toBe(Colors.accent);
   });
 });
