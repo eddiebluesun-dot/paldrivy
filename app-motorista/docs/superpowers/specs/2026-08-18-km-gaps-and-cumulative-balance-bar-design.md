@@ -1,25 +1,85 @@
 # KM Gaps table + cumulative-balance bar — Design
 
-**Goal:** (A) make the "Franquia de km" bar visually represent the cumulative signed balance (never resets, can go negative) instead of "this period's usage only". (B) persist every automatically-detected personal-use odometer gap as its own auditable, editable database row, for every vehicle — not just an invisible component of a running total — and surface it on the day it happened.
+**Goal:** (A) switch the km-allowance calculation from weekly/monthly *block* accrual (shipped 2026-08-15) to pure **daily-linear** accrual, and make the "Franquia de km" bar visually represent the resulting cumulative signed balance (never resets, can go negative) instead of "this period's usage only". (B) persist every automatically-detected personal-use odometer gap as its own auditable, editable database row, for every vehicle — not just an invisible component of a running total — and surface it on the day it happened.
 
-This is a same-week follow-up to `2026-08-15-rental-km-allowance-cumulative-balance-design.md` — the underlying `balanceKm`/`cumulativeUsageKm`/`cumulativeAllowanceKm` math from that pass is unchanged and confirmed correct (re-verified by hand against production data during this brainstorm: a 3-week worked example the owner did by hand matched the shipped formula exactly). What changes here is what the UI does with those numbers, plus a wholly new persistence layer for the gaps themselves.
+This is a same-week follow-up to `2026-08-15-rental-km-allowance-cumulative-balance-design.md`. That pass's core principle — a running balance that never resets — stays correct and is kept as-is. What changes here is the accrual formula itself: block-per-period (a full week/month granted upfront at its calendar start) is replaced with linear-per-day (see Part A), because the two only agree when sampled at exact week/month boundaries and diverge sharply mid-period — which is exactly what exposed this in production (see Context).
 
 ## Context
 
 Real production case, 2026-08-17 (owner Eddie): Monday's first shift started at an odometer reading that already included ~114 km of unlogged weekend driving (no shift or fuel entry logged between Saturday's last reading and Monday's first). The existing card correctly included those 114 km in the cumulative balance, but displayed them baked into "this week's" 387 km usage figure, which read as wrong on a day where only 273 km of actual work had happened. Rather than trying to algorithmically guess which calendar day unlogged driving "really" happened on (the previous design's approach, and admitted at the time to be an unresolvable guess without finer-grained data), the owner wants the app to stop hiding this entirely: track every such gap as its own visible, editable record, and make the headline number the one that's always unambiguously correct — the running balance — rather than a period-scoped figure that requires guessing.
 
-The owner independently re-derived the balance formula by hand across a 3-week example (1505 km/week nominal, week 1 under by 100 km, week 2 over by 195 km net of the carried surplus, week 3 starts at 1505 + 100 − 195 = 1310 available) — this is arithmetically identical to `cumulativeAllowanceKm − cumulativeUsageKm` from the existing implementation, confirming that formula doesn't need to change, only its role in the UI.
+The owner first re-derived the balance formula by hand across a 3-week example (1505 km/week nominal, week 1 under by 100 km, week 2 over by 195 km net of the carried surplus, week 3 starts at 1505 + 100 − 195 = 1310 available). That example only samples at exact week boundaries, where block accrual and daily-linear accrual necessarily agree (7 days × daily rate = one week's block, always). It was a second hand calculation — sampling *mid-period*, 215 km/day (1505/7) × 13 calendar days from contract start (2026-08-05) through 2026-08-17 = 2795 km allowance vs 2794 km actually driven, "+1 km de saldo" — that diverged from the shipped block formula's output for that same real data (+1277 km) and settled which model the owner actually wants: daily-linear (see Part A).
 
-## Part A — Bar shows the cumulative balance
+## Part A — daily-linear accrual (supersedes the 2026-08-15 weekly-block formula) + bar shows the cumulative balance
 
-`RentalAllowanceExtractCard.tsx` currently fills its bar from `periodUsageKm / periodAllowanceKm` (this week/month only) and shows the cumulative `balanceKm` as a small text line underneath. This flips:
+**This revises the core calculation itself, not just the display.** The 2026-08-15 pass computed `cumulativeAllowanceKm` in weekly/monthly *blocks* — a full period's allowance granted upfront at that period's calendar start (with the first, possibly-partial period prorated by days). Verified by hand during this brainstorm against production data (contract start 2026-08-05 at 18332 km, 1505 km/week ⇒ 215 km/day exactly, odometer 21126 as of 2026-08-17): 13 calendar days × 215 km/day = 2795 km allowance vs 2794 km actually driven ⇒ **+1 km balance**. The shipped block-formula gives **+1277 km** for the same data — a different model entirely, not a rounding difference. The owner wants the block model replaced with pure daily-linear accrual.
+
+### New formula
+
+No more "periods" for this calculation (the block model's `periodIndex`/first-period-proration/calendar-Monday-alignment machinery is no longer needed *for km-allowance* — see "What stays, what goes" below).
+
+```
+dailyRateKm(day) =
+  allowanceAmountKm / 7                              -- if allowancePeriod = 'weekly'
+  allowanceAmountKm / daysInMonth(day's own month)    -- if allowancePeriod = 'monthly'
+
+daysElapsed = floor((todayUTCMidnight - contractStartUTCMidnight) / 1 day) + 1
+  -- inclusive of both the contract's first day and today; matches the
+  -- existing "a period is granted in full at its start, never prorated
+  -- within itself" precedent, just applied at day granularity instead of
+  -- week/month granularity. Verified: 2026-08-05 to 2026-08-17 inclusive
+  -- = 13 days, matching the owner's hand calculation.
+
+cumulativeAllowanceKm =
+  dailyRateKm * daysElapsed                                    -- weekly (constant daily rate, closed form)
+  sum of dailyRateKm(d) for each day d from contractStartDate   -- monthly (rate varies by
+    through today, inclusive                                       which month d falls in)
+
+cumulativeUsageKm = (currentOdometerMeters - baselineMeters) / 1000   -- UNCHANGED
+balanceKm = cumulativeAllowanceKm - cumulativeUsageKm                  -- UNCHANGED formula, new allowance input
+```
+
+`baselineMeters`/`baselineIsEstimated` also simplify: there is no more "first period" special case (there are no periods) — baseline is always simply the explicit `contractStartOdometerMeters` if the owner provided one, else the earliest reading ever logged for that vehicle. Nothing else changes about the baseline.
+
+### What stays, what goes
+
+- **`getPeriodBounds`/`PeriodBounds` in `rentalKmAllowanceUtils.ts` — DO NOT TOUCH.** Confirmed via grep: `src/utils/recurringExpenseAllocationUtils.ts` imports and depends on `getPeriodBounds` for its own, unrelated daily-allocation-of-recurring-expenses feature (`countWorkingDaysInRange`/`getDailyAllocationCents`, 2026-08-07 design). It only reads `periodStart`/`periodEnd` from the returned bounds, never `periodIndex`, so this rewrite doesn't affect it either way — but the function itself must keep working exactly as today for that caller.
+- **`periodIndex` on `PeriodBounds`** (added 2026-08-15 specifically for the km-allowance block formula) — now unused by anything, since `computeRentalAllowanceStatus` no longer calls `getPeriodBounds` at all. Leave the field on the type (harmless, still correctly computed, `recurringExpenseAllocationUtils.ts` simply doesn't read it) rather than removing it — removing a field nothing reads is optional cleanup, not required for correctness, and touching `getPeriodBounds` at all raises the risk of breaking its other caller for no benefit.
+- **`periodStart`/`periodEnd`/`periodIndex`/`periodUsageKm`/`periodAllowanceKm` on `RentalAllowanceStatus`** (the km-allowance status type, not `PeriodBounds`) — these existed only to support the block model and the now-superseded "this week only" bar from two days ago. Remove them from `RentalAllowanceStatus`; nothing reads them after this pass (confirmed in the original Part A analysis: `RentalAllowanceBanner` already only used cumulative fields, and the "this week" bar they fed is exactly what's being replaced here).
+
+### Updated `RentalAllowanceStatus`
+
+```ts
+export interface RentalAllowanceStatus {
+  allowanceAmountKm: number;      // nominal weekly/monthly amount, as configured
+  allowancePeriod: RentalAllowancePeriod;
+
+  baselineMeters: number;
+  baselineIsEstimated: boolean;
+
+  currentOdometerMeters: number;
+
+  cumulativeUsageKm: number;
+  cumulativeAllowanceKm: number;
+  balanceKm: number;              // signed; positive = banked, negative = debt
+
+  isNearLimit: boolean;           // cumulativeUsageKm / cumulativeAllowanceKm >= 90%
+  isOverLimit: boolean;           // balanceKm < 0
+  overageKm: number;              // max(0, -balanceKm)
+  overageCostCents: number;
+  remainingKm: number;            // max(0, balanceKm)
+}
+```
+
+### Bar
+
+`RentalAllowanceExtractCard.tsx`:
 
 - **Bar fill** = `min(cumulativeUsageKm / cumulativeAllowanceKm, 1)`. Same color ladder as today (success → accent → error as it approaches/passes 100%).
-- **When `balanceKm < 0`** (over the cumulative allowance): bar renders fully filled, in the error color, regardless of how far over — a driver 5 km over and a driver 500 km over both see a full red bar; the exact debt is in the number, not the fill amount (an unbounded negative doesn't have a meaningful "how full" reading).
-- **Headline text**: replace the current "`periodUsageKm` / `periodAllowanceKm` km usados" line with the cumulative figures — "`cumulativeUsageKm` / `cumulativeAllowanceKm` km usados" (both already rounded the same way as today).
-- **Balance line** (already exists): keeps showing signed `balanceKm` — "X km de saldo" (positive, success color) or "X km em débito" (negative, error color) — this line doesn't change, it's already the cumulative number; only the bar and headline above it change to match.
-- `periodUsageKm`/`periodAllowanceKm` remain on `RentalAllowanceStatus` (still computed, still correct) but this card stops reading them. No other call site uses them today (confirmed: `RentalAllowanceBanner` already uses only the cumulative fields). Leave the fields in place rather than ripping them out — a future card may want the period-scoped view again, and the computation is cheap and already tested.
-- `RentalAllowanceBanner.tsx`: no change. It already alerts on cumulative `isNearLimit`/`isOverLimit`.
+- **When `balanceKm < 0`**: bar renders fully filled, error color, regardless of how far over — the exact debt is in the number, not the fill amount.
+- **Headline text**: "`cumulativeUsageKm` / `cumulativeAllowanceKm` km usados".
+- **Balance line** (already exists, unchanged in shape): signed `balanceKm` — "X km de saldo" / "X km em débito".
+- `RentalAllowanceBanner.tsx`: no change — already alerts on cumulative `isNearLimit`/`isOverLimit`, which keep the same meaning, just a different (smaller, in this production example) number feeding them.
 
 ## Part B — `km_gaps` table
 
@@ -197,5 +257,4 @@ A gap whose `start_at`/`end_at` window spans midnight (like the real 2026-08-17 
 
 - Auto-converting a reclassified "actually a missed shift" gap into a real `shifts` row — the driver logs that manually; see Part B.
 - A dedicated full-history "gaps" screen (Part C only adds the day-detail line item, per the owner's choice in brainstorming).
-- Any change to `computeRentalAllowanceStatus`'s math itself — confirmed correct, unchanged by this pass.
 - Retroactively backfilling `km_gaps` for the vehicle's entire history before this migration runs. The first recompute triggered by the next shift/fuel_entries write will naturally populate everything from the vehicle's full reading history (the recompute function scans ALL of that vehicle's readings, not just new ones) — so a one-time manual `select recompute_km_gaps(id, user_id) from vehicles` for existing vehicles is enough to backfill immediately rather than waiting for the next organic write; call this out as a required one-time step in the implementation plan, not a new migration concern.
