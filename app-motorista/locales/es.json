@@ -426,6 +426,13 @@
                              "over_limit":  "Tienes {{km}} km de déficit acumulado (~{{cost}} estimado).",
                              "baseline_estimated":  "El conteo comenzó a partir de tu primer registro en este período."
                          },
+    "km_gaps":  {
+                    "category_personal_use":  "Uso personal",
+                    "category_other":  "Otro",
+                    "row_label":  "{{category}} detectado: {{km}} {{unit}}",
+                    "note_placeholder":  "Nota (opcional)",
+                    "spans_multiple_days":  "Hora exacta no registrada — puede haber ocurrido el día anterior o siguiente."
+                },
     "more":  {
                  "title":  "Más",
                  "profile":  "Perfil",

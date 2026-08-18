@@ -426,6 +426,13 @@
                              "over_limit":  "Você está com {{km}} km de débito acumulado (~{{cost}} estimado).",
                              "baseline_estimated":  "Contagem iniciada a partir do seu primeiro registro neste período."
                          },
+    "km_gaps":  {
+                    "category_personal_use":  "Uso pessoal",
+                    "category_other":  "Outro",
+                    "row_label":  "{{category}} detectado: {{km}} {{unit}}",
+                    "note_placeholder":  "Nota (opcional)",
+                    "spans_multiple_days":  "Horário exato não registrado — pode ter ocorrido no dia anterior ou seguinte."
+                },
     "more":  {
                  "title":  "Mais",
                  "profile":  "Perfil",

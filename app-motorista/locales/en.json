@@ -426,6 +426,13 @@
                              "over_limit":  "You're {{km}} km over your accumulated allowance (~{{cost}} estimated).",
                              "baseline_estimated":  "Tracking started from your first record this period."
                          },
+    "km_gaps":  {
+                    "category_personal_use":  "Personal use",
+                    "category_other":  "Other",
+                    "row_label":  "{{category}} detected: {{km}} {{unit}}",
+                    "note_placeholder":  "Note (optional)",
+                    "spans_multiple_days":  "Exact time not logged — may have happened the day before or after."
+                },
     "more":  {
                  "title":  "More",
                  "profile":  "Profile",

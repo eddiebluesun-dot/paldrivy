@@ -360,6 +360,13 @@
     "over_limit": "Vous avez un déficit cumulé de {{km}} km (~{{cost}} estimé).",
     "baseline_estimated": "Le suivi a commencé à partir de votre premier relevé de cette période."
   },
+  "km_gaps": {
+    "category_personal_use": "Usage personnel",
+    "category_other": "Autre",
+    "row_label": "{{category}} détecté : {{km}} {{unit}}",
+    "note_placeholder": "Note (facultatif)",
+    "spans_multiple_days": "Heure exacte non enregistrée — a pu se produire la veille ou le lendemain."
+  },
   "more": {
     "title": "Plus",
     "profile": "Profil",

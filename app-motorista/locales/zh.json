@@ -360,6 +360,13 @@
     "over_limit": "您累计超出 {{km}} 公里（预计约 {{cost}}）。",
     "baseline_estimated": "本周期的公里数统计从您的第一条记录开始。"
   },
+  "km_gaps": {
+    "category_personal_use": "私人使用",
+    "category_other": "其他",
+    "row_label": "检测到{{category}}：{{km}} {{unit}}",
+    "note_placeholder": "备注（可选）",
+    "spans_multiple_days": "确切时间未记录 — 可能发生在前一天或后一天。"
+  },
   "more": {
     "title": "更多",
     "profile": "个人资料",
