@@ -43,6 +43,8 @@ import { fireRentalAllowanceNearLimitNotification } from '@/src/services/notific
 import { getRecurringExpenseBreakdownForDay } from '@/src/services/recurringExpenseAllocation';
 import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
 import { addExpense } from '@/src/services/expenses';
+import { getKmGapsForDay, updateKmGap, type KmGapForDay } from '@/src/services/kmGaps';
+import { KmGapRow } from '@/src/components/KmGapRow';
 import { getPeriodBounds, type RentalAllowanceStatus, type RentalAllowancePeriod } from '@/src/utils/rentalKmAllowanceUtils';
 import type { Shift, Vehicle } from '@/src/types';
 
@@ -920,18 +922,29 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
   const { t } = useTranslation();
   const [detail, setDetail] = useState<DayDetail | null>(null);
   const [recurringBreakdown, setRecurringBreakdown] = useState<Array<{ category: string; amountCents: number }>>([]);
+  const [kmGaps, setKmGaps] = useState<KmGapForDay[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!visible || !dateStr || !userId) return;
-    setLoading(true); setDetail(null); setRecurringBreakdown([]);
+    setLoading(true); setDetail(null); setRecurringBreakdown([]); setKmGaps([]);
     Promise.all([
       getDayDetail(userId, dateStr),
       getRecurringExpenseBreakdownForDay(userId, dateStr).catch(() => []),
-    ]).then(([d, breakdown]) => { setDetail(d); setRecurringBreakdown(breakdown); })
+      getKmGapsForDay(userId, dateStr).catch(() => [] as KmGapForDay[]),
+    ]).then(([d, breakdown, gaps]) => { setDetail(d); setRecurringBreakdown(breakdown); setKmGaps(gaps); })
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
   }, [visible, dateStr, userId]);
+
+  // Optimistic local update: reclassification (Part B's "Reclassification
+  // is metadata-only") never changes gap_meters/start_odometer_meters/
+  // end_odometer_meters, so merging the patch into local state is exactly
+  // as correct as refetching, without a round trip.
+  async function handleGapSave(gap: KmGapForDay, category: KmGapForDay['category'], note: string | null) {
+    await updateKmGap(gap.id, { category, note });
+    setKmGaps(prev => prev.map(g => (g.id === gap.id ? { ...g, category, note, is_edited: true } : g)));
+  }
 
   const label = dateStr ? (() => {
     const s = new Date(dateStr + 'T12:00:00').toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
@@ -1050,6 +1063,14 @@ function DayDetailModal({ visible, dateStr, userId, onClose, distanceUnit, curre
               {dayOdomEnd != null && (
                 <Row label={t('dashboard.day_odometer_end')} value={`${(dayOdomEnd / 1000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} km`} />
               )}
+              {kmGaps.map(gap => (
+                <KmGapRow
+                  key={gap.id}
+                  gap={gap}
+                  distanceUnit={distanceUnit}
+                  onSave={(category, note) => handleGapSave(gap, category, note)}
+                />
+              ))}
               <Row label={t('dashboard.day_shifts')} value={String(shifts.length)} />
               {totalDur > 0 && totalGross > 0 && <Row label={t('dashboard.day_gross_per_hour')} value={formatMoney(Math.round((totalGross / totalDur) * 3600), currencyCode, locale)} />}
               {totalDur > 0 && realNet > 0 && <Row label={t('dashboard.day_net_real_per_hour')} value={formatMoney(Math.round((realNet / totalDur) * 3600), currencyCode, locale)} />}
