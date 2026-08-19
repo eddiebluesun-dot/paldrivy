@@ -1,4 +1,59 @@
-import { getPeriodBounds, computeRentalAllowanceStatus, type OdometerReading } from '@/src/utils/rentalKmAllowanceUtils';
+import { getPeriodBounds, computeRentalAllowanceStatus, getAllowanceCycleBounds, type OdometerReading } from '@/src/utils/rentalKmAllowanceUtils';
+
+describe('getAllowanceCycleBounds', () => {
+  it('daily: cycleIndex is days elapsed since contract start, cycle is exactly 1 day', () => {
+    const bounds = getAllowanceCycleBounds('2026-08-05', 'daily', null, new Date('2026-08-08T15:00:00Z'));
+    expect(bounds).toEqual({
+      cycleStart: new Date('2026-08-08T00:00:00.000Z'),
+      cycleEnd: new Date('2026-08-09T00:00:00.000Z'),
+      cycleIndex: 3,
+    });
+  });
+
+  it('monthly: fixed 30-day rolling window anchored to contractStartDate, no calendar-month clamping', () => {
+    // 31 days after 2026-08-05 -> day 31 falls in the SECOND 30-day block (days 31-60), cycleIndex 1.
+    const bounds = getAllowanceCycleBounds('2026-08-05', 'monthly', null, new Date('2026-09-05T12:00:00Z'));
+    expect(bounds).toEqual({
+      cycleStart: new Date('2026-09-04T00:00:00.000Z'), // contractStart + 30 days
+      cycleEnd: new Date('2026-10-04T00:00:00.000Z'),
+      cycleIndex: 1,
+    });
+  });
+
+  it('weekly: cycle 0 contains contractStartDate regardless of weekStartDay, even when the week starts BEFORE the contract', () => {
+    // Contract started Wed 2026-08-05, week starts Monday -> cycle 0 is [Aug 3, Aug 10).
+    const bounds = getAllowanceCycleBounds('2026-08-05', 'weekly', 1, new Date('2026-08-05T12:00:00Z'));
+    expect(bounds).toEqual({
+      cycleStart: new Date('2026-08-03T00:00:00.000Z'),
+      cycleEnd: new Date('2026-08-10T00:00:00.000Z'),
+      cycleIndex: 0,
+    });
+  });
+
+  it('weekly: cycleIndex advances by 1 each configured week-start weekday, regardless of contract start weekday', () => {
+    // "now" = 2026-08-19 (Wednesday) -> current week is [Aug 17, Aug 24), 2 full weeks after
+    // the contract-start week (which began Mon Aug 3) -> cycleIndex 2.
+    const bounds = getAllowanceCycleBounds('2026-08-05', 'weekly', 1, new Date('2026-08-19T12:00:00Z'));
+    expect(bounds).toEqual({
+      cycleStart: new Date('2026-08-17T00:00:00.000Z'),
+      cycleEnd: new Date('2026-08-24T00:00:00.000Z'),
+      cycleIndex: 2,
+    });
+  });
+
+  it('weekly: defaults weekStartDay to Monday (1) when null', () => {
+    const withNull = getAllowanceCycleBounds('2026-08-05', 'weekly', null, new Date('2026-08-19T12:00:00Z'));
+    const withMonday = getAllowanceCycleBounds('2026-08-05', 'weekly', 1, new Date('2026-08-19T12:00:00Z'));
+    expect(withNull).toEqual(withMonday);
+  });
+
+  it('weekly: a different week-start day (e.g. Sunday=0) shifts the boundary', () => {
+    // now = Sunday 2026-08-16 -> with week starting Sunday, "now" itself IS the boundary.
+    const bounds = getAllowanceCycleBounds('2026-08-05', 'weekly', 0, new Date('2026-08-16T12:00:00Z'));
+    expect(bounds.cycleStart).toEqual(new Date('2026-08-16T00:00:00.000Z'));
+    expect(bounds.cycleEnd).toEqual(new Date('2026-08-23T00:00:00.000Z'));
+  });
+});
 
 describe('getPeriodBounds', () => {
   it('returns null for unlimited', () => {

@@ -77,6 +77,62 @@ export function getPeriodBounds(
   return { periodStart, periodEnd, periodIndex: n };
 }
 
+// ─── Cycle bounds for the km-allowance feature (daily/weekly/monthly) ─────
+// Deliberately SEPARATE from getPeriodBounds/PeriodBounds above: those stay
+// calendar-Monday/calendar-month for recurringExpenseAllocationUtils.ts,
+// which is unrelated and must keep working exactly as today (confirmed
+// 2026-08-19). This is the km-allowance feature's own cycle math, with a
+// configurable week-start day and a fixed 30-day (not calendar) month.
+
+export type AllowanceCycleType = 'daily' | 'weekly' | 'monthly';
+
+export interface CycleBounds {
+  cycleStart: Date;
+  cycleEnd: Date;      // exclusive
+  cycleIndex: number;  // 0-based: the cycle containing contractStartDate is 0
+}
+
+function truncateToUTCMidnight(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getTime() + days * DAY_MS);
+}
+
+// The UTC-midnight date <= `d` whose day-of-week equals `startDay` (0=Sun..6=Sat).
+function alignToWeekStart(d: Date, startDay: number): Date {
+  const mid = truncateToUTCMidnight(d);
+  const diff = (mid.getUTCDay() - startDay + 7) % 7;
+  return addDays(mid, -diff);
+}
+
+export function getAllowanceCycleBounds(
+  contractStartDate: string,
+  cycleType: AllowanceCycleType,
+  weekStartDay: number | null,
+  now: Date,
+): CycleBounds {
+  const cycleLengthDays = cycleType === 'daily' ? 1 : cycleType === 'weekly' ? 7 : 30;
+  const contractStart = new Date(`${contractStartDate}T00:00:00.000Z`);
+
+  if (cycleType === 'weekly') {
+    const startDay = weekStartDay ?? 1; // default Monday
+    const cycleStart = alignToWeekStart(now, startDay);
+    const anchorCycleStart = alignToWeekStart(contractStart, startDay);
+    const cycleIndex = Math.round((cycleStart.getTime() - anchorCycleStart.getTime()) / (cycleLengthDays * DAY_MS));
+    return { cycleStart, cycleEnd: addDays(cycleStart, 7), cycleIndex };
+  }
+
+  // daily and monthly are both fixed-length rolling windows from contractStart
+  // -- no calendar alignment needed (unlike weekly), so both reduce to the
+  // same "how many whole cycleLengthDays-day blocks have elapsed" arithmetic.
+  const daysSinceStart = Math.floor((truncateToUTCMidnight(now).getTime() - contractStart.getTime()) / DAY_MS);
+  const cycleIndex = Math.floor(daysSinceStart / cycleLengthDays);
+  const cycleStart = addDays(contractStart, cycleIndex * cycleLengthDays);
+  return { cycleStart, cycleEnd: addDays(cycleStart, cycleLengthDays), cycleIndex };
+}
+
 export interface RentalAllowanceStatus {
   allowanceAmountKm: number;      // nominal weekly/monthly amount, as configured
   allowancePeriod: RentalAllowancePeriod;
