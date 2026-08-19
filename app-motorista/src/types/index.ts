@@ -5,7 +5,7 @@ export type OwnershipType = 'own' | 'rent' | 'financed';
 export type PlatformType = 'rideshare' | 'taxi_app' | 'taxi_conventional' | 'delivery';
 export type WorkerType = 'driver' | 'motoboy';
 export type RecurringFrequency = 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
-export type RentalAllowancePeriod = 'weekly' | 'monthly' | 'unlimited';
+export type RentalAllowancePeriod = 'daily' | 'weekly' | 'monthly';
 
 export type GoalType = 'bruto' | 'liquido';
 
@@ -56,6 +56,7 @@ export interface Vehicle {
   rental_km_allowance_period?: RentalAllowancePeriod | null;
   rental_km_allowance_amount?: number | null;
   rental_km_excess_rate_cents?: number | null;
+  rental_week_start_day?: number | null; // 0=Sunday..6=Saturday; only meaningful when rental_km_allowance_period === 'weekly'
   created_at: string;
 }
 
