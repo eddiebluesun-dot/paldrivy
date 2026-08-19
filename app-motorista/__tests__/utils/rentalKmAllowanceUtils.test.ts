@@ -132,58 +132,173 @@ describe('getPeriodBounds', () => {
   });
 });
 
-describe('computeRentalAllowanceStatus', () => {
-  // Real production case (Eddie, 2026-08-17): contract started 2026-08-05
-  // at 18332000m, 1505 km/week (215 km/day exactly). By 2026-08-17 the
-  // odometer read 21126000m. Hand-verified: 13 calendar days (inclusive of
-  // both start and today) x 215 km/day = 2795 km allowance vs
-  // (21126000-18332000)/1000 = 2794 km driven -> +1 km balance. The
-  // previous block-formula gave +1277 km for this exact data -- a
-  // different model, not a rounding difference. This is the regression
-  // test for the whole daily-linear rewrite (docs/superpowers/specs/
-  // 2026-08-18-km-gaps-and-cumulative-balance-bar-design.md).
-  it('regression: daily-linear allowance for a weekly plan matches the hand-verified production case (+1 km balance)', () => {
-    const status = computeRentalAllowanceStatus({
-      contractStartDate: '2026-08-05',
-      contractStartOdometerMeters: 18332000,
-      allowancePeriod: 'weekly',
-      allowanceAmountKm: 1505,
-      excessRateCents: 150,
-      readings: [{ odometerMeters: 21126000, at: '2026-08-17T10:00:00Z' }],
-      now: new Date('2026-08-17T16:00:00Z'),
-    });
-    expect(status?.cumulativeUsageKm).toBe(2794);
-    expect(status?.cumulativeAllowanceKm).toBeCloseTo(2795); // 215 km/day * 13 days
-    expect(status?.balanceKm).toBeCloseTo(1);
-    expect(status?.isOverLimit).toBe(false);
+// Real production odometer readings for Eddie's rental Kwid (vehicle_id
+// 4483a9f5-10b0-442c-9732-415a1dc27264), pulled 2026-08-19 via Supabase
+// execute_sql against public.shifts and public.fuel_entries, built exactly
+// as src/services/rentalAllowance.ts assembles readings (shift start tagged
+// with started_at, shift end tagged with ended_at, fuel entries tagged with
+// filled_at). Contract start 2026-08-05 at odometer 18332000. This is the
+// dataset the owner hand-verified against his real Localiza contract --
+// see docs/superpowers/specs/2026-08-19-km-allowance-cycle-generalization-design.md.
+const EDDIE_REAL_READINGS: OdometerReading[] = [
+  { odometerMeters: 18376000, at: '2026-08-06T08:48:00.000Z' },
+  { odometerMeters: 18626000, at: '2026-08-06T21:15:00.000Z' },
+  { odometerMeters: 18643000, at: '2026-08-07T12:42:50.320Z' },
+  { odometerMeters: 18611000, at: '2026-08-07T15:00:00.000Z' },
+  { odometerMeters: 18853000, at: '2026-08-07T20:33:42.634Z' },
+  { odometerMeters: 18861000, at: '2026-08-08T09:04:42.313Z' },
+  { odometerMeters: 18925000, at: '2026-08-08T15:00:00.000Z' },
+  { odometerMeters: 19070000, at: '2026-08-08T16:44:24.373Z' },
+  { odometerMeters: 19088000, at: '2026-08-09T10:36:00.000Z' },
+  { odometerMeters: 19228000, at: '2026-08-09T15:21:00.000Z' },
+  { odometerMeters: 19228000, at: '2026-08-10T09:54:03.178Z' },
+  { odometerMeters: 19300000, at: '2026-08-10T12:51:02.482Z' },
+  { odometerMeters: 19302000, at: '2026-08-10T14:57:00.000Z' },
+  { odometerMeters: 19302000, at: '2026-08-10T15:00:00.000Z' },
+  { odometerMeters: 19231000, at: '2026-08-10T15:00:00.000Z' },
+  { odometerMeters: 19474000, at: '2026-08-10T22:06:00.000Z' },
+  { odometerMeters: 19474000, at: '2026-08-11T08:40:00.000Z' },
+  { odometerMeters: 19646000, at: '2026-08-11T15:00:00.000Z' },
+  { odometerMeters: 19818000, at: '2026-08-11T21:46:00.000Z' },
+  { odometerMeters: 19818000, at: '2026-08-12T09:13:00.000Z' },
+  { odometerMeters: 20034000, at: '2026-08-12T15:00:00.000Z' },
+  { odometerMeters: 19841000, at: '2026-08-12T15:00:00.000Z' },
+  { odometerMeters: 20107000, at: '2026-08-12T22:06:00.000Z' },
+  { odometerMeters: 20107000, at: '2026-08-13T09:23:25.776Z' },
+  { odometerMeters: 20271000, at: '2026-08-13T15:00:00.000Z' },
+  { odometerMeters: 20274000, at: '2026-08-13T16:58:39.625Z' },
+  { odometerMeters: 20282000, at: '2026-08-13T18:47:00.000Z' },
+  { odometerMeters: 20365000, at: '2026-08-13T22:30:00.000Z' },
+  { odometerMeters: 20365000, at: '2026-08-14T09:06:00.000Z' },
+  { odometerMeters: 20566000, at: '2026-08-14T16:36:00.000Z' },
+  { odometerMeters: 20584000, at: '2026-08-15T08:57:00.000Z' },
+  { odometerMeters: 20586000, at: '2026-08-15T15:00:00.000Z' },
+  { odometerMeters: 20739000, at: '2026-08-15T15:46:00.000Z' },
+  { odometerMeters: 20853000, at: '2026-08-17T12:44:39.292Z' },
+  { odometerMeters: 20833000, at: '2026-08-17T15:00:00.000Z' },
+  { odometerMeters: 21126000, at: '2026-08-17T21:55:48.192Z' },
+  { odometerMeters: 21143000, at: '2026-08-18T12:15:00.000Z' },
+  { odometerMeters: 21167000, at: '2026-08-18T15:00:00.000Z' },
+  { odometerMeters: 21372000, at: '2026-08-18T22:04:00.000Z' },
+];
+
+function eddieStatusAt(now: Date) {
+  return computeRentalAllowanceStatus({
+    contractStartDate: '2026-08-05',
+    contractStartOdometerMeters: 18332000,
+    cycleType: 'weekly',
+    weekStartDay: 1,
+    allowanceAmountKm: 1505,
+    excessRateCents: 75,
+    readings: EDDIE_REAL_READINGS.filter(r => new Date(r.at).getTime() <= now.getTime()),
+    now,
+  });
+}
+
+describe('computeRentalAllowanceStatus — real-data regression (Eddie, vehicle 4483a9f5, hand-verified against the Localiza contract)', () => {
+  it('week 1 (partial, 05-09/08): 896 km used, 1075 km allowance (1505 * 5/7 prorated), +179 balance', () => {
+    const status = eddieStatusAt(new Date('2026-08-09T20:00:00.000Z'));
+    expect(status?.cumulativeUsageKm).toBe(896);
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(1075);
+    expect(status?.balanceKm).toBeCloseTo(179);
   });
 
-  // Boundary case requested explicitly: same real data, but 2km more driven
-  // tips the balance from +1 to a small debt, proving the boundary crosses
-  // exactly where hand-calculated (2795 - 2796 = -1), not off-by-one.
-  it('regression: 2km more driven on the same real data crosses the balance from +1 to -1 km (debt boundary)', () => {
+  it('week 2 usage bridges the weekend gap to 1625 km, NOT 1511 km (regression: a trailing gap belongs to the cycle it happened in, not the one that reveals it)', () => {
+    const week1End = eddieStatusAt(new Date('2026-08-09T20:00:00.000Z'));
+
+    // Naive/WRONG snapshot: only data available strictly within week 2's own
+    // calendar bounds (Sunday night, before week 3's Monday reading exists).
+    // This reproduces the exact 1511 undercount the owner flagged as wrong.
+    const naiveWeek2Close = eddieStatusAt(new Date('2026-08-16T20:00:00.000Z'));
+    expect(naiveWeek2Close!.cumulativeUsageKm - week1End!.cumulativeUsageKm).toBe(1511);
+
+    // Correct snapshot: once week 3's first reading (Mon 2026-08-17 12:44
+    // shift start) is known, the SAME subtraction yields the true 1625 --
+    // the 114km weekend gap is now counted, attributed back to week 2.
+    const onceWeek3RevealsIt = eddieStatusAt(new Date('2026-08-17T13:00:00.000Z'));
+    expect(onceWeek3RevealsIt!.cumulativeUsageKm).toBe(2521); // 896 + 1625
+    expect(onceWeek3RevealsIt!.cumulativeUsageKm - week1End!.cumulativeUsageKm).toBe(1625);
+
+    // The owner's own manual ledger: prevBalance + week2Allowance - week2Usage.
+    const week2Balance = 179 + 1505 - 1625;
+    expect(week2Balance).toBe(59);
+  });
+
+  it('week 3 (open, live as of 2026-08-19): 519 km current-cycle usage, 3040 km cumulative usage, +1045 cumulative balance', () => {
+    const status = eddieStatusAt(new Date('2026-08-19T12:00:00.000Z'));
+    expect(status?.cumulativeUsageKm).toBe(3040); // 896 + 1625 + 519
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(4085); // 1075 + 1505*2
+    expect(status?.balanceKm).toBeCloseTo(1045);
+    expect(status?.currentCycleUsageKm).toBe(519); // 21372000 - 20853000 (first reading of week 3)
+    expect(status?.isOverLimit).toBe(false);
+  });
+});
+
+describe('computeRentalAllowanceStatus — cycle mechanics', () => {
+  it('daily: full daily allowance granted at each day boundary, no proration ever (cycle 0 anchors exactly to contractStartDate)', () => {
+    const status = computeRentalAllowanceStatus({
+      contractStartDate: '2026-08-05',
+      contractStartOdometerMeters: 0,
+      cycleType: 'daily',
+      weekStartDay: null,
+      allowanceAmountKm: 200,
+      excessRateCents: 100,
+      readings: [{ odometerMeters: 450_000, at: '2026-08-07T10:00:00Z' }], // day index 2 (Aug5=0,Aug6=1,Aug7=2)
+      now: new Date('2026-08-07T12:00:00Z'),
+    });
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(600); // 200 * (cycleIndex 2 + 1 cycles) = 200*3
+    expect(status?.cumulativeUsageKm).toBe(450);
+    expect(status?.balanceKm).toBeCloseTo(150);
+  });
+
+  it('monthly: fixed 30-day block, no calendar clamping -- full allowance granted at day 30, not varying by month length', () => {
+    const status = computeRentalAllowanceStatus({
+      contractStartDate: '2026-01-30',
+      contractStartOdometerMeters: 0,
+      cycleType: 'monthly',
+      weekStartDay: null,
+      allowanceAmountKm: 300,
+      excessRateCents: 100,
+      readings: [{ odometerMeters: 100_000, at: '2026-03-02T00:00:00Z' }], // 31 days after Jan 30 -> cycleIndex 1
+      now: new Date('2026-03-02T00:00:00Z'),
+    });
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(600); // cycle 0 (300, never prorated) + cycle 1 (300)
+    expect(status?.cumulativeUsageKm).toBe(100);
+  });
+
+  it('uncapped/informational mode: allowanceAmountKm null returns cumulative + current-cycle usage but no balance/limit fields', () => {
     const status = computeRentalAllowanceStatus({
       contractStartDate: '2026-08-05',
       contractStartOdometerMeters: 18332000,
-      allowancePeriod: 'weekly',
-      allowanceAmountKm: 1505,
-      excessRateCents: 150,
-      readings: [{ odometerMeters: 21128000, at: '2026-08-17T10:00:00Z' }],
-      now: new Date('2026-08-17T16:00:00Z'),
+      cycleType: 'weekly',
+      weekStartDay: 1,
+      allowanceAmountKm: null,
+      excessRateCents: null,
+      readings: [
+        { odometerMeters: 18332000, at: '2026-08-05T09:00:00Z' },
+        { odometerMeters: 18400000, at: '2026-08-17T09:00:00Z' }, // first reading of the current (week 3) cycle
+        { odometerMeters: 18459000, at: '2026-08-19T09:00:00Z' },
+      ],
+      now: new Date('2026-08-19T12:00:00Z'),
     });
-    expect(status?.cumulativeUsageKm).toBe(2796);
-    expect(status?.cumulativeAllowanceKm).toBeCloseTo(2795);
-    expect(status?.balanceKm).toBeCloseTo(-1);
-    expect(status?.isOverLimit).toBe(true);
-    expect(status?.overageKm).toBeCloseTo(1);
-    expect(status?.overageCostCents).toBe(Math.round(1 * 150));
+    expect(status).not.toBeNull();
+    expect(status?.cumulativeUsageKm).toBe(127); // 18459000 - 18332000, since contract start
+    expect(status?.currentCycleUsageKm).toBe(59); // 18459000 - 18400000, since this cycle's own first reading
+    expect(status?.cumulativeAllowanceKm).toBeNull();
+    expect(status?.balanceKm).toBeNull();
+    expect(status?.overageKm).toBeNull();
+    expect(status?.overageCostCents).toBeNull();
+    expect(status?.remainingKm).toBeNull();
+    expect(status?.isNearLimit).toBe(false);
+    expect(status?.isOverLimit).toBe(false);
   });
 
   it('uses the explicit contract-start odometer as the baseline', () => {
     const status = computeRentalAllowanceStatus({
       contractStartDate: '2026-08-05',
       contractStartOdometerMeters: 18332000,
-      allowancePeriod: 'weekly',
+      cycleType: 'weekly',
+      weekStartDay: 1,
       allowanceAmountKm: 500,
       excessRateCents: 150,
       readings: [
@@ -192,10 +307,7 @@ describe('computeRentalAllowanceStatus', () => {
       ],
       now: new Date('2026-08-07T09:00:00Z'),
     });
-    // latest reading 18622000 - baseline 18332000 = 290000m = 290km
     expect(status?.cumulativeUsageKm).toBe(290);
-    // daysElapsed: Aug5,6,7 inclusive = 3 days -> (500/7)*3 = 214.2857...
-    expect(status?.cumulativeAllowanceKm).toBeCloseTo((500 / 7) * 3);
     expect(status?.baselineIsEstimated).toBe(false);
   });
 
@@ -203,7 +315,8 @@ describe('computeRentalAllowanceStatus', () => {
     const status = computeRentalAllowanceStatus({
       contractStartDate: '2026-08-05',
       contractStartOdometerMeters: null,
-      allowancePeriod: 'weekly',
+      cycleType: 'weekly',
+      weekStartDay: 1,
       allowanceAmountKm: 500,
       excessRateCents: 150,
       readings: [
@@ -216,75 +329,36 @@ describe('computeRentalAllowanceStatus', () => {
     expect(status?.baselineIsEstimated).toBe(true);
   });
 
-  it('cumulative usage never resets across what would have been a period boundary (weekend gap production shape)', () => {
-    // Contract started Monday 2026-08-03 at odometer 0. A shift ends
-    // Saturday at 500km; the car is driven privately over the weekend with
-    // nothing logged (+200km); the next reading Wednesday is 900km. There
-    // is no period-boundary concept anymore for this to get lost at.
-    const status = computeRentalAllowanceStatus({
-      contractStartDate: '2026-08-03',
-      contractStartOdometerMeters: 0,
-      allowancePeriod: 'weekly',
-      allowanceAmountKm: 1500,
-      excessRateCents: 75,
-      readings: [
-        { odometerMeters: 500_000, at: '2026-08-08T18:00:00Z' },
-        { odometerMeters: 900_000, at: '2026-08-12T18:00:00Z' },
-      ],
-      now: new Date('2026-08-12T19:00:00Z'),
-    });
-    expect(status?.cumulativeUsageKm).toBe(900);
-    // daysElapsed: Aug3..Aug12 inclusive = 10 days -> (1500/7)*10
-    expect(status?.cumulativeAllowanceKm).toBeCloseTo((1500 / 7) * 10);
-  });
-
-  it('monthly: daily rate varies by which calendar month the elapsed day falls in (rate changes across a month boundary)', () => {
-    // Contract started 2026-01-30, allowance 310km/month. daysElapsed
-    // (Jan30, Jan31, Feb1, Feb2 inclusive) = 4 days: 2 days at Jan's rate
-    // (310/31 = 10 km/day exactly) + 2 days at Feb's rate (310/28, Feb 2026
-    // is not a leap year).
-    const status = computeRentalAllowanceStatus({
-      contractStartDate: '2026-01-30',
-      contractStartOdometerMeters: 0,
-      allowancePeriod: 'monthly',
-      allowanceAmountKm: 310,
-      excessRateCents: 100,
-      readings: [{ odometerMeters: 1_000_000, at: '2026-02-02T12:00:00Z' }],
-      now: new Date('2026-02-02T12:00:00Z'),
-    });
-    expect(status?.cumulativeUsageKm).toBe(1000);
-    expect(status?.cumulativeAllowanceKm).toBeCloseTo(2 * (310 / 31) + 2 * (310 / 28));
-  });
-
   it('flags over-limit once the cumulative balance goes negative, with an overage cost estimate', () => {
     const status = computeRentalAllowanceStatus({
       contractStartDate: '2026-08-05',
       contractStartOdometerMeters: 0,
-      allowancePeriod: 'weekly',
+      cycleType: 'weekly',
+      weekStartDay: 1,
       allowanceAmountKm: 500,
       excessRateCents: 150,
       readings: [{ odometerMeters: 520_000, at: '2026-08-05T18:00:00Z' }],
       now: new Date('2026-08-05T19:00:00Z'),
     });
-    // daysElapsed = 1 -> allowance = 500/7 ~= 71.43km
+    // cycle 0 for a Wed contract start with Monday week-start is prorated 5/7 -> 500*5/7 ~= 357.14
     expect(status?.isOverLimit).toBe(true);
-    expect(status?.balanceKm).toBeCloseTo(500 / 7 - 520);
-    expect(status?.overageKm).toBeCloseTo(520 - 500 / 7);
-    expect(status?.overageCostCents).toBe(Math.round((520 - 500 / 7) * 150));
-    expect(status?.remainingKm).toBe(0);
+    expect(status?.balanceKm).toBeCloseTo((500 * 5) / 7 - 520);
+    expect(status?.overageKm).toBeCloseTo(520 - (500 * 5) / 7);
+    expect(status?.overageCostCents).toBe(Math.round((520 - (500 * 5) / 7) * 150));
   });
 
   it('isNearLimit fires at >=90% cumulative usage', () => {
     const status = computeRentalAllowanceStatus({
       contractStartDate: '2026-08-05',
       contractStartOdometerMeters: 0,
-      allowancePeriod: 'weekly',
-      allowanceAmountKm: 700, // daysElapsed=1 -> allowance = 100km
+      cycleType: 'weekly',
+      weekStartDay: 1,
+      allowanceAmountKm: 700,
       excessRateCents: 150,
-      readings: [{ odometerMeters: 95_000, at: '2026-08-05T18:00:00Z' }],
+      readings: [{ odometerMeters: 460_000, at: '2026-08-05T18:00:00Z' }], // cycle0 allowance = 700*5/7 = 500; 460/500 = 92%
       now: new Date('2026-08-05T19:00:00Z'),
     });
-    expect(status?.cumulativeAllowanceKm).toBeCloseTo(100);
+    expect(status?.cumulativeAllowanceKm).toBeCloseTo(500);
     expect(status?.isNearLimit).toBe(true);
     expect(status?.isOverLimit).toBe(false);
   });
@@ -293,36 +367,11 @@ describe('computeRentalAllowanceStatus', () => {
     const status = computeRentalAllowanceStatus({
       contractStartDate: '2026-08-05',
       contractStartOdometerMeters: 18332000,
-      allowancePeriod: 'weekly',
+      cycleType: 'weekly',
+      weekStartDay: 1,
       allowanceAmountKm: 500,
       excessRateCents: 150,
       readings: [],
-      now: new Date('2026-08-07T09:00:00Z'),
-    });
-    expect(status).toBeNull();
-  });
-
-  it('returns null for unlimited allowance', () => {
-    const status = computeRentalAllowanceStatus({
-      contractStartDate: '2026-08-05',
-      contractStartOdometerMeters: 18332000,
-      allowancePeriod: 'unlimited',
-      allowanceAmountKm: null,
-      excessRateCents: null,
-      readings: [{ odometerMeters: 18622000, at: '2026-08-07T08:30:00Z' }],
-      now: new Date('2026-08-07T09:00:00Z'),
-    });
-    expect(status).toBeNull();
-  });
-
-  it('returns null when allowanceAmountKm is null', () => {
-    const status = computeRentalAllowanceStatus({
-      contractStartDate: '2026-08-05',
-      contractStartOdometerMeters: 18332000,
-      allowancePeriod: 'weekly',
-      allowanceAmountKm: null,
-      excessRateCents: null,
-      readings: [{ odometerMeters: 18622000, at: '2026-08-07T08:30:00Z' }],
       now: new Date('2026-08-07T09:00:00Z'),
     });
     expect(status).toBeNull();
