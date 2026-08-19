@@ -26,6 +26,7 @@ function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllow
     allowanceAmountKm: 500, allowancePeriod: 'weekly',
     baselineMeters: 18332000, baselineIsEstimated: false, currentOdometerMeters: 18622000,
     cumulativeUsageKm: 290, cumulativeAllowanceKm: 500, balanceKm: 210,
+    currentCycleUsageKm: 290,
     isNearLimit: false, isOverLimit: false,
     overageKm: 0, overageCostCents: 0, remainingKm: 210,
     ...overrides,
@@ -87,5 +88,14 @@ describe('RentalAllowanceBanner', () => {
       status={makeStatus({ isNearLimit: true, isOverLimit: true, baselineIsEstimated: false, balanceKm: -20, overageKm: 20, overageCostCents: 3000 })}
     />);
     expect(screen.queryByTestId('rental-allowance-baseline-estimated')).toBeNull();
+  });
+
+  it('renders nothing for uncapped/informational status (isNearLimit is always false when allowanceAmountKm is null)', () => {
+    const { toJSON } = render(<RentalAllowanceBanner status={makeStatus({
+      allowanceAmountKm: null, cumulativeAllowanceKm: null, balanceKm: null,
+      overageKm: null, overageCostCents: null, remainingKm: null,
+      isNearLimit: false, isOverLimit: false,
+    })} />);
+    expect(toJSON()).toBeNull();
   });
 });
