@@ -53,6 +53,14 @@ export function computeDailyAllocationCents(
 
   let total = 0;
   for (const expense of expenses) {
+    // Lower bound: this expense didn't exist before its own anchor date, no
+    // matter what getPeriodBounds computes for a period containing
+    // targetDate (getPeriodBounds derives period edges from targetDate, not
+    // from expense.expenseDate, so a pre-anchor date can still land inside a
+    // period it returns). Mirrors the endsAt check below as an upper bound.
+    const expenseDateAnchor = new Date(`${expense.expenseDate}T00:00:00.000Z`);
+    if (targetDate < expenseDateAnchor) continue;
+
     if (expense.endsAt) {
       const endsAtDate = new Date(`${expense.endsAt}T00:00:00.000Z`);
       if (targetDate >= endsAtDate) continue;

@@ -103,12 +103,26 @@ export async function getMonthHistory(userId: string, limit = 12): Promise<Month
 
   // Each bucketed month's recurring-expense share, same rationale as
   // getYearlyReport in dashboard.ts.
+  //
+  // The CURRENT (in-progress) month is capped at "today" (month-to-date),
+  // not the full projected calendar month -- otherwise the recurring-expense
+  // proration (spread evenly across every working day of the range) smears a
+  // share onto days later in the month that haven't happened yet, inflating
+  // "Resumo do Mês" beyond what's actually owed so far. A CLOSED past month
+  // has no "future" within it to exclude, so it's unchanged: full month end.
   const bucketKeys = Array.from(buckets.keys());
   const recurringTotals = await Promise.all(bucketKeys.map(key => {
     const b = buckets.get(key)!;
     const mStart = `${b.year}-${String(b.month).padStart(2, '0')}-01`;
-    const nextMonthDate = new Date(b.year, b.month, 1);
-    const mEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+    const isCurrentMonth = b.year === now.getFullYear() && b.month === now.getMonth() + 1;
+    let mEnd: string;
+    if (isCurrentMonth) {
+      const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      mEnd = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+    } else {
+      const nextMonthDate = new Date(b.year, b.month, 1);
+      mEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+    }
     return getRecurringExpenseTotalForRange(userId, mStart, mEnd);
   }));
   bucketKeys.forEach((key, i) => { buckets.get(key)!.expenses_cents += recurringTotals[i]; });

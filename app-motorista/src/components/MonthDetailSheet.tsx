@@ -105,6 +105,22 @@ export function MonthDetailSheet({
     const startStr   = `${item.year}-${String(item.month).padStart(2, '0')}-01`;
     const endStr     = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, '0')}-01`;
 
+    // The CURRENT (in-progress) month's recurring-expense proration is capped
+    // at "today" (month-to-date) instead of the full projected calendar
+    // month -- otherwise a recurring expense's evenly-spread daily share
+    // would include days later in the month that haven't happened yet,
+    // inflating "Aluguel"/etc past what's actually owed so far. A CLOSED past
+    // month has no "future" within it, so it keeps using the real month end
+    // (endStr, unchanged). Mirrors getMonthHistory's same rule (cockpit.ts).
+    const now = new Date();
+    const isCurrentMonth = item.year === now.getFullYear() && item.month === now.getMonth() + 1;
+    const recurringEndStr = isCurrentMonth
+      ? (() => {
+          const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+        })()
+      : endStr;
+
     setLoading(true);
     Promise.all([
       supabase
@@ -120,7 +136,7 @@ export function MonthDetailSheet({
         .gte('filled_at', monthStart.toISOString())
         .lt('filled_at', monthEnd.toISOString()),
       getMonthlyBucketsForMonth(userId, item.year, item.month),
-      getRecurringExpenseBreakdownForRange(userId, startStr, endStr),
+      getRecurringExpenseBreakdownForRange(userId, startStr, recurringEndStr),
     ]).then(([expRes, fuelRes, buckets, recurringByCategory]) => {
       const catMap = new Map<string, number>();
       // Weekly/monthly recurring rows excluded here -- their prorated share

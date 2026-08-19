@@ -119,6 +119,62 @@ describe('computeDailyAllocationCents', () => {
     expect(result).toBe(0);
   });
 
+  it('a weekly expense contributes 0 for a target date before its own anchor (expenseDate), even though the calendar week containing that date overlaps the period getPeriodBounds would compute', () => {
+    // Bug: getPeriodBounds derives periodStart/periodEnd from `now` (targetDate),
+    // not from the expense's own anchor date, so a date BEFORE the expense was
+    // ever created could still fall inside the Mon-Sun week getPeriodBounds
+    // returns for it. expenseDate=2026-08-10 (a Monday) anchors the expense;
+    // 2026-08-05 (the Wednesday of the PRIOR week) must contribute 0 regardless.
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 80431, expenseDate: '2026-08-10', frequency: 'weekly' },
+    ];
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-05T12:00:00Z'));
+    expect(result).toBe(0);
+  });
+
+  it('a monthly expense contributes 0 for a target date before its own anchor (expenseDate)', () => {
+    // Same lower-bound rule as weekly, for the monthly branch. Anchored
+    // 2026-08-15; a target date in the same getPeriodBounds-computed period
+    // stretch but before the anchor day must still contribute 0.
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 30000, expenseDate: '2026-08-15', frequency: 'monthly' },
+    ];
+    const result = computeDailyAllocationCents(expenses, [1, 2, 3, 4, 5, 6], new Date('2026-08-10T12:00:00Z'));
+    expect(result).toBe(0);
+  });
+
+  it('regression: real rent (R$804.31/week, anchored 2026-08-10) summed over all of August contributes ZERO for days 01-09 and the correct total for days 10-31', () => {
+    // Real case: user db85eea7-8cd7-464d-ba68-05f1e8a15560, rent R$804.31/week,
+    // recurring_frequency='weekly', expense_date='2026-08-10' (a Monday).
+    // Driver works Mon-Sat. Before the fix, days 01-09 (11 days before the
+    // expense ever existed) were incorrectly allocated a share of this rent.
+    const expenses: RecurringExpenseInput[] = [
+      { amountCents: 80431, expenseDate: '2026-08-10', frequency: 'weekly' },
+    ];
+    const workingDays = [1, 2, 3, 4, 5, 6];
+
+    let earlyTotal = 0; // Aug 1-9
+    for (let d = 1; d <= 9; d++) {
+      earlyTotal += computeDailyAllocationCents(expenses, workingDays, new Date(`2026-08-0${d}T12:00:00Z`));
+    }
+    expect(earlyTotal).toBe(0);
+
+    // Aug 10-31: every calendar week Aug10-2026 anchors is a full Mon-Sun
+    // week (Aug 10 itself is a Monday), so every one of those weeks has 6
+    // working days (Mon-Sat) and each working day's share is always
+    // round(80431 / 6) = 13405 cents (R$134.05), regardless of which of the
+    // 4 weekly periods it falls in. Working days Aug10-31 inclusive: Aug
+    // 10-15 (6), 17-22 (6), 24-29 (6), 31 (1) = 19 working days (Sundays
+    // Aug16/23/30 excluded). Expected total = 19 x 13405 = 254695 cents
+    // (R$2,546.95) -- derived here independently of the implementation, not
+    // copied from it.
+    let lateTotal = 0; // Aug 10-31
+    for (let d = 10; d <= 31; d++) {
+      lateTotal += computeDailyAllocationCents(expenses, workingDays, new Date(`2026-08-${d}T12:00:00Z`));
+    }
+    expect(lateTotal).toBe(254695);
+  });
+
   it('summing the daily share across every day of the period reconciles to the total expense, not more', () => {
     // The exact scenario reported: R$804.31/week, driver works Mon-Sat.
     // Every working day in the period should get an equal share that sums

@@ -145,6 +145,63 @@ describe('MonthDetailSheet — Despesas por categoria vs total DESPESAS', () => 
   });
 });
 
+describe('MonthDetailSheet — month-to-date range for the current month', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-19T12:00:00-03:00'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('queries the recurring-expense breakdown up to tomorrow (exclusive) when item is the CURRENT month, not the full calendar month', async () => {
+    setupSupabase([]);
+    (getRecurringExpenseBreakdownForRange as jest.Mock).mockResolvedValue([]);
+
+    const currentMonthItem: MonthHistoryItem = { ...ITEM, year: 2026, month: 8 }; // August = current month (pinned above)
+
+    render(
+      <MonthDetailSheet
+        visible
+        item={currentMonthItem}
+        userId={USER_ID}
+        currencyCode={CURRENCY}
+        locale={LOCALE}
+        onClose={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getRecurringExpenseBreakdownForRange).toHaveBeenCalled();
+    });
+    expect(getRecurringExpenseBreakdownForRange).toHaveBeenCalledWith(USER_ID, '2026-08-01', '2026-08-20');
+  });
+
+  it('queries a CLOSED past month through its real last day, unchanged', async () => {
+    setupSupabase([]);
+    (getRecurringExpenseBreakdownForRange as jest.Mock).mockResolvedValue([]);
+
+    const pastMonthItem: MonthHistoryItem = { ...ITEM, year: 2026, month: 7 }; // July -- already closed relative to pinned "now"
+
+    render(
+      <MonthDetailSheet
+        visible
+        item={pastMonthItem}
+        userId={USER_ID}
+        currencyCode={CURRENCY}
+        locale={LOCALE}
+        onClose={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getRecurringExpenseBreakdownForRange).toHaveBeenCalled();
+    });
+    expect(getRecurringExpenseBreakdownForRange).toHaveBeenCalledWith(USER_ID, '2026-07-01', '2026-08-01');
+  });
+});
+
 // Intl.NumberFormat inserts a non-breaking space between "R$" and the
 // amount; RTL's default text normalizer collapses all whitespace (including
 // nbsp) to a plain space before matching -- mirror that here (same helper as

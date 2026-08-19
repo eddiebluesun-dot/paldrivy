@@ -234,15 +234,24 @@ describe('getRecurringExpenseTotalForRange', () => {
     // R$804.31/week (Eddie's real production figure), Mon-Sat (6 working
     // days) -> 80431/6 = 13405 cents/day (rounds to R$134.05, matching the
     // "Total despesas" rateio the driver actually sees).
+    //
+    // expense_date=2026-08-10 (a Monday) is this expense's own anchor --
+    // it didn't exist before that date, so days 2026-08-01..09 must
+    // contribute 0 (fixed 2026-08-19: computeDailyAllocationCents used to
+    // only check the upper bound (ends_at), never the lower bound
+    // (expense_date itself), so it retroactively charged this rent from the
+    // 1st of the month even though the expense was anchored on the 10th --
+    // this is the exact bug that hit production for this real user/expense).
+    // Working days 2026-08-10..31: Aug 10-15, 17-22, 24-29 (6 each) + Aug 31
+    // (1) = 19 working days (Sundays 16/23/30 excluded, and 01-09 excluded
+    // entirely as before-anchor).
     mockTables({
       expenses: [{ user_id: 'user-1', amount_cents: 80431, expense_date: '2026-08-10', recurring: true, recurring_frequency: 'weekly' }],
       goal: { user_id: 'user-1', type: 'monthly', starts_at: '2026-08-01', working_days: [1, 2, 3, 4, 5, 6] },
     });
 
-    // Full August 2026 (31 days): Sundays (the one non-working day) are
-    // 2026-08-02, 09, 16, 23, 30 -> 5 Sundays, 26 working days.
     const total = await getRecurringExpenseTotalForRange('user-1', '2026-08-01', '2026-09-01');
-    expect(total).toBe(26 * 13405);
+    expect(total).toBe(19 * 13405);
   });
 
   it('returns 0 for a range with no active recurring expenses', async () => {
