@@ -151,7 +151,8 @@ export default function RegisterScreen() {
   const [odometer, setOdometer] = useState('0');
   const [rentalStartDate, setRentalStartDate] = useState<string | null>(null);
   const [rentalStartOdometer, setRentalStartOdometer] = useState('');
-  const [allowancePeriod, setAllowancePeriod] = useState<RentalAllowancePeriod>('unlimited');
+  const [allowancePeriod, setAllowancePeriod] = useState<RentalAllowancePeriod>('weekly');
+  const [weekStartDay, setWeekStartDay] = useState<string>('1'); // Select requires string values
   const [allowanceAmount, setAllowanceAmount] = useState('');
   const [excessRate, setExcessRate] = useState('');
 
@@ -260,18 +261,12 @@ export default function RegisterScreen() {
   const dialDigits    = (COUNTRY_DIAL[auto.country] ?? '').replace(/\D/g, '');
   const phoneOk       = phoneDigits.length >= 8 || phoneDigits.length > dialDigits.length + 6;
   const profileOk     = !!fullName.trim() && phoneOk && !!city.trim() && !!state.trim() && countryOk;
-  // Mirrors vehicle.tsx's own rule: the rental start date is only required once
-  // a km allowance period is set (vehicle.tsx never hard-requires the start
-  // odometer at all). Requiring both unconditionally was stricter than the
-  // shipped screen and risked blocking legitimate signups — the opposite of
-  // this feature's purpose. The allowance amount/excess rate stay required,
-  // though: a driver who picked weekly/monthly has stated they have a cap, and
-  // those two fields feed the real excess-km cost calculation.
-  // rentalStartDate now comes from DateField, which only ever produces a
-  // structurally valid 'YYYY-MM-DD' string or null -- no parsing needed.
-  const rentalOk      = ownership !== 'rent' || allowancePeriod === 'unlimited'
-    ? true
-    : !!rentalStartDate && !!allowanceAmount.trim() && !!excessRate.trim();
+  // A rent vehicle always has a cycle selected (default weekly) so its
+  // contract start date is always required for cycle-bounds math -- even in
+  // uncapped/informational mode, since that still needs to know which
+  // cycle "now" falls in. The allowance amount/excess rate are always
+  // optional (blank amount = uncapped).
+  const rentalOk = ownership !== 'rent' || !!rentalStartDate;
   const vehicleOk     = !!brand.trim() && !!model.trim() && !!year.trim()
     && !!fuelType && !!ownership && rentalOk;
   // LGPD: every active legal document must be individually accepted. This is
@@ -335,9 +330,10 @@ export default function RegisterScreen() {
         rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
           ? displayToMeters(parseFloat(rentalStartOdometer.replace(',', '.')) || 0, 'km') : null,
         rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,
-        rental_km_allowance_amount: ownership === 'rent' && allowancePeriod !== 'unlimited' && allowanceAmount
+        rental_week_start_day: ownership === 'rent' && allowancePeriod === 'weekly' ? parseInt(weekStartDay, 10) : null,
+        rental_km_allowance_amount: ownership === 'rent' && allowanceAmount.trim()
           ? parseInt(allowanceAmount.replace(',', '.'), 10) : null,
-        rental_km_excess_rate_cents: ownership === 'rent' && allowancePeriod !== 'unlimited' && excessRate
+        rental_km_excess_rate_cents: ownership === 'rent' && excessRate.trim()
           ? decimalToCents(parseFloat(excessRate.replace(',', '.')) || 0) : null,
       },
       platforms: [...Array.from(selected), ...customList],
@@ -661,11 +657,12 @@ export default function RegisterScreen() {
 
             {ownership === 'rent' ? (
               <>
-                {/* Required only alongside a km allowance period — same rule as
-                    vehicle.tsx. The odometer is never hard-required. */}
+                {/* Always required for a rent vehicle now -- cycle-bounds math
+                    needs it even in uncapped/informational mode. The odometer
+                    itself is never hard-required. */}
                 <Text style={s.label}>
                   {t('onboarding.rental_start_date')}
-                  {allowancePeriod !== 'unlimited' ? <Text style={s.required}> *</Text> : null}
+                  <Text style={s.required}> *</Text>
                 </Text>
                 <DateField
                   value={rentalStartDate}
@@ -691,35 +688,46 @@ export default function RegisterScreen() {
                   value={allowancePeriod}
                   onValueChange={(v) => setAllowancePeriod(v as RentalAllowancePeriod)}
                   items={[
+                    { label: t('onboarding.allowance_daily'), value: 'daily' },
                     { label: t('onboarding.allowance_weekly'), value: 'weekly' },
                     { label: t('onboarding.allowance_monthly'), value: 'monthly' },
-                    { label: t('onboarding.allowance_unlimited'), value: 'unlimited' },
                   ]}
                 />
 
-                {allowancePeriod !== 'unlimited' ? (
+                {allowancePeriod === 'weekly' ? (
                   <>
-                    <Text style={s.label}>{t('onboarding.allowance_amount')}<Text style={s.required}> *</Text></Text>
-                    <TextInput
-                      style={inp}
-                      value={allowanceAmount}
-                      onChangeText={setAllowanceAmount}
-                      keyboardType="numeric"
-                      placeholderTextColor={Colors.textSecondary}
-                      accessibilityLabel={t('onboarding.allowance_amount')}
+                    <Text style={s.label}>{t('onboarding.week_start_day')}</Text>
+                    <Select
+                      value={weekStartDay}
+                      onValueChange={setWeekStartDay}
+                      items={['1', '2', '3', '4', '5', '6', '0'].map(d => ({
+                        label: t(`onboarding.weekday_${d}`), value: d,
+                      }))}
                     />
-
-                    <Text style={s.label}>{t('onboarding.excess_rate')}<Text style={s.required}> *</Text></Text>
-                    <TextInput
-                      style={inp}
-                      value={excessRate}
-                      onChangeText={setExcessRate}
-                      keyboardType="decimal-pad"
-                      placeholderTextColor={Colors.textSecondary}
-                      accessibilityLabel={t('onboarding.excess_rate')}
-                    />
+                    <Text style={s.hint}>{t('onboarding.week_start_day_hint')}</Text>
                   </>
                 ) : null}
+
+                <Text style={s.label}>{t('onboarding.allowance_amount')}</Text>
+                <TextInput
+                  style={inp}
+                  value={allowanceAmount}
+                  onChangeText={setAllowanceAmount}
+                  keyboardType="numeric"
+                  placeholderTextColor={Colors.textSecondary}
+                  accessibilityLabel={t('onboarding.allowance_amount')}
+                />
+                <Text style={s.hint}>{t('onboarding.allowance_amount_hint')}</Text>
+
+                <Text style={s.label}>{t('onboarding.excess_rate')}</Text>
+                <TextInput
+                  style={inp}
+                  value={excessRate}
+                  onChangeText={setExcessRate}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={Colors.textSecondary}
+                  accessibilityLabel={t('onboarding.excess_rate')}
+                />
               </>
             ) : null}
 
