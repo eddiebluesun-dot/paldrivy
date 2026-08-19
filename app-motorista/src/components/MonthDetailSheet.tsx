@@ -15,6 +15,7 @@ import { Colors, Radius, Spacing } from '../theme';
 import { formatMoney } from '../utils/currency';
 import type { MonthHistoryItem } from '../services/cockpit';
 import { getMonthlyBucketsForMonth, type MonthBucket } from '../services/dashboard';
+import { getRecurringExpenseBreakdownForRange } from '../services/recurringExpenseAllocation';
 
 const MONTH_NAMES = [
   'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -108,7 +109,7 @@ export function MonthDetailSheet({
     Promise.all([
       supabase
         .from('expenses')
-        .select('category, amount_cents')
+        .select('category, amount_cents, recurring, recurring_frequency')
         .eq('user_id', userId)
         .gte('expense_date', startStr)
         .lt('expense_date', endStr),
@@ -119,10 +120,24 @@ export function MonthDetailSheet({
         .gte('filled_at', monthStart.toISOString())
         .lt('filled_at', monthEnd.toISOString()),
       getMonthlyBucketsForMonth(userId, item.year, item.month),
-    ]).then(([expRes, fuelRes, buckets]) => {
+      getRecurringExpenseBreakdownForRange(userId, startStr, endStr),
+    ]).then(([expRes, fuelRes, buckets, recurringByCategory]) => {
       const catMap = new Map<string, number>();
-      for (const row of (expRes.data ?? []) as Array<{ category: string; amount_cents: number }>) {
+      // Weekly/monthly recurring rows excluded here -- their prorated share
+      // for the month comes from recurringByCategory below instead of the
+      // raw anchor row, otherwise "Aluguel" would show one week's/month's
+      // raw amount_cents instead of the working-day rateio, mismatching the
+      // DESPESAS total above (which already uses the prorated figure via
+      // getMonthHistory -> getRecurringExpenseTotalForRange). Mirrors
+      // getMonthReport()'s expRows filter (dashboard.ts) exactly.
+      const expRows = ((expRes.data ?? []) as Array<{
+        category: string; amount_cents: number; recurring: boolean; recurring_frequency: string | null;
+      }>).filter(e => !(e.recurring && (e.recurring_frequency === 'weekly' || e.recurring_frequency === 'monthly')));
+      for (const row of expRows) {
         catMap.set(row.category, (catMap.get(row.category) ?? 0) + row.amount_cents);
+      }
+      for (const r of recurringByCategory) {
+        catMap.set(r.category, (catMap.get(r.category) ?? 0) + r.amountCents);
       }
       const fuelTotal = ((fuelRes.data ?? []) as Array<{ total_cost_cents: number }>)
         .reduce((s, r) => s + r.total_cost_cents, 0);
