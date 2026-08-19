@@ -37,6 +37,7 @@ function mockVehicle(overrides: Partial<Vehicle> = {}): Vehicle {
     rental_contract_start_date: '2026-08-05',
     rental_contract_start_odometer: 18332000,
     rental_km_allowance_period: 'weekly',
+    rental_week_start_day: 1,
     rental_km_allowance_amount: 500,
     rental_km_excess_rate_cents: 150,
     ...overrides,
@@ -51,11 +52,30 @@ describe('getRentalAllowanceStatus', () => {
     expect(supabase.from).not.toHaveBeenCalled();
   });
 
-  it('returns null for unlimited allowance, without querying', async () => {
-    const vehicle = mockVehicle({ rental_km_allowance_period: 'unlimited' });
+  it('returns null when no allowance period is configured (rental km tracking not set up), without querying', async () => {
+    const vehicle = mockVehicle({ rental_km_allowance_period: null });
     const result = await getRentalAllowanceStatus(vehicle);
     expect(result).toBeNull();
     expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('returns a status with null allowance fields (not null itself) when allowance amount is not set, without needing a special-case query', async () => {
+    const vehicle = mockVehicle({ rental_km_allowance_amount: null, rental_km_excess_rate_cents: null });
+    (supabase.from as jest.Mock).mockImplementation((table: string) => {
+      if (table === 'shifts') {
+        return { select: () => ({ eq: () => ({ eq: () => ({ lte: () => Promise.resolve({
+          data: [{ odometer_start_meters: 18332000, odometer_end_meters: 18459000, started_at: '2026-08-19T08:00:00Z' }],
+        }) }) }) }) };
+      }
+      if (table === 'fuel_entries') {
+        return { select: () => ({ eq: () => ({ eq: () => ({ lte: () => Promise.resolve({ data: [] }) }) }) }) };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+    const result = await getRentalAllowanceStatus(vehicle, new Date('2026-08-19T12:00:00Z'));
+    expect(result).not.toBeNull();
+    expect(result?.cumulativeAllowanceKm).toBeNull();
+    expect(result?.balanceKm).toBeNull();
   });
 
   it('combines shift and fuel-entry odometer readings for the vehicle', async () => {

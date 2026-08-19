@@ -7,7 +7,7 @@ export async function getRentalAllowanceStatus(
   now: Date = new Date(),
 ): Promise<RentalAllowanceStatus | null> {
   if (vehicle.ownership_type !== 'rent') return null;
-  if (!vehicle.rental_km_allowance_period || vehicle.rental_km_allowance_period === 'unlimited') return null;
+  if (!vehicle.rental_km_allowance_period) return null;
   if (!vehicle.rental_contract_start_date) return null;
 
   const [{ data: shifts }, { data: fuelEntries }] = await Promise.all([
@@ -39,7 +39,8 @@ export async function getRentalAllowanceStatus(
   return computeRentalAllowanceStatus({
     contractStartDate: vehicle.rental_contract_start_date,
     contractStartOdometerMeters: vehicle.rental_contract_start_odometer ?? null,
-    allowancePeriod: vehicle.rental_km_allowance_period,
+    cycleType: vehicle.rental_km_allowance_period,
+    weekStartDay: vehicle.rental_week_start_day ?? null,
     allowanceAmountKm: vehicle.rental_km_allowance_amount ?? null,
     excessRateCents: vehicle.rental_km_excess_rate_cents ?? null,
     readings,
