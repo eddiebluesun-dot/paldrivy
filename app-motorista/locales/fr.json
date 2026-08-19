@@ -356,6 +356,8 @@
     "extract_balance_negative": "{{km}} km de déficit",
     "period_weekly": "hebdomadaire",
     "period_monthly": "mensuel",
+    "period_daily": "quotidienne",
+    "current_cycle": "{{km}} km sur la {{period}} en cours",
     "near_limit": "Vous avez utilisé {{percent}} % de votre forfait km cumulé. Il reste {{km}} km de solde.",
     "over_limit": "Vous avez un déficit cumulé de {{km}} km (~{{cost}} estimé).",
     "baseline_estimated": "Le suivi a commencé à partir de votre premier relevé de cette période."

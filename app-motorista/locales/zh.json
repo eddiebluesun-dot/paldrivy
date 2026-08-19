@@ -356,6 +356,8 @@
     "extract_balance_negative": "超支 {{km}} 公里",
     "period_weekly": "每周",
     "period_monthly": "每月",
+    "period_daily": "每日",
+    "current_cycle": "本{{period}}已行驶 {{km}} 公里",
     "near_limit": "您已使用累计配额的 {{percent}}%。剩余 {{km}} 公里余额。",
     "over_limit": "您累计超出 {{km}} 公里（预计约 {{cost}}）。",
     "baseline_estimated": "本周期的公里数统计从您的第一条记录开始。"

@@ -422,6 +422,8 @@
                              "extract_balance_negative":  "{{km}} km em débito",
                              "period_weekly":  "semanal",
                              "period_monthly":  "mensal",
+                             "period_daily":  "diária",
+                             "current_cycle":  "{{km}} km na {{period}} atual",
                              "near_limit":  "Você já usou {{percent}}% da sua franquia acumulada. Restam {{km}} km de saldo.",
                              "over_limit":  "Você está com {{km}} km de débito acumulado (~{{cost}} estimado).",
                              "baseline_estimated":  "Contagem iniciada a partir do seu primeiro registro neste período."

@@ -422,6 +422,8 @@
                              "extract_balance_negative":  "{{km}} km over",
                              "period_weekly":  "weekly",
                              "period_monthly":  "monthly",
+                             "period_daily":  "daily",
+                             "current_cycle":  "{{km}} km in the current {{period}}",
                              "near_limit":  "You've used {{percent}}% of your accumulated allowance. {{km}} km left in your balance.",
                              "over_limit":  "You're {{km}} km over your accumulated allowance (~{{cost}} estimated).",
                              "baseline_estimated":  "Tracking started from your first record this period."

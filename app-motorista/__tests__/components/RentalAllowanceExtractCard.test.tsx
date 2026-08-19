@@ -31,6 +31,7 @@ function makeStatus(overrides: Partial<RentalAllowanceStatus> = {}): RentalAllow
     allowanceAmountKm: 1500, allowancePeriod: 'weekly',
     baselineMeters: 19228000, baselineIsEstimated: true, currentOdometerMeters: 20739000,
     cumulativeUsageKm: 2858, cumulativeAllowanceKm: 3000, balanceKm: 142,
+    currentCycleUsageKm: 519,
     isNearLimit: true, isOverLimit: false,
     overageKm: 0, overageCostCents: 0, remainingKm: 142,
     ...overrides,
@@ -78,5 +79,24 @@ describe('RentalAllowanceExtractCard', () => {
     const fill = flattenStyle(screen.getByTestId('rental-allowance-fill').props.style);
     expect(fill.width).toBe(`${(2858 / 3000) * 100}%`);
     expect(fill.backgroundColor).toBe(Colors.accent);
+  });
+
+  it('shows the current-cycle usage line regardless of cap status', () => {
+    render(<RentalAllowanceExtractCard status={makeStatus({ currentCycleUsageKm: 519, allowancePeriod: 'weekly' })} />);
+    expect(screen.getByText('519 km na semanal atual')).toBeTruthy();
+  });
+
+  it('shows the daily period label', () => {
+    render(<RentalAllowanceExtractCard status={makeStatus({ allowancePeriod: 'daily' })} />);
+    expect(screen.getByText('diária')).toBeTruthy();
+  });
+
+  it('uncapped/informational mode: no bar, no balance, no percentage -- only the current-cycle usage line', () => {
+    render(<RentalAllowanceExtractCard status={makeStatus({
+      cumulativeAllowanceKm: null, balanceKm: null, currentCycleUsageKm: 127, allowancePeriod: 'weekly',
+    })} />);
+    expect(screen.getByText('127 km na semanal atual')).toBeTruthy();
+    expect(screen.queryByTestId('rental-allowance-fill')).toBeNull();
+    expect(screen.queryByTestId('rental-allowance-balance')).toBeNull();
   });
 });
