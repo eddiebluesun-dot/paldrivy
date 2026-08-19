@@ -120,7 +120,7 @@ const LANG_ITEMS = [
 
 const FUEL_TYPES: FuelType[] = ['gasoline', 'ethanol', 'diesel', 'gnv', 'electric', 'hybrid'];
 const OWNERSHIP_TYPES: OwnershipType[] = ['own', 'rent', 'financed'];
-const ALLOWANCE_PERIODS: RentalAllowancePeriod[] = ['weekly', 'monthly', 'unlimited'];
+const ALLOWANCE_PERIODS: RentalAllowancePeriod[] = ['daily', 'weekly', 'monthly'];
 
 // ─── Quick Picker Modal ───────────────────────────────────────────────────────
 
@@ -297,7 +297,8 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
   const [endingCost, setEndingCost] = useState(false);
   const [rentalStartDate, setRentalStartDate]         = useState<string | null>(null);
   const [rentalStartOdometer, setRentalStartOdometer] = useState('');
-  const [allowancePeriod, setAllowancePeriod]         = useState<RentalAllowancePeriod>('unlimited');
+  const [allowancePeriod, setAllowancePeriod]         = useState<RentalAllowancePeriod>('weekly');
+  const [weekStartDay, setWeekStartDay]                = useState<string>('1');
   const [allowanceAmount, setAllowanceAmount]         = useState('');
   const [excessRate, setExcessRate]                   = useState('');
   const [saving, setSaving]         = useState(false);
@@ -314,7 +315,8 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
           ? String(metersToDisplay(vehicle.rental_contract_start_odometer, 'km'))
           : ''
       );
-      setAllowancePeriod(vehicle.rental_km_allowance_period ?? 'unlimited');
+      setAllowancePeriod(vehicle.rental_km_allowance_period ?? 'weekly');
+      setWeekStartDay(vehicle.rental_week_start_day != null ? String(vehicle.rental_week_start_day) : '1');
       setAllowanceAmount(vehicle.rental_km_allowance_amount != null ? String(vehicle.rental_km_allowance_amount) : '');
       setExcessRate(vehicle.rental_km_excess_rate_cents != null ? String(centsToDecimal(vehicle.rental_km_excess_rate_cents)) : '');
       getVehicleRecurringCost(vehicle.id).then(cost => {
@@ -333,7 +335,7 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
       setFuel('gasoline');
       setOwnership('own');
       setRentalStartDate(null); setRentalStartOdometer('');
-      setAllowancePeriod('unlimited'); setAllowanceAmount(''); setExcessRate('');
+      setAllowancePeriod('weekly'); setWeekStartDay('1'); setAllowanceAmount(''); setExcessRate('');
       setRentalCostFrequency('monthly'); setCostAmount('0'); setLinkedCost(null);
     }
   }, [visible, vehicle]);
@@ -342,16 +344,19 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
     if (!userId || !brand.trim() || !model.trim()) { setError(t('more.vehicle_required')); return; }
     // rentalStartDate now comes from DateField, which only ever produces a
     // structurally valid 'YYYY-MM-DD' string or null -- no parsing needed.
-    if (ownership === 'rent' && allowancePeriod !== 'unlimited' && !rentalStartDate) { setError(t('more.vehicle_required')); return; }
+    // Always required for a rent vehicle: cycle-bounds math needs it even in
+    // uncapped/informational mode (blank amount).
+    if (ownership === 'rent' && !rentalStartDate) { setError(t('more.vehicle_required')); return; }
     const rentalFields = {
       ownership_type: ownership,
       rental_contract_start_date: ownership === 'rent' ? rentalStartDate : null,
       rental_contract_start_odometer: ownership === 'rent' && rentalStartOdometer
         ? displayToMeters(parseFloat(rentalStartOdometer.replace(',', '.')) || 0, 'km') : null,
       rental_km_allowance_period: ownership === 'rent' ? allowancePeriod : null,
-      rental_km_allowance_amount: ownership === 'rent' && allowancePeriod !== 'unlimited' && allowanceAmount
+      rental_week_start_day: ownership === 'rent' && allowancePeriod === 'weekly' ? parseInt(weekStartDay, 10) : null,
+      rental_km_allowance_amount: ownership === 'rent' && allowanceAmount
         ? parseInt(allowanceAmount.replace(',', '.'), 10) : null,
-      rental_km_excess_rate_cents: ownership === 'rent' && allowancePeriod !== 'unlimited' && excessRate
+      rental_km_excess_rate_cents: ownership === 'rent' && excessRate
         ? decimalToCents(parseFloat(excessRate.replace(',', '.')) || 0) : null,
     };
     setSaving(true); setError('');
@@ -510,29 +515,38 @@ function VehicleModal({ visible, vehicle, userId, onSaved, onClose }: {
                 ))}
               </View>
 
-              {allowancePeriod !== 'unlimited' ? (
+              {allowancePeriod === 'weekly' ? (
                 <>
-                  <Text style={s.fieldLabel}>{t('onboarding.allowance_amount')}</Text>
-                  <TextInput
-                    style={s.fieldInput}
-                    value={allowanceAmount}
-                    onChangeText={setAllowanceAmount}
-                    keyboardType="numeric"
-                    placeholderTextColor={Colors.textSecondary}
-                    accessibilityLabel={t('onboarding.allowance_amount')}
-                  />
-
-                  <Text style={s.fieldLabel}>{t('onboarding.excess_rate')}</Text>
-                  <TextInput
-                    style={s.fieldInput}
-                    value={excessRate}
-                    onChangeText={setExcessRate}
-                    keyboardType="decimal-pad"
-                    placeholderTextColor={Colors.textSecondary}
-                    accessibilityLabel={t('onboarding.excess_rate')}
+                  <Text style={s.fieldLabel}>{t('onboarding.week_start_day')}</Text>
+                  <Select
+                    value={weekStartDay}
+                    onValueChange={setWeekStartDay}
+                    items={['1', '2', '3', '4', '5', '6', '0'].map(d => ({
+                      label: t(`onboarding.weekday_${d}`), value: d,
+                    }))}
                   />
                 </>
               ) : null}
+
+              <Text style={s.fieldLabel}>{t('onboarding.allowance_amount')}</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={allowanceAmount}
+                onChangeText={setAllowanceAmount}
+                keyboardType="numeric"
+                placeholderTextColor={Colors.textSecondary}
+                accessibilityLabel={t('onboarding.allowance_amount')}
+              />
+
+              <Text style={s.fieldLabel}>{t('onboarding.excess_rate')}</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={excessRate}
+                onChangeText={setExcessRate}
+                keyboardType="decimal-pad"
+                placeholderTextColor={Colors.textSecondary}
+                accessibilityLabel={t('onboarding.excess_rate')}
+              />
             </>
           ) : null}
 
