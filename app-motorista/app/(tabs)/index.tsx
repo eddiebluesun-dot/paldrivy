@@ -45,7 +45,7 @@ import { getRentalAllowanceStatus } from '@/src/services/rentalAllowance';
 import { addExpense } from '@/src/services/expenses';
 import { getKmGapsForDay, updateKmGap, type KmGapForDay } from '@/src/services/kmGaps';
 import { KmGapRow } from '@/src/components/KmGapRow';
-import { getPeriodBounds, type RentalAllowanceStatus, type RentalAllowancePeriod } from '@/src/utils/rentalKmAllowanceUtils';
+import { getAllowanceCycleBounds, type RentalAllowanceStatus, type AllowanceCycleType } from '@/src/utils/rentalKmAllowanceUtils';
 import type { Shift, Vehicle } from '@/src/types';
 
 function secondsToHHMM(s: number): string {
@@ -1374,7 +1374,7 @@ export default function DashboardScreen() {
     // km-allowance fields, so the same fetch can feed both VehicleInfo (the
     // pill) and getRentalAllowanceStatus (the dashboard hero banner) without
     // a second query.
-    const vehicleColumns = 'id, user_id, brand, model, year, fuel_type, avg_consumption_per_100, ownership_type, rental_contract_start_date, rental_contract_start_odometer, rental_km_allowance_period, rental_km_allowance_amount, rental_km_excess_rate_cents';
+    const vehicleColumns = 'id, user_id, brand, model, year, fuel_type, avg_consumption_per_100, ownership_type, rental_contract_start_date, rental_contract_start_odometer, rental_km_allowance_period, rental_km_allowance_amount, rental_km_excess_rate_cents, rental_week_start_day';
     const vehicleP = profile?.vehicle_id
       ? supabase.from('vehicles').select(vehicleColumns)
           .eq('id', profile.vehicle_id).maybeSingle().then(r => r.data, () => null)
@@ -1447,20 +1447,24 @@ export default function DashboardScreen() {
     setVehicleInfo(vehicleData as VehicleInfo | null);
     setRentalStatus(rentalStatusData);
     if (rentalStatusData?.isNearLimit) {
-      // RentalAllowanceStatus no longer carries periodStart/periodEnd (removed
-      // 2026-08-18 along with the block-accrual formula -- see
-      // docs/superpowers/specs/2026-08-18-km-gaps-and-cumulative-balance-bar-design.md).
-      // The notification's dedup key still needs a value that re-arms on
-      // each new calendar week/month, so it's derived directly here from
-      // getPeriodBounds (the exact function the old removed periodStart
-      // field itself came from) -- this key is display/dedup plumbing only,
-      // it never flows into RentalAllowanceStatus.
-      const vd = vehicleData as { rental_contract_start_date?: string | null; rental_km_allowance_period?: RentalAllowancePeriod | null } | null;
-      const notifBounds = vd?.rental_contract_start_date && vd?.rental_km_allowance_period
-        ? getPeriodBounds(vd.rental_contract_start_date, vd.rental_km_allowance_period, new Date())
+      // The dedup key re-arms on each new cycle (day/week/month), derived
+      // from the vehicle's own cycle bounds -- see
+      // docs/superpowers/specs/2026-08-19-km-allowance-cycle-generalization-design.md.
+      const vd = vehicleData as {
+        rental_contract_start_date?: string | null;
+        rental_km_allowance_period?: AllowanceCycleType | null;
+        rental_week_start_day?: number | null;
+      } | null;
+      const cycleBounds = vd?.rental_contract_start_date && vd?.rental_km_allowance_period
+        ? getAllowanceCycleBounds(
+            vd.rental_contract_start_date,
+            vd.rental_km_allowance_period,
+            vd.rental_week_start_day ?? null,
+            new Date(),
+          )
         : null;
-      if (notifBounds) {
-        fireRentalAllowanceNearLimitNotification(i18n.language, notifBounds.periodStart.toISOString().slice(0, 10)).catch(() => {});
+      if (cycleBounds) {
+        fireRentalAllowanceNearLimitNotification(i18n.language, cycleBounds.cycleStart.toISOString().slice(0, 10)).catch(() => {});
       }
     }
     setMonthlyTotals(mTotals);
